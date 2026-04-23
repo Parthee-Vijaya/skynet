@@ -3,8 +3,7 @@ import { useEffect, useRef } from "react";
 
 /**
  * Animated starquake-style globe with blue halo.
- * Uses three-globe + Three.js via dynamic import (avoids SSR issues).
- * "Skynet" text is rendered as an HTML overlay that pulses with the globe rotation.
+ * Round crop via borderRadius:50% + overflow:hidden on the canvas wrapper.
  */
 export function SkynetGlobe({ size = 260 }: { size?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +18,7 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
     (async () => {
       const THREE = await import("three");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ThreeGlobeLib = await import("three-globe") as any;
+      const ThreeGlobeLib = (await import("three-globe")) as any;
       const ThreeGlobe = ThreeGlobeLib.default ?? ThreeGlobeLib;
 
       if (destroyed) return;
@@ -27,24 +26,24 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
       // ── Scene ──────────────────────────────────────────────────────────
       const scene = new THREE.Scene();
 
-      // Blue halo: additive sprite behind the globe
+      // Blue inner halo (BackSide sphere, renders behind globe surface)
       const haloGeo = new THREE.SphereGeometry(1.18, 32, 32);
       const haloMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(0x1a4fff),
         transparent: true,
-        opacity: 0.13,
+        opacity: 0.14,
         side: THREE.BackSide,
         depthWrite: false,
       });
       const halo = new THREE.Mesh(haloGeo, haloMat);
       scene.add(halo);
 
-      // Outer glow ring (slightly larger, more transparent)
-      const glowGeo = new THREE.SphereGeometry(1.32, 32, 32);
+      // Outer glow sphere
+      const glowGeo = new THREE.SphereGeometry(1.34, 32, 32);
       const glowMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(0x3a6fff),
         transparent: true,
-        opacity: 0.055,
+        opacity: 0.06,
         side: THREE.BackSide,
         depthWrite: false,
       });
@@ -55,33 +54,33 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
         .globeMaterial(
           new THREE.MeshPhongMaterial({
             color: new THREE.Color(0x060612),
-            emissive: new THREE.Color(0x0a0a1a),
+            emissive: new THREE.Color(0x080818),
             shininess: 6,
           })
         )
         .showAtmosphere(true)
         .atmosphereColor("#2255ff")
-        .atmosphereAltitude(0.18);
+        .atmosphereAltitude(0.16);
 
       globe.rotation.y = -Math.PI / 4;
       scene.add(globe);
 
-      // Fetch country hex polygons
+      // Fetch country hex polygons from CDN
       try {
         const geoRes = await fetch(
           "https://cdn.jsdelivr.net/gh/janarosmonaliev/github-globe@master/src/files/globe-data-min.json"
         );
-        const geoData = await geoRes.json() as { features: unknown[] };
+        const geoData = (await geoRes.json()) as { features: unknown[] };
         if (!destroyed) {
           globe
             .hexPolygonsData(geoData.features)
             .hexPolygonResolution(3)
             .hexPolygonMargin(0.35)
             .hexPolygonAltitude(0.003)
-            .hexPolygonColor(() => "rgba(100,160,255,0.45)");
+            .hexPolygonColor(() => "rgba(100,165,255,0.50)");
         }
       } catch {
-        // geo data not critical — globe still shows
+        // non-critical
       }
 
       // ── Lights ────────────────────────────────────────────────────────
@@ -98,42 +97,28 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
       camera.position.z = 2.6;
 
       // ── Renderer ──────────────────────────────────────────────────────
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-      });
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(size, size);
       renderer.setClearColor(0x000000, 0);
+      // canvas itself also gets round clip so WebGL output is circular
+      renderer.domElement.style.borderRadius = "50%";
       el.appendChild(renderer.domElement);
 
       // ── Animation loop ─────────────────────────────────────────────────
-      const SPEED = 0.003;
       let frame = 0;
       const animate = () => {
         if (destroyed) return;
         raf = requestAnimationFrame(animate);
-        globe.rotation.y += SPEED;
-        halo.rotation.y += SPEED * 0.3;
+        globe.rotation.y += 0.003;
+        halo.rotation.y += 0.001;
         frame++;
         renderer.render(scene, camera);
-
-        // Drive the text opacity via a CSS variable on the container
-        // so the overlay label can pulse slightly with rotation
-        const pulse = 0.85 + 0.15 * Math.sin(frame * 0.018);
+        // CSS variable drives the SKYNET text pulse
+        const pulse = 0.82 + 0.18 * Math.sin(frame * 0.016);
         el.style.setProperty("--globe-pulse", String(pulse));
       };
       animate();
-
-      // ── Cleanup ───────────────────────────────────────────────────────
-      return () => {
-        destroyed = true;
-        cancelAnimationFrame(raf);
-        renderer.dispose();
-        if (renderer.domElement.parentNode) {
-          renderer.domElement.parentNode.removeChild(renderer.domElement);
-        }
-      };
     })().catch(console.error);
 
     return () => {
@@ -142,25 +127,49 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
     };
   }, [size]);
 
-  return (
-    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      {/* Three.js canvas injected here */}
-      <div ref={containerRef} style={{ width: size, height: size }} />
+  // Extra: blue radial glow ring drawn in CSS around the circle
+  const haloSize = Math.round(size * 1.28);
+  const haloOffset = -Math.round((haloSize - size) / 2);
 
-      {/* Blue radial glow behind everything */}
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: size,
+        height: size,
+        flexShrink: 0,
+      }}
+    >
+      {/* CSS halo ring — sits behind the canvas */}
       <div
         style={{
           position: "absolute",
-          inset: 0,
+          width: haloSize,
+          height: haloSize,
+          top: haloOffset,
+          left: haloOffset,
           borderRadius: "50%",
           background:
-            "radial-gradient(circle, rgba(30,80,255,0.18) 0%, rgba(10,30,120,0.10) 50%, transparent 75%)",
+            "radial-gradient(circle, rgba(40,100,255,0.22) 0%, rgba(20,60,200,0.12) 38%, rgba(10,30,120,0.06) 58%, transparent 72%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
       />
 
-      {/* SKYNET label — animates with globe pulse */}
+      {/* Canvas container — ROUND clip */}
+      <div
+        ref={containerRef}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          overflow: "hidden",        // ← clips the square WebGL canvas to a circle
+          position: "relative",
+          zIndex: 1,
+        }}
+      />
+
+      {/* SKYNET text overlay */}
       <div
         style={{
           position: "absolute",
@@ -170,22 +179,22 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
           alignItems: "center",
           justifyContent: "center",
           pointerEvents: "none",
-          zIndex: 2,
+          zIndex: 3,
         }}
       >
         <span
-          className="globe-skynet-label"
           style={{
             fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 13,
-            letterSpacing: "0.35em",
-            color: "rgba(160,200,255,0.90)",
+            fontSize: Math.round(size * 0.1),   // scales with globe size
+            letterSpacing: "0.3em",
+            fontWeight: 300,
+            color: "rgba(180,215,255,0.92)",
             textTransform: "uppercase",
             userSelect: "none",
-            opacity: "var(--globe-pulse, 0.85)",
-            transition: "opacity 60ms linear",
+            opacity: "var(--globe-pulse, 0.85)" as unknown as number,
+            transition: "opacity 80ms linear",
             textShadow:
-              "0 0 12px rgba(80,140,255,0.8), 0 0 30px rgba(40,80,255,0.4)",
+              "0 0 14px rgba(80,150,255,0.9), 0 0 36px rgba(40,90,255,0.5)",
           }}
         >
           SKYNET
@@ -193,15 +202,15 @@ export function SkynetGlobe({ size = 260 }: { size?: number }) {
         <span
           style={{
             fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 9,
-            letterSpacing: "0.25em",
-            color: "rgba(100,150,255,0.45)",
+            fontSize: Math.round(size * 0.042),
+            letterSpacing: "0.22em",
+            color: "rgba(100,155,255,0.50)",
             textTransform: "uppercase",
-            marginTop: 4,
+            marginTop: 6,
             userSelect: "none",
           }}
         >
-          personal intelligence
+          intelligence
         </span>
       </div>
     </div>
