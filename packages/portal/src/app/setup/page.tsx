@@ -205,7 +205,7 @@ export default function SetupPage() {
                 type="text"
                 value={ntfyTopic}
                 onChange={(e) => setNtfyTopic(e.target.value)}
-                placeholder="fx skynet-parthee-xyz  (hent ntfy-appen og abonnér på dit topic)"
+                placeholder="fx skynet-dit-navn-abc  (hent ntfy-appen og abonnér på dit topic)"
                 style={INPUT}
                 onKeyDown={(e) => e.key === "Enter" && saveProfile()}
               />

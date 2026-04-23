@@ -185,7 +185,7 @@ async function detectNzbgeek(): Promise<Detection> {
 }
 
 async function detectGitHub(): Promise<Detection> {
-  const user = process.env.GITHUB_USER || "Parthee-Vijaya";
+  const user = process.env.GITHUB_USER || "";
   const ok = await ping(`https://api.github.com/users/${user}`);
   if (!ok) {
     return {

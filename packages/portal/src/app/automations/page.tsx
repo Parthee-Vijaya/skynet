@@ -211,7 +211,7 @@ export default function AutomationsPage() {
                   value={notifyCfg.ntfyTopic}
                   onChange={(e) => setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })}
                   onBlur={(e) => saveNotify({ ntfyTopic: e.target.value })}
-                  placeholder="fx skynet-parthee-xyz"
+                  placeholder="fx skynet-dit-navn-xyz"
                   style={{ ...inputStyle, flex: 1 }}
                 />
                 <span style={{ color: "#6b6b6b" }}>{notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}</span>

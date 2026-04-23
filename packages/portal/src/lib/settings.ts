@@ -128,7 +128,7 @@ export function setNotifyConfig(partial: Partial<NotifyConfig>): void {
 
 export interface GmailConfig {
   enabled: boolean;
-  /** Gmail-adresse (fx parti.vijaya1@gmail.com) */
+  /** Gmail-adresse (fx din@gmail.com) */
   user: string;
   /**
    * App password (IKKE dit normale Gmail-password).
