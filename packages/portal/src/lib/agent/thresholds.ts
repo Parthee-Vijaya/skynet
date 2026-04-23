@@ -11,8 +11,8 @@
  */
 
 import { listAutomations, recordRun } from "./automations";
-import { runAction } from "./actions";
-import type { ThresholdTrigger } from "./types";
+import { runActions } from "./actions";
+import type { ThresholdTrigger, Action } from "./types";
 
 interface TriggerState {
   /** Hvornår blev betingelsen først opfyldt? (for sustain) */
@@ -74,9 +74,9 @@ export async function evaluateThresholds(
     state.set(a.id, st);
 
     try {
-      const result = await runAction(
-        interpolateAction(a.action, t, value)
-      );
+      const interpolated = a.actions.map((act) => interpolateAction(act, t, value));
+      const meta = { automationId: a.id, automationName: a.name };
+      const result = await runActions(interpolated, meta);
       recordRun(
         a.id,
         result.ok ? "ok" : "error",
@@ -110,10 +110,10 @@ function compare(a: number, op: ThresholdTrigger["op"], b: number): boolean {
  * inkludere den aktuelle værdi. Ikke-string properties ændres ikke.
  */
 function interpolateAction(
-  action: ReturnType<typeof listAutomations>[number]["action"],
+  action: Action,
   trigger: ThresholdTrigger,
   currentValue: number
-): ReturnType<typeof listAutomations>[number]["action"] {
+): Action {
   const vars: Record<string, string> = {
     metric: trigger.metric,
     value: formatValue(currentValue),

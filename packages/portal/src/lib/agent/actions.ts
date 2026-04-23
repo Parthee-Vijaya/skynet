@@ -20,6 +20,28 @@ export interface ActionMeta {
   automationName?: string;
 }
 
+/**
+ * Kør en kæde af actions sekventielt. Stopper ved første fejl.
+ * Returnerer samlet status + besked.
+ */
+export async function runActions(actions: Action[], meta?: ActionMeta): Promise<ActionResult> {
+  if (actions.length === 0) return { ok: false, message: "ingen actions defineret" };
+  if (actions.length === 1) return runAction(actions[0], meta);
+
+  const msgs: string[] = [];
+  for (let i = 0; i < actions.length; i++) {
+    appendLog("info", `trin ${i + 1}/${actions.length} starter (${actions[i].type})`, meta);
+    const r = await runAction(actions[i], meta);
+    msgs.push(`[${i + 1}] ${r.message}`);
+    if (!r.ok) {
+      appendLog("warn", `trin ${i + 1}/${actions.length} fejlede — stopper kæden`, meta);
+      return { ok: false, message: `trin ${i + 1}/${actions.length} fejlede: ${r.message}` };
+    }
+    appendLog("ok", `trin ${i + 1}/${actions.length} ok`, meta);
+  }
+  return { ok: true, message: `${actions.length} trin fuldført · ${msgs.join(" · ")}` };
+}
+
 export async function runAction(action: Action, meta?: ActionMeta): Promise<ActionResult> {
   try {
     switch (action.type) {

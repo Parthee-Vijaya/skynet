@@ -28,24 +28,36 @@ type DraftAction =
   | (LLMNotifyAction & { type: "llm_notify" })
   | (ToolAction & { type: "tool" });
 
+function defaultAction(type: "notify" | "llm_notify" | "tool"): DraftAction {
+  if (type === "notify") {
+    return { type: "notify", title: "Skynet", body: "Ny besked fra Skynet", priority: "default" };
+  } else if (type === "llm_notify") {
+    return { type: "llm_notify", prompt: "Skriv en kort dansk besked om ...", notifyTitle: "Skynet", priority: "default" };
+  } else {
+    return { type: "tool", tool: "read_system_status", args: {}, allowDestructive: false };
+  }
+}
+
 function emptyDraft(): {
   name: string;
   description: string;
   enabled: boolean;
   trigger: DraftTrigger;
-  action: DraftAction;
+  actions: DraftAction[];
 } {
   return {
     name: "",
     description: "",
     enabled: true,
     trigger: { type: "cron", expression: "0 7 * * *" },
-    action: {
-      type: "llm_notify",
-      prompt: "Skriv en kort venlig dansk besked om dagens vejr og el-spotpris.",
-      notifyTitle: "Morgenbesked",
-      priority: "default",
-    },
+    actions: [
+      {
+        type: "llm_notify",
+        prompt: "Skriv en kort venlig dansk besked om dagens vejr og el-spotpris.",
+        notifyTitle: "Morgenbesked",
+        priority: "default",
+      },
+    ],
   };
 }
 
@@ -73,7 +85,7 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
         description: target.description ?? "",
         enabled: target.enabled,
         trigger: target.trigger as DraftTrigger,
-        action: target.action as DraftAction,
+        actions: (target.actions ?? [target.action]) as DraftAction[],
       });
     } else {
       setDraft(emptyDraft());
@@ -87,6 +99,10 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
     setError(null);
     if (!draft.name.trim()) {
       setError("Navn er påkrævet");
+      return;
+    }
+    if (draft.actions.length === 0) {
+      setError("Mindst én action er påkrævet");
       return;
     }
     setSaving(true);
@@ -103,7 +119,7 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
           description: draft.description.trim() || undefined,
           enabled: draft.enabled,
           trigger: draft.trigger as Trigger,
-          action: draft.action as Action,
+          actions: draft.actions as Action[],
         }),
       });
       if (!res.ok) {
@@ -138,38 +154,22 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
     }
   };
 
-  const changeActionType = (type: "notify" | "llm_notify" | "tool") => {
-    if (type === "notify") {
-      setDraft({
-        ...draft,
-        action: {
-          type: "notify",
-          title: "Skynet",
-          body: "Ny besked fra Skynet",
-          priority: "default",
-        },
-      });
-    } else if (type === "llm_notify") {
-      setDraft({
-        ...draft,
-        action: {
-          type: "llm_notify",
-          prompt: "Skriv en kort dansk besked om ...",
-          notifyTitle: "Skynet",
-          priority: "default",
-        },
-      });
-    } else {
-      setDraft({
-        ...draft,
-        action: {
-          type: "tool",
-          tool: "read_system_status",
-          args: {},
-          allowDestructive: false,
-        },
-      });
-    }
+  const updateAction = (idx: number, newAction: DraftAction) => {
+    const updated = [...draft.actions];
+    updated[idx] = newAction;
+    setDraft({ ...draft, actions: updated });
+  };
+
+  const addStep = () => {
+    setDraft({ ...draft, actions: [...draft.actions, defaultAction("notify")] });
+  };
+
+  const removeStep = (idx: number) => {
+    setDraft({ ...draft, actions: draft.actions.filter((_, i) => i !== idx) });
+  };
+
+  const changeStepType = (idx: number, type: "notify" | "llm_notify" | "tool") => {
+    updateAction(idx, defaultAction(type));
   };
 
   return (
@@ -355,262 +355,77 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
             )}
           </section>
 
-          {/* Action-sektion */}
+          {/* Multi-action kæde */}
           <section className="border-t border-cyan-400/10 pt-4">
-            <Label>ACTION</Label>
-            <div className="flex gap-2 mt-1 mb-3">
-              {(["notify", "llm_notify", "tool"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => changeActionType(t)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] border transition-colors ${
-                    draft.action.type === t
-                      ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-100"
-                      : "border-cyan-400/15 text-neutral-400 hover:border-cyan-400/40"
-                  }`}
-                >
-                  {t === "notify"
-                    ? "Simpel besked"
-                    : t === "llm_notify"
-                      ? "LLM-genereret besked"
-                      : "Kør tool"}
-                </button>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <Label>
+                ACTIONS
+                {draft.actions.length > 1 && (
+                  <span className="ml-2 text-neutral-500 normal-case text-[10px]">
+                    — {draft.actions.length} trin køres sekventielt
+                  </span>
+                )}
+              </Label>
+              <button
+                onClick={addStep}
+                className="text-[11px] text-cyan-400/70 hover:text-cyan-300 border border-cyan-400/20 rounded px-2 py-0.5 hover:border-cyan-400/40 transition-colors"
+              >
+                + Tilføj trin
+              </button>
             </div>
 
-            {draft.action.type === "notify" && (
-              <div className="space-y-2">
-                <Field label="Titel">
-                  <input
-                    type="text"
-                    value={draft.action.title}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, title: e.target.value } as DraftAction,
-                      })
-                    }
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label="Besked">
-                  <textarea
-                    value={draft.action.body}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, body: e.target.value } as DraftAction,
-                      })
-                    }
-                    rows={3}
-                    className={inputCls}
-                  />
-                </Field>
-                <PriorityPicker
-                  value={draft.action.priority ?? "default"}
-                  onChange={(p) =>
-                    setDraft({
-                      ...draft,
-                      action: { ...draft.action, priority: p } as DraftAction,
-                    })
-                  }
-                />
-                {draft.trigger.type === "threshold" && (
-                  <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-2 py-1.5 border border-cyan-400/10">
-                    Tip: brug {"{metric}"}, {"{value}"}, {"{threshold}"} og {"{op}"} i
-                    titel/besked — fx &quot;Disk fuld ({"{value}"}%)&quot;.
+            <div className="space-y-4">
+              {draft.actions.map((action, idx) => (
+                <div
+                  key={idx}
+                  className="border border-cyan-400/10 rounded-lg p-3 bg-black/20"
+                >
+                  {/* Step header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] text-cyan-400/50 font-mono uppercase tracking-widest">
+                      {draft.actions.length > 1 ? `Trin ${idx + 1} / ${draft.actions.length}` : "Action"}
+                    </span>
+                    {draft.actions.length > 1 && (
+                      <button
+                        onClick={() => removeStep(idx)}
+                        className="text-[11px] text-neutral-600 hover:text-rose-400 transition-colors"
+                      >
+                        ✕ fjern
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
 
-            {draft.action.type === "llm_notify" && (
-              <div className="space-y-2">
-                <Field label="Notifikations-titel">
-                  <input
-                    type="text"
-                    value={draft.action.notifyTitle}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, notifyTitle: e.target.value } as DraftAction,
-                      })
-                    }
-                    className={inputCls}
+                  {/* Type picker */}
+                  <div className="flex gap-2 mb-3">
+                    {(["notify", "llm_notify", "tool"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => changeStepType(idx, t)}
+                        className={`px-3 py-1.5 rounded-lg text-[12px] border transition-colors ${
+                          action.type === t
+                            ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-100"
+                            : "border-cyan-400/15 text-neutral-400 hover:border-cyan-400/40"
+                        }`}
+                      >
+                        {t === "notify"
+                          ? "Simpel besked"
+                          : t === "llm_notify"
+                            ? "LLM-genereret besked"
+                            : "Kør tool"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Action-specifikke felter */}
+                  <ActionFields
+                    action={action}
+                    trigger={draft.trigger}
+                    models={models}
+                    onChange={(newAction) => updateAction(idx, newAction)}
                   />
-                </Field>
-                <Field label="Prompt til LLM">
-                  <textarea
-                    value={draft.action.prompt}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, prompt: e.target.value } as DraftAction,
-                      })
-                    }
-                    rows={6}
-                    className={`${inputCls} font-mono text-[12px]`}
-                    placeholder="Fortæl LLM'en hvad den skal skrive. Hold det kort — output pushes som notifikation."
-                  />
-                </Field>
-                <Field label="Model">
-                  {models.length > 0 ? (
-                    <select
-                      value={draft.action.model ?? ""}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          action: { ...draft.action, model: e.target.value || undefined } as DraftAction,
-                        })
-                      }
-                      className={`${inputCls} font-mono text-[12px]`}
-                    >
-                      <option value="">— første tilgængelige —</option>
-                      {models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label ? `${m.label} · ${m.id.split("/").pop()}` : m.id.split("/").pop()}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="text-[11px] text-neutral-500 py-1">
-                      LM Studio ikke tilgængeligt — gem alligevel, modellen vælges automatisk
-                    </div>
-                  )}
-                </Field>
-                <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={draft.action.useTools !== false}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, useTools: e.target.checked } as DraftAction,
-                      })
-                    }
-                    className="accent-cyan-400"
-                  />
-                  <span className="text-neutral-300">Aktivér tools</span>
-                  <span className="text-neutral-500 text-[11px]">
-                    (web_fetch, web_search, system, vejr, energi, kalender…)
-                  </span>
-                </label>
-                <PriorityPicker
-                  value={draft.action.priority ?? "default"}
-                  onChange={(p) =>
-                    setDraft({
-                      ...draft,
-                      action: { ...draft.action, priority: p } as DraftAction,
-                    })
-                  }
-                />
-                <Field label="Send som iMessage til (valgfri)">
-                  <input
-                    type="text"
-                    value={(draft.action as LLMNotifyAction).imessageTo ?? ""}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: {
-                          ...draft.action,
-                          imessageTo: e.target.value || undefined,
-                        } as DraftAction,
-                      })
-                    }
-                    className={inputCls}
-                    placeholder="+4512345678 eller navn@icloud.com (tom = kun push)"
-                  />
-                </Field>
-                <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
-                  <strong className="text-cyan-300">Med tools aktiveret</strong> kan LLM&apos;en
-                  søge på nettet, hente nyheder (fetch_news), tjekke vejr, el-pris, system-status mm.
-                  <br />
-                  <span className="text-neutral-600">
-                    Tip: &quot;Hent danske nyheder fra DR og skriv en kort morgenbriefing på dansk.&quot;
-                  </span>
                 </div>
-              </div>
-            )}
-
-            {draft.action.type === "tool" && (
-              <div className="space-y-2">
-                <Field label="Tool-navn">
-                  <select
-                    value={draft.action.tool}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: { ...draft.action, tool: e.target.value } as DraftAction,
-                      })
-                    }
-                    className={inputCls}
-                  >
-                    <optgroup label="Beskeder">
-                      <option value="send_imessage">send_imessage</option>
-                    </optgroup>
-                    <optgroup label="Services & Apps">
-                      <option value="list_services">list_services</option>
-                      <option value="control_service">control_service</option>
-                      <option value="list_apps">list_apps</option>
-                      <option value="control_app">control_app</option>
-                    </optgroup>
-                    <optgroup label="System">
-                      <option value="read_system_status">read_system_status</option>
-                      <option value="read_disk">read_disk</option>
-                      <option value="read_weather">read_weather</option>
-                      <option value="read_energy">read_energy</option>
-                      <option value="run_discovery">run_discovery</option>
-                    </optgroup>
-                    <optgroup label="Web & Nyheder">
-                      <option value="fetch_news">fetch_news</option>
-                      <option value="web_fetch">web_fetch</option>
-                      <option value="web_search">web_search</option>
-                    </optgroup>
-                    <optgroup label="Kalender & Påmindelser">
-                      <option value="list_calendar_events">list_calendar_events</option>
-                      <option value="list_reminders">list_reminders</option>
-                      <option value="add_reminder">add_reminder</option>
-                    </optgroup>
-                  </select>
-                </Field>
-                <Field label="Argumenter (JSON)">
-                  <textarea
-                    value={JSON.stringify(draft.action.args, null, 2)}
-                    onChange={(e) => {
-                      try {
-                        const args = JSON.parse(e.target.value);
-                        setDraft({
-                          ...draft,
-                          action: { ...draft.action, args } as DraftAction,
-                        });
-                      } catch {
-                        // ignore — ugyldig JSON, lad brugeren skrive færdigt
-                      }
-                    }}
-                    rows={4}
-                    className={`${inputCls} font-mono text-[12px]`}
-                    placeholder='{"label":"com.tailscale.tailscaled","action":"start"}'
-                  />
-                </Field>
-                <label className="flex items-center gap-2 text-[12px] text-amber-300">
-                  <input
-                    type="checkbox"
-                    checked={draft.action.allowDestructive === true}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        action: {
-                          ...draft.action,
-                          allowDestructive: e.target.checked,
-                        } as DraftAction,
-                      })
-                    }
-                    className="accent-amber-400"
-                  />
-                  Tillad destruktive actions (stop, restart, quit)
-                </label>
-              </div>
-            )}
+              ))}
+            </div>
           </section>
 
           {/* Enabled toggle */}
@@ -651,6 +466,198 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
       </div>
     </div>
   );
+}
+
+// ── Action-fields komponent ──────────────────────────────────────────────────
+
+function ActionFields({
+  action,
+  trigger,
+  models,
+  onChange,
+}: {
+  action: DraftAction;
+  trigger: DraftTrigger;
+  models: Array<{ id: string; label?: string }>;
+  onChange: (a: DraftAction) => void;
+}) {
+  if (action.type === "notify") {
+    return (
+      <div className="space-y-2">
+        <Field label="Titel">
+          <input
+            type="text"
+            value={action.title}
+            onChange={(e) => onChange({ ...action, title: e.target.value })}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Besked">
+          <textarea
+            value={action.body}
+            onChange={(e) => onChange({ ...action, body: e.target.value })}
+            rows={3}
+            className={inputCls}
+          />
+        </Field>
+        <PriorityPicker
+          value={action.priority ?? "default"}
+          onChange={(p) => onChange({ ...action, priority: p })}
+        />
+        {trigger.type === "threshold" && (
+          <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-2 py-1.5 border border-cyan-400/10">
+            Tip: brug {"{metric}"}, {"{value}"}, {"{threshold}"} og {"{op}"} i
+            titel/besked — fx &quot;Disk fuld ({"{value}"}%)&quot;.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (action.type === "llm_notify") {
+    return (
+      <div className="space-y-2">
+        <Field label="Notifikations-titel">
+          <input
+            type="text"
+            value={action.notifyTitle}
+            onChange={(e) => onChange({ ...action, notifyTitle: e.target.value })}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Prompt til LLM">
+          <textarea
+            value={action.prompt}
+            onChange={(e) => onChange({ ...action, prompt: e.target.value })}
+            rows={6}
+            className={`${inputCls} font-mono text-[12px]`}
+            placeholder="Fortæl LLM'en hvad den skal skrive. Hold det kort — output pushes som notifikation."
+          />
+        </Field>
+        <Field label="Model">
+          {models.length > 0 ? (
+            <select
+              value={action.model ?? ""}
+              onChange={(e) => onChange({ ...action, model: e.target.value || undefined })}
+              className={`${inputCls} font-mono text-[12px]`}
+            >
+              <option value="">— første tilgængelige —</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label ? `${m.label} · ${m.id.split("/").pop()}` : m.id.split("/").pop()}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-[11px] text-neutral-500 py-1">
+              LM Studio ikke tilgængeligt — gem alligevel, modellen vælges automatisk
+            </div>
+          )}
+        </Field>
+        <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={action.useTools !== false}
+            onChange={(e) => onChange({ ...action, useTools: e.target.checked })}
+            className="accent-cyan-400"
+          />
+          <span className="text-neutral-300">Aktivér tools</span>
+          <span className="text-neutral-500 text-[11px]">
+            (web_fetch, web_search, system, vejr, energi, kalender…)
+          </span>
+        </label>
+        <PriorityPicker
+          value={action.priority ?? "default"}
+          onChange={(p) => onChange({ ...action, priority: p })}
+        />
+        <Field label="Send som iMessage til (valgfri)">
+          <input
+            type="text"
+            value={action.imessageTo ?? ""}
+            onChange={(e) => onChange({ ...action, imessageTo: e.target.value || undefined })}
+            className={inputCls}
+            placeholder="+4512345678 eller navn@icloud.com (tom = kun push)"
+          />
+        </Field>
+        <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
+          <strong className="text-cyan-300">Med tools aktiveret</strong> kan LLM&apos;en
+          søge på nettet, hente nyheder (fetch_news), tjekke vejr, el-pris, system-status mm.
+          <br />
+          <span className="text-neutral-600">
+            Tip: &quot;Hent danske nyheder fra DR og skriv en kort morgenbriefing på dansk.&quot;
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (action.type === "tool") {
+    return (
+      <div className="space-y-2">
+        <Field label="Tool-navn">
+          <select
+            value={action.tool}
+            onChange={(e) => onChange({ ...action, tool: e.target.value })}
+            className={inputCls}
+          >
+            <optgroup label="Beskeder">
+              <option value="send_imessage">send_imessage</option>
+            </optgroup>
+            <optgroup label="Services & Apps">
+              <option value="list_services">list_services</option>
+              <option value="control_service">control_service</option>
+              <option value="list_apps">list_apps</option>
+              <option value="control_app">control_app</option>
+            </optgroup>
+            <optgroup label="System">
+              <option value="read_system_status">read_system_status</option>
+              <option value="read_disk">read_disk</option>
+              <option value="read_weather">read_weather</option>
+              <option value="read_energy">read_energy</option>
+              <option value="run_discovery">run_discovery</option>
+            </optgroup>
+            <optgroup label="Web & Nyheder">
+              <option value="fetch_news">fetch_news</option>
+              <option value="web_fetch">web_fetch</option>
+              <option value="web_search">web_search</option>
+            </optgroup>
+            <optgroup label="Kalender & Påmindelser">
+              <option value="list_calendar_events">list_calendar_events</option>
+              <option value="list_reminders">list_reminders</option>
+              <option value="add_reminder">add_reminder</option>
+            </optgroup>
+          </select>
+        </Field>
+        <Field label="Argumenter (JSON)">
+          <textarea
+            value={JSON.stringify(action.args, null, 2)}
+            onChange={(e) => {
+              try {
+                const args = JSON.parse(e.target.value);
+                onChange({ ...action, args });
+              } catch {
+                // ignore — ugyldig JSON, lad brugeren skrive færdigt
+              }
+            }}
+            rows={4}
+            className={`${inputCls} font-mono text-[12px]`}
+            placeholder='{"label":"com.tailscale.tailscaled","action":"start"}'
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-[12px] text-amber-300">
+          <input
+            type="checkbox"
+            checked={action.allowDestructive === true}
+            onChange={(e) => onChange({ ...action, allowDestructive: e.target.checked })}
+            className="accent-amber-400"
+          />
+          Tillad destruktive actions (stop, restart, quit)
+        </label>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
