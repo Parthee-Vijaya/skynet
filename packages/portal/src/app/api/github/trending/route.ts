@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getOrRefresh } from "@/lib/cache";
+import { getSettingJSON, setSettingJSON } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export interface TrendingRepo {
   rank: number;
@@ -20,6 +22,8 @@ export interface TrendingRepo {
   isNew: boolean;
   createdAt: string;
   pushedAt: string;
+  /** Stars gained since start of day (UTC). Null if not enough data. */
+  starsToday: number | null;
 }
 
 export interface TrendingResponse {
@@ -28,9 +32,20 @@ export interface TrendingResponse {
   windowDays: number;
 }
 
+/** Baseline: store star counts at the start of each UTC day */
+function getDayKey(): string {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function getStarBaseline(): Record<number, number> {
+  return getSettingJSON<Record<number, number>>(`github_star_baseline_${getDayKey()}`, {});
+}
+
+function setStarBaseline(baseline: Record<number, number>): void {
+  setSettingJSON(`github_star_baseline_${getDayKey()}`, baseline);
+}
+
 async function fetchTrending(): Promise<TrendingResponse> {
-  // Two passes so we show a mix of brand-new repos AND actively-pushed repos
-  // Both use GitHub Search API (60 req/h unauthenticated — we cache 5 min → ≤12/h)
   const now = Date.now();
   const day7 = new Date(now - 7 * 86_400_000).toISOString().slice(0, 10);
   const day30 = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
@@ -57,22 +72,40 @@ async function fetchTrending(): Promise<TrendingResponse> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = (await res.json()) as { items: any[] };
 
-  const repos: TrendingRepo[] = data.items.map((item, idx) => ({
-    rank: idx + 1,
-    id: item.id as number,
-    name: item.name as string,
-    fullName: item.full_name as string,
-    owner: (item.owner?.login ?? "") as string,
-    description: (item.description ?? null) as string | null,
-    language: (item.language ?? null) as string | null,
-    stars: item.stargazers_count as number,
-    forks: item.forks_count as number,
-    url: item.html_url as string,
-    isHot: (item.created_at as string) > `${day7}T00:00:00Z`,
-    isNew: (item.created_at as string) > `${day30}T00:00:00Z`,
-    createdAt: item.created_at as string,
-    pushedAt: item.pushed_at as string,
-  }));
+  // Load (or create) today's star baseline
+  let baseline = getStarBaseline();
+  const isFirstFetch = Object.keys(baseline).length === 0;
+
+  const repos: TrendingRepo[] = data.items.map((item, idx) => {
+    const id = item.id as number;
+    const stars = item.stargazers_count as number;
+    const baselineStars = baseline[id];
+    const starsToday = baselineStars !== undefined ? Math.max(0, stars - baselineStars) : null;
+    return {
+      rank: idx + 1,
+      id,
+      name: item.name as string,
+      fullName: item.full_name as string,
+      owner: (item.owner?.login ?? "") as string,
+      description: (item.description ?? null) as string | null,
+      language: (item.language ?? null) as string | null,
+      stars,
+      forks: item.forks_count as number,
+      url: item.html_url as string,
+      isHot: (item.created_at as string) > `${day7}T00:00:00Z`,
+      isNew: (item.created_at as string) > `${day30}T00:00:00Z`,
+      createdAt: item.created_at as string,
+      pushedAt: item.pushed_at as string,
+      starsToday,
+    };
+  });
+
+  // First fetch of the day: set baseline from current data
+  if (isFirstFetch) {
+    baseline = {};
+    for (const repo of repos) baseline[repo.id] = repo.stars;
+    setStarBaseline(baseline);
+  }
 
   return { repos, fetchedAt: now, windowDays: 7 };
 }
