@@ -272,7 +272,8 @@ async function execute(
 
     // ── iMessage ─────────────────────────────────────────────────────────
     case "send_imessage": {
-      const to = String(args.to ?? "").trim();
+      const rawTo = String(args.to ?? "").trim();
+      const to = normalizeImessageRecipient(rawTo);
       const msg = String(args.message ?? "").trim();
       if (!to || !msg) throw new Error("to og message er påkrævet");
       const { execFile } = await import("node:child_process");
@@ -446,6 +447,27 @@ async function execute(
     default:
       throw new Error(`ukendt tool: ${name}`);
   }
+}
+
+/**
+ * Normaliser en iMessage-modtager til noget osascript/Messages.app kan løse.
+ *
+ * - Email (Apple-ID) → uændret
+ * - Starter med '+' → antages allerede E.164, uændret
+ * - 8 cifre → antaget dansk mobilnummer → '+45XXXXXXXX'
+ * - 10+ cifre → antaget med landekode → prefix '+'
+ * - Alt andet → lad osascript selv afgøre (fx navn fra Kontakter)
+ */
+function normalizeImessageRecipient(raw: string): string {
+  const s = raw.trim();
+  if (!s) return s;
+  if (s.includes("@")) return s;
+  if (s.startsWith("+")) return s;
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 8) return `+45${digits}`;
+  if (digits.length === 10 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length >= 10) return `+${digits}`;
+  return s;
 }
 
 /** JSON.stringify med fallback til String() + begrænsning */
