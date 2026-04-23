@@ -7,6 +7,7 @@ import type { Action, LLMNotifyAction, NotifyAction, ToolAction } from "./types"
 import { notify } from "../notify";
 import { dispatchTool } from "./dispatcher";
 import { getLLMConfig } from "../settings";
+import { TOOLS } from "./tools";
 
 export interface ActionResult {
   ok: boolean;
@@ -87,43 +88,88 @@ async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
     return { ok: false, message: "ingen model valgt og ingen default fundet" };
   }
 
-  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const useTools = a.useTools !== false; // default: tools aktive
+  const MAX_TURNS = 5;
+
+  type Msg =
+    | { role: "system" | "user" | "assistant"; content: string; tool_calls?: TcDef[] }
+    | { role: "tool"; content: string; tool_call_id: string };
+  type TcDef = { id: string; type: "function"; function: { name: string; arguments: string } };
+
+  const conversation: Msg[] = [
+    ...(sys ? [{ role: "system" as const, content: sys }] : []),
+    { role: "user" as const, content: a.prompt },
+  ];
+
+  let finalText = "";
+
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    const payload: Record<string, unknown> = {
       model,
       stream: false,
-      messages: [
-        ...(sys ? [{ role: "system", content: sys }] : []),
-        { role: "user", content: a.prompt },
-      ],
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
+      messages: conversation,
+      ...(useTools ? { tools: TOOLS, tool_choice: "auto" } : {}),
+    };
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    return { ok: false, message: `LM Studio HTTP ${res.status}: ${txt.slice(0, 200)}` };
+    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return { ok: false, message: `LM Studio HTTP ${res.status}: ${txt.slice(0, 200)}` };
+    }
+
+    const data = (await res.json()) as {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          tool_calls?: TcDef[];
+        };
+        finish_reason?: string;
+      }>;
+    };
+
+    const choice = data.choices?.[0];
+    const msg = choice?.message;
+    const content = msg?.content?.trim() ?? "";
+    const toolCalls = msg?.tool_calls ?? [];
+
+    if (toolCalls.length === 0) {
+      // LLM er færdig — brug tekst-svaret
+      finalText = content;
+      break;
+    }
+
+    // Tilføj assistantens tool_calls til konversationen
+    conversation.push({ role: "assistant", content, tool_calls: toolCalls });
+
+    // Eksekver tools og tilføj resultater
+    for (const tc of toolCalls) {
+      let parsedArgs: Record<string, unknown> = {};
+      try { parsedArgs = JSON.parse(tc.function.arguments); } catch { /* noop */ }
+      const result = await dispatchTool(
+        { id: tc.id, name: tc.function.name, arguments: parsedArgs },
+        { allowDestructive: false },
+      );
+      conversation.push({ role: "tool", content: result.content, tool_call_id: tc.id });
+    }
   }
 
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const text = data.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!text) return { ok: false, message: "tom respons fra LLM" };
+  if (!finalText) return { ok: false, message: "tom eller ingen respons fra LLM" };
 
   const notifyResults = await notify({
     title: a.notifyTitle,
-    body: text,
+    body: finalText,
     priority: a.priority,
   });
   const okCount = notifyResults.filter((r) => r.ok).length;
   return {
     ok: okCount > 0,
-    message: `LLM gen. ${text.length} tegn · notify ${okCount}/${notifyResults.length}`,
+    message: `LLM gen. ${finalText.length} tegn · notify ${okCount}/${notifyResults.length}`,
   };
 }
 

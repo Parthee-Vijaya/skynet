@@ -293,6 +293,45 @@ export const TOOLS: ToolSchema[] = [
       },
     },
   },
+
+  // ── Web: Fetch + Search ─────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "web_fetch",
+      description:
+        "Hent en URL og returner sidens tekst-indhold (HTML strippes). Brug til at læse nyheder, dokumentation, priser, statusser eller andet fra nettet. Max ~4000 tegn returneres.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "Den fulde URL der skal hentes, fx 'https://example.com/article'",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Søg på nettet og returner de 5 bedste resultater med titel, URL og uddrag. Brug til at finde aktuelle nyheder, facts eller information du ikke kender på forhånd.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeforespørgslen, fx 'el-spotpris Danmark i dag'",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
 ];
 
 /** Tools hvor action er destruktiv → kræver X-Confirm: true */

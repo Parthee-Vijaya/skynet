@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type {
   Automation,
   Trigger,
@@ -53,7 +53,18 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState(emptyDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<Array<{ id: string; label?: string }>>([]);
   const isEdit = target !== null && target !== "new";
+
+  const fetchModels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat/models", { cache: "no-store" });
+      const data = await res.json() as { available: boolean; models: Array<{ id: string; label?: string }> };
+      if (data.available) setModels(data.models);
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => { if (target !== null) fetchModels(); }, [target, fetchModels]);
 
   useEffect(() => {
     if (target && target !== "new") {
@@ -442,23 +453,48 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
                     placeholder="Fortæl LLM'en hvad den skal skrive. Hold det kort — output pushes som notifikation."
                   />
                 </Field>
-                <Field label="Model (valgfri — default: første tilgængelige)">
+                <Field label="Model">
+                  {models.length > 0 ? (
+                    <select
+                      value={draft.action.model ?? ""}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          action: { ...draft.action, model: e.target.value || undefined } as DraftAction,
+                        })
+                      }
+                      className={`${inputCls} font-mono text-[12px]`}
+                    >
+                      <option value="">— første tilgængelige —</option>
+                      {models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label ? `${m.label} · ${m.id.split("/").pop()}` : m.id.split("/").pop()}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-[11px] text-neutral-500 py-1">
+                      LM Studio ikke tilgængeligt — gem alligevel, modellen vælges automatisk
+                    </div>
+                  )}
+                </Field>
+                <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none">
                   <input
-                    type="text"
-                    value={draft.action.model ?? ""}
+                    type="checkbox"
+                    checked={draft.action.useTools !== false}
                     onChange={(e) =>
                       setDraft({
                         ...draft,
-                        action: {
-                          ...draft.action,
-                          model: e.target.value || undefined,
-                        } as DraftAction,
+                        action: { ...draft.action, useTools: e.target.checked } as DraftAction,
                       })
                     }
-                    className={`${inputCls} font-mono text-[12px]`}
-                    placeholder="fx mistral-small-3.1-24b-instruct-2503-mp"
+                    className="accent-cyan-400"
                   />
-                </Field>
+                  <span className="text-neutral-300">Aktivér tools</span>
+                  <span className="text-neutral-500 text-[11px]">
+                    (web_fetch, web_search, system, vejr, energi, kalender…)
+                  </span>
+                </label>
                 <PriorityPicker
                   value={draft.action.priority ?? "default"}
                   onChange={(p) =>
@@ -469,16 +505,12 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
                   }
                 />
                 <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
-                  <strong className="text-cyan-300">Eksempel-prompt:</strong>
+                  <strong className="text-cyan-300">Med tools aktiveret</strong> kan LLM&apos;en
+                  søge på nettet, hente URL&apos;er, tjekke vejr, el-pris, system-status mm.
                   <br />
-                  &quot;Skriv en kort dansk morgenbriefing på max 3 linjer. Nævn
-                  vejret og dagens el-spotpris.&quot;
-                  <br />
-                  <strong className="text-cyan-300 mt-1 inline-block">
-                    Bemærk:
-                  </strong>{" "}
-                  prompten har adgang til data om vejr, energi, system og
-                  services (sendes automatisk til LLM&apos;en før prompten).
+                  <span className="text-neutral-600">
+                    Tip: &quot;Søg efter dagens el-spotpris og skriv en kort dansk briefing.&quot;
+                  </span>
                 </div>
               </div>
             )}

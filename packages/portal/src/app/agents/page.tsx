@@ -19,12 +19,19 @@ interface AgentsResponse {
   error?: string;
 }
 
+interface ModelEntry {
+  id: string;
+  label?: string;
+}
+
 const STATUS_COLOR: Record<string, string> = {
   running: "#7dd67d",
   idle: "#9bd0ff",
   stopped: "#6b6b6b",
   error: "#d87373",
   waiting: "#e6b450",
+  initializing: "#e6b450",
+  closed: "#6b6b6b",
 };
 
 export default function AgentsPage() {
@@ -32,6 +39,8 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState("");
+  const [models, setModels] = useState<ModelEntry[]>([]);
   const [creating, setCreating] = useState(false);
 
   const fetchAgents = useCallback(async () => {
@@ -46,11 +55,23 @@ export default function AgentsPage() {
     }
   }, []);
 
+  const fetchModels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat/models", { cache: "no-store" });
+      const d = await res.json() as { available: boolean; models: ModelEntry[] };
+      if (d.available && d.models.length > 0) {
+        setModels(d.models);
+        setModel((cur) => cur || d.models[0].id);
+      }
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => {
     fetchAgents();
+    fetchModels();
     const id = setInterval(fetchAgents, 5000);
     return () => clearInterval(id);
-  }, [fetchAgents]);
+  }, [fetchAgents, fetchModels]);
 
   const handleCreate = async () => {
     if (!prompt.trim()) return;
@@ -59,7 +80,7 @@ export default function AgentsPage() {
       await fetch("/api/daemon/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: prompt.trim(), model: model || undefined }),
       });
       setPrompt("");
       setShowCreate(false);
@@ -69,8 +90,8 @@ export default function AgentsPage() {
     }
   };
 
-  const running = data?.agents.filter((a) => a.status === "running") ?? [];
-  const others = data?.agents.filter((a) => a.status !== "running") ?? [];
+  const running = data?.agents.filter((a) => a.status === "running" || a.status === "initializing") ?? [];
+  const others = data?.agents.filter((a) => a.status !== "running" && a.status !== "initializing") ?? [];
 
   return (
     <MinimalPageLayout active="agents">
@@ -128,6 +149,34 @@ export default function AgentsPage() {
                 outline: "none",
               }}
             />
+            <div className="flex items-center gap-3 mt-3 text-[11px]">
+              <span style={{ color: "#6b6b6b" }}>model</span>
+              {models.length > 0 ? (
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  style={{
+                    background: "#111",
+                    border: "1px dashed #333",
+                    padding: "3px 8px",
+                    color: "#9bd0ff",
+                    fontFamily: "inherit",
+                    fontSize: 11,
+                    outline: "none",
+                    flex: 1,
+                    maxWidth: 340,
+                  }}
+                >
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label ? `${m.label} · ${m.id.split("/").pop()}` : m.id.split("/").pop()}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{ color: "#444" }}>LM Studio ikke tilgængeligt</span>
+              )}
+            </div>
             <div className="flex justify-end gap-4 mt-3 text-[11px]">
               <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer" }}>
                 annuller
