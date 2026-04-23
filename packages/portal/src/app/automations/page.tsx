@@ -26,29 +26,78 @@ const TEMPLATES: Array<{
   trigger: Trigger;
   action: Action;
 }> = [
+  // ── Daglige briefings ──────────────────────────────────────────────────────
   {
     name: "Morgen-ping",
-    description: "Kort besked hver morgen kl 07:30",
+    description: "Simpel besked hver morgen kl 07:30",
     trigger: { type: "cron", expression: "30 7 * * *" },
-    action: { type: "notify", title: "Godmorgen", body: "Skynet er klar til dagen ☕", priority: "default" },
+    action: { type: "notify", title: "Godmorgen ☀️", body: "Skynet er klar til dagen — tjek vejr, energi og nyheder.", priority: "default" },
   },
+  {
+    name: "LLM Morgen-briefing",
+    description: "AI genererer dansk briefing: vejr + energi + nyheder kl 07:00",
+    trigger: { type: "cron", expression: "0 7 * * *" },
+    action: {
+      type: "llm_notify",
+      prompt: `Skriv en kort dansk morgenbriefing i max 4 linjer. Gør følgende:
+1. Kald read_weather → nævn dagens vejr og temperatur
+2. Kald read_energy → nævn dagens el-spotpris (øre/kWh)
+3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn den vigtigste nyhed
+4. Afslut med en kort opmuntrende sætning
+Svar udelukkende på dansk. Vær konkret og præcis.`,
+      notifyTitle: "☀️ Morgenbriefing",
+      priority: "default",
+      useTools: true,
+    } as Action,
+  },
+  {
+    name: "iMessage Morgen-briefing",
+    description: "Sender AI-briefing som iMessage + push kl 07:00",
+    trigger: { type: "cron", expression: "0 7 * * *" },
+    action: {
+      type: "llm_notify",
+      prompt: `Skriv en kort dansk morgenbriefing i max 5 linjer til en iMessage. Gør følgende:
+1. Kald read_weather → nævn vejr og temperatur
+2. Kald read_energy → nævn el-spotpris (øre/kWh)
+3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn 2 vigtige nyheder med korte titler
+4. Afslut kort og venligt
+Brug emoji sparsomt. Svar på dansk.`,
+      notifyTitle: "☀️ Morgenbriefing",
+      priority: "default",
+      useTools: true,
+      imessageTo: "+4500000000",
+    } as Action,
+  },
+  {
+    name: "DR Nyheder (daglig)",
+    description: "Hent DR-nyheder og send push kl 08:00",
+    trigger: { type: "cron", expression: "0 8 * * *" },
+    action: {
+      type: "llm_notify",
+      prompt: "Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
+      notifyTitle: "📰 DR Nyheder",
+      priority: "default",
+      useTools: true,
+    } as Action,
+  },
+  // ── Tærskler & alarmer ──────────────────────────────────────────────────────
   {
     name: "Disk-alarm >90%",
     description: "Advarsel når disken er næsten fuld",
     trigger: { type: "threshold", metric: "disk_percent", op: ">", value: 90, cooldownSec: 3600 },
-    action: { type: "notify", title: "Disk næsten fuld ({value}%)", body: "Disken er over {threshold}% — ryd op i Downloads/cache", priority: "high", tag: "warning" },
+    action: { type: "notify", title: "Disk næsten fuld", body: "Disken er over 90% — ryd op i Downloads/cache", priority: "high", tag: "warning" },
   },
   {
     name: "CPU hot >85°C",
     description: "Push når temperaturen er høj i 5 min",
     trigger: { type: "threshold", metric: "temperature", op: ">", value: 85, sustainSec: 300, cooldownSec: 1800 },
-    action: { type: "notify", title: "CPU varm ({value}°C)", body: "Tjek om en proces er i loop — har været over {threshold}°C i 5+ min", priority: "high", tag: "fire" },
+    action: { type: "notify", title: "🔥 CPU varm", body: "Processortemperatur over 85°C i 5+ min — tjek aktivitetsmonitor", priority: "high", tag: "fire" },
   },
   {
-    name: "LLM-briefing kl 07:00",
-    description: "LLM genererer kort dansk morgenbriefing",
-    trigger: { type: "cron", expression: "0 7 * * *" },
-    action: { type: "llm_notify", prompt: "Skriv en kort dansk morgenbriefing på max 3 linjer. Nævn vejret, dagens el-spotpris og om der er vigtige services der ikke kører. Brug tools når det giver mening.", notifyTitle: "Morgenbriefing", priority: "default" },
+    name: "Lav el-pris (<50 øre)",
+    description: "Push når el-spotprisen falder under 50 øre/kWh",
+    trigger: { type: "threshold", metric: "energy_price", op: "<", value: 50, cooldownSec: 7200 },
+    action: { type: "notify", title: "⚡ Lav el-pris", body: "Spotprisen er under 50 øre/kWh — godt tidspunkt at lade op.", priority: "default", tag: "energy" },
   },
 ];
 
