@@ -46,6 +46,31 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* Mobil base-font en anelse mindre så widget-grid ikke spilder plads på phones */
+@media (max-width: 640px) {
+  html { font-size: 14px; }
+
+  /* Alle synlige knapper + interaktive links får 44px min tap-target på mobil.
+     Skipper knapper med inline minHeight (fx header hamburger som er 44 eksplicit). */
+  button:not([data-no-mobile-min]),
+  a[role="button"]:not([data-no-mobile-min]) {
+    min-height: 44px;
+  }
+  /* Input-felter også tap-friendly */
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="url"], select, textarea {
+    min-height: 40px;
+    font-size: 16px; /* forhindrer iOS Safari zoom ved focus */
+  }
+}
+
+/* Skjul scrollbar på horisontalt scroll-rows (fx mobile chip-rows) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(var(--j-acc-rgb), 0.2); border-radius: 4px; }

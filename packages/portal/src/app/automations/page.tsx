@@ -182,10 +182,14 @@ const btnStyle = {
   background: "none",
   border: "1px dashed #333",
   color: "#9bd0ff",
-  padding: "4px 10px",
+  padding: "8px 14px",
+  minHeight: 36,
   fontFamily: "inherit",
-  fontSize: 11,
+  fontSize: 12,
   cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
 } as const;
 
 export default function AutomationsPage() {

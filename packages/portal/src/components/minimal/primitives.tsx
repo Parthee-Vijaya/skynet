@@ -16,12 +16,18 @@ export function Section({
   children: ReactNode;
   className?: string;
 }) {
+  // Mobile: dashed bottom-border + lidt padding så sektioner er tydeligt
+  // adskilte i stack-layout. Desktop: ingen border — grid-gap gør jobbet.
   return (
-    <section className={className}>
-      <h2 className="font-mono text-[11px] text-neutral-500 mb-2 lowercase tracking-wide">
-        <span className="mr-1">#</span>
-        {title}
-        {right ? <span className="float-right text-neutral-700 font-normal">{right}</span> : null}
+    <section
+      className={`border-b border-dashed border-neutral-900 pb-4 mb-1 lg:border-b-0 lg:pb-0 lg:mb-0 ${className}`}
+    >
+      <h2 className="font-mono text-[11px] sm:text-[11px] text-neutral-500 mb-2 lowercase tracking-wide flex justify-between items-baseline gap-2">
+        <span>
+          <span className="mr-1">#</span>
+          {title}
+        </span>
+        {right ? <span className="text-neutral-700 font-normal text-right truncate">{right}</span> : null}
       </h2>
       {children}
     </section>
