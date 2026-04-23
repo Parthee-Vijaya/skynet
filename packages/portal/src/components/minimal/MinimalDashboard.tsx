@@ -49,9 +49,9 @@ export function MinimalDashboard() {
         }
       />
 
-      {/* Main grid — responsive gaps + padding */}
+      {/* Main grid — responsive gaps + padding (tættere top på mobil) */}
       <main
-        className="mx-auto grid gap-x-4 gap-y-5 sm:gap-x-6 sm:gap-y-6 lg:gap-x-8 lg:gap-y-7 px-4 py-5 sm:px-6 sm:py-6 lg:px-6 lg:py-7 pb-14"
+        className="mx-auto grid gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-6 lg:gap-x-8 lg:gap-y-7 px-4 pt-3 pb-10 sm:px-6 sm:py-6 lg:px-6 lg:py-7"
         style={{
           maxWidth: 1400,
           gridTemplateColumns: "repeat(12, minmax(0, 1fr))",

@@ -96,22 +96,25 @@ export function MobileNav({
         {rightSlot ?? defaultRight}
       </nav>
 
-      {/* ── Mobile top-bar (<md): hamburger + title + status ───────────── */}
+      {/* ── Mobile top-bar (<md): hamburger + title + status ─────────────
+           Bemærk: body har allerede padding-top: env(safe-area-inset-top)
+           via globals.css, så vi dobbelt-padder IKKE her. Header-højde
+           strammet til 48 for kompakt feel. */}
       <header
-        className="md:hidden sticky top-0 z-30 flex items-center gap-1 px-2 pr-4"
+        className="md:hidden sticky top-0 z-30 flex items-center gap-1 px-1 pr-3"
         style={{
           background: "#0a0a0a",
           borderBottom: "1px solid #1c1c1c",
-          height: 56,
+          height: 48,
           color: "#e5e5e5",
           fontFamily: MONO,
-          paddingTop: "env(safe-area-inset-top, 0px)",
         }}
       >
         <button
           onClick={() => setOpen(true)}
           aria-label="Menu"
-          style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: "#e5e5e5" }}
+          data-no-mobile-min
+          style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#e5e5e5" }}
         >
           ☰
         </button>
