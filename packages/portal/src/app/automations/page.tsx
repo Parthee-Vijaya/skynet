@@ -106,6 +106,52 @@ Brug emoji sparsomt. Svar på dansk.`,
     trigger: { type: "threshold", metric: "energy_price", op: "<", value: 50, cooldownSec: 7200 },
     actions: [{ type: "notify", title: "⚡ Lav el-pris", body: "Spotprisen er under 50 øre/kWh — godt tidspunkt at lade op.", priority: "default", tag: "energy" }],
   },
+  // ── Proaktive skabeloner ────────────────────────────────────────────────────
+  {
+    name: "🧠 Proaktiv morgen-scanner",
+    description: "AI scanner data hver time 07-09 og foreslår kun handling hvis relevant",
+    trigger: { type: "cron", expression: "0 7-9 * * *" },
+    actions: [
+      {
+        type: "llm_notify",
+        notifyTitle: "💡 Skynet-forslag",
+        prompt: `Du er en proaktiv hjemme-assistent. Scan dagens data og foreslå HØJST ÉN konkret handling jeg kan udføre nu — men kun hvis det er reelt værd at handle på.
+
+Tjek i rækkefølge:
+1. Kald read_energy → er el-prisen usædvanligt lav (< 50 øre/kWh)? Foreslå: start vaskemaskine, oplad bil, tør tøj nu.
+2. Kald read_weather → er der vindstød > 15 m/s, regn > 5 mm, eller usædvanlig varme/kulde? Foreslå: tag gummistøvler med, tøm altan, luft ud inden varmen.
+3. Kald list_calendar_events → er der et møde inden for 30 min jeg burde forberede?
+4. Ellers: svar EKSAKT med ordet "NONE" — så jeg ved du ikke spammer mig.
+
+Hvis du finder én god anledning: skriv max 2 linjer dansk. Ingen emoji, ingen "jeg" — bare direkte forslaget. Fx "El-prisen er 18 øre/kWh i næste time. God tid at starte opvasken eller vaskemaskinen."`,
+        priority: "default",
+        useTools: true,
+      } as LLMNotifyAction,
+    ],
+  },
+  {
+    name: "🧠 iMessage proaktiv aften-brief",
+    description: "Scanner dagens data kl 21 og iMessager kun hvis noget kræver handling før i morgen",
+    trigger: { type: "cron", expression: "0 21 * * *" },
+    actions: [
+      {
+        type: "llm_notify",
+        notifyTitle: "🌙 Skynet aften",
+        prompt: `Du er en diskret aften-assistent. Kig på morgendagen og nævn HØJST 1-2 ting jeg bør forberede nu.
+
+Tjek:
+1. Kald list_calendar_events → tidligt møde i morgen? Check lokation/forberedelse.
+2. Kald read_weather → morgenvejr der kræver forberedelse (regntøj, is-skrabning, varmt tøj)?
+3. Kald read_energy → meget lave priser om natten der betyder at timere kan programmeres?
+
+Hvis INTET er vigtigt: svar EKSAKT "NONE" — så skipper jeg beskeden.
+Ellers: max 3 korte linjer på dansk. Direkte, hjælpsom tone.`,
+        priority: "low",
+        useTools: true,
+        imessageTo: "+4500000000",
+      } as LLMNotifyAction,
+    ],
+  },
 ];
 
 const inputStyle = {

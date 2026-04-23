@@ -197,6 +197,15 @@ async function runLLMNotify(a: LLMNotifyAction, meta?: { automationId?: number; 
     return { ok: false, message: "tom eller ingen respons fra LLM" };
   }
 
+  // Proaktivt mønster: LLM kan skippe notifikation ved at returnere "NONE".
+  // Nyttigt til automations der kun skal pinge hvis der faktisk er noget
+  // at foreslå (fx "El-prisen er lav"-agent der kører hver time).
+  const normalized = finalText.trim().replace(/[.!]+$/, "").toUpperCase();
+  if (normalized === "NONE" || normalized.startsWith("NONE:") || normalized.startsWith("NONE ")) {
+    appendLog("info", "LLM returnerede NONE · springer notifikation over", meta);
+    return { ok: true, message: "LLM fandt intet værd at pinge om (NONE)" };
+  }
+
   appendLog("info", `LLM færdig · ${finalText.length} tegn genereret`, meta);
 
   // Push-notifikation
