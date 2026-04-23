@@ -44,7 +44,7 @@ const TEMPLATES: Array<{
         prompt: `Skriv en kort dansk morgenbriefing i max 4 linjer. Gør følgende:
 1. Kald read_weather → nævn dagens vejr og temperatur
 2. Kald read_energy → nævn dagens el-spotpris (øre/kWh)
-3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn den vigtigste nyhed
+3. Kald fetch_news med url='https://www.dr.dk/nyheder/service/feeds/allenyheder' → nævn den vigtigste nyhed
 4. Afslut med en kort opmuntrende sætning
 Svar udelukkende på dansk. Vær konkret og præcis.`,
         notifyTitle: "☀️ Morgenbriefing",
@@ -63,7 +63,7 @@ Svar udelukkende på dansk. Vær konkret og præcis.`,
         prompt: `Skriv en kort dansk morgenbriefing i max 5 linjer til en iMessage. Gør følgende:
 1. Kald read_weather → nævn vejr og temperatur
 2. Kald read_energy → nævn el-spotpris (øre/kWh)
-3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn 2 vigtige nyheder med korte titler
+3. Kald fetch_news med url='https://www.dr.dk/nyheder/service/feeds/allenyheder' → nævn 2 vigtige nyheder med korte titler
 4. Afslut kort og venligt
 Brug emoji sparsomt. Svar på dansk.`,
         notifyTitle: "☀️ Morgenbriefing",
@@ -80,8 +80,22 @@ Brug emoji sparsomt. Svar på dansk.`,
     actions: [
       {
         type: "llm_notify",
-        prompt: "Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
+        prompt: "Kald fetch_news med url='https://www.dr.dk/nyheder/service/feeds/allenyheder' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
         notifyTitle: "📰 DR Nyheder",
+        priority: "default",
+        useTools: true,
+      } as LLMNotifyAction,
+    ],
+  },
+  {
+    name: "Politiken (daglig)",
+    description: "Hent Politiken senest-nyt og send push kl 08:05",
+    trigger: { type: "cron", expression: "5 8 * * *" },
+    actions: [
+      {
+        type: "llm_notify",
+        prompt: "Kald fetch_news med url='https://politiken.dk/rss/senestenyt.rss' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
+        notifyTitle: "📰 Politiken",
         priority: "default",
         useTools: true,
       } as LLMNotifyAction,
@@ -168,10 +182,14 @@ const btnStyle = {
   background: "none",
   border: "1px dashed #333",
   color: "#9bd0ff",
-  padding: "4px 10px",
+  padding: "8px 14px",
+  minHeight: 36,
   fontFamily: "inherit",
-  fontSize: 11,
+  fontSize: 12,
   cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
 } as const;
 
 export default function AutomationsPage() {

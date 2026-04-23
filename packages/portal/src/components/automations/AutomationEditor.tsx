@@ -578,6 +578,9 @@ function ActionFields({
             className={inputCls}
             placeholder="+4512345678 eller navn@icloud.com (tom = kun push)"
           />
+          <div className="text-[11px] text-neutral-600 mt-1">
+            8-cifret DK-nummer normaliseres automatisk til +45-format
+          </div>
         </Field>
         <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
           <strong className="text-cyan-300">Med tools aktiveret</strong> kan LLM&apos;en

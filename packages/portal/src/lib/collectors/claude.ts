@@ -1,10 +1,11 @@
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import type { ClaudeSessionSummary, ClaudeStatusData, TokenBucket } from "@/lib/types";
+import type { ClaudeSessionSummary, ClaudeStatusData, ClaudeRateLimit, ClaudeRateLimits, TokenBucket } from "@/lib/types";
 
 const PROJECTS_DIR = path.join(os.homedir(), ".claude/projects");
 const STATS_CACHE = path.join(os.homedir(), ".claude/stats-cache.json");
+const RATE_LIMITS_CACHE = path.join(os.homedir(), ".claude/rate-limits.json");
 
 interface StatsCacheModelUsage {
   inputTokens?: number;
@@ -22,6 +23,66 @@ interface StatsCache {
 interface StatsCacheResult {
   bucket: TokenBucket;
   cutoffMs: number;
+}
+
+function humanizeResetIn(resetsAtMs: number | null): string {
+  if (!resetsAtMs) return "";
+  const diff = resetsAtMs - Date.now();
+  if (diff <= 0) return "nu";
+  const mins = Math.round(diff / 60_000);
+  if (mins < 60) return `om ${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `om ${hours}t`;
+  const days = Math.round(hours / 24);
+  return `om ${days}d`;
+}
+
+interface RawRateBucket {
+  used_percentage?: number | null;
+  resets_at?: number | null;
+}
+
+interface RawRateLimitsFile {
+  rate_limits?: {
+    five_hour?: RawRateBucket;
+    seven_day?: RawRateBucket;
+    seven_day_opus?: RawRateBucket;
+  };
+  updated_at?: number;
+}
+
+function toBucket(raw: RawRateBucket | undefined): ClaudeRateLimit | null {
+  if (!raw) return null;
+  const usedPct = typeof raw.used_percentage === "number" ? raw.used_percentage : null;
+  const resetsAtSec = typeof raw.resets_at === "number" ? raw.resets_at : null;
+  // Claude Code sender resets_at i sekunder — normaliser til ms
+  const resetsAtMs = resetsAtSec ? resetsAtSec * 1000 : null;
+  if (usedPct == null && resetsAtMs == null) return null;
+  return {
+    usedPercent: usedPct ?? 0,
+    resetsAt: resetsAtMs,
+    resetsIn: humanizeResetIn(resetsAtMs),
+  };
+}
+
+async function readRateLimits(): Promise<ClaudeRateLimits | null> {
+  try {
+    const raw = await fs.readFile(RATE_LIMITS_CACHE, "utf8");
+    const d = JSON.parse(raw) as RawRateLimitsFile;
+    const rl = d.rate_limits ?? {};
+    const updatedAt = (d.updated_at ?? 0) * 1000; // sek → ms
+    const ageMs = Date.now() - updatedAt;
+    const stale = ageMs > 24 * 60 * 60_000;
+    return {
+      fiveHour: toBucket(rl.five_hour),
+      sevenDay: toBucket(rl.seven_day),
+      sevenDayOpus: toBucket(rl.seven_day_opus),
+      updatedAt,
+      stale,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function readStatsCache(): Promise<StatsCacheResult | null> {
@@ -117,7 +178,7 @@ export async function collect(): Promise<ClaudeStatusData> {
   const startOfWeek = startOfDay - 6 * 24 * 60 * 60 * 1000;
   const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
 
-  const [files, statsCache] = await Promise.all([listAllJsonl(), readStatsCache()]);
+  const [files, statsCache, rateLimits] = await Promise.all([listAllJsonl(), readStatsCache(), readRateLimits()]);
 
   const total = statsCache ? { ...statsCache.bucket } : emptyBucket();
   const statsCutoff = statsCache?.cutoffMs ?? 0;
@@ -230,6 +291,7 @@ export async function collect(): Promise<ClaudeStatusData> {
     yearToDate: ytd,
     dailyTotals,
     recent,
+    rateLimits,
     fetchedAt: new Date().toISOString(),
   };
 }

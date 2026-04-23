@@ -1,6 +1,6 @@
 "use client";
 import { usePoll } from "@/hooks/usePoll";
-import type { ClaudeStatusData } from "@/lib/types";
+import type { ClaudeStatusData, ClaudeRateLimit } from "@/lib/types";
 import { Section, Dot } from "../primitives";
 
 function fmtTok(n: number): string {
@@ -10,6 +10,31 @@ function fmtTok(n: number): string {
   return String(n);
 }
 
+/** Én plan-usage linje · "5-hour limit   16% · resets 1h" */
+function PlanRow({ label, bucket }: { label: string; bucket: ClaudeRateLimit | null }) {
+  if (!bucket) {
+    return (
+      <tr>
+        <td className="text-neutral-600 py-0.5">{label}</td>
+        <td className="text-right text-neutral-700 tabular-nums">—</td>
+      </tr>
+    );
+  }
+  const pct = Math.round(bucket.usedPercent);
+  const tone = pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
+  return (
+    <tr>
+      <td className="text-neutral-500 py-0.5 truncate">{label}</td>
+      <td className={`text-right ${tone} tabular-nums`}>
+        {pct}%
+        {bucket.resetsIn && (
+          <span className="text-neutral-600 font-normal ml-1.5">· {bucket.resetsIn}</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 export function ClaudeWidget() {
   const { data } = usePoll<ClaudeStatusData>("/api/claude", 60_000);
 
@@ -17,6 +42,7 @@ export function ClaudeWidget() {
   const todayTotal = data?.today.total ?? 0;
   const weekTotal = data?.week.total ?? 0;
   const total = data?.total.total ?? 0;
+  const rl = data?.rateLimits;
 
   return (
     <Section
@@ -47,6 +73,26 @@ export function ClaudeWidget() {
             </tr>
           </tbody>
         </table>
+
+        {/* ── Plan-usage sektion (vises kun hvis rate-limits-cache er udfyldt) ── */}
+        {rl && (rl.fiveHour || rl.sevenDay || rl.sevenDayOpus) && (
+          <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-800">
+            <div className="flex items-baseline justify-between mb-1">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-600">plan usage</span>
+              {rl.stale && (
+                <span className="text-[10px] text-amber-500/70">⚠ gamle data</span>
+              )}
+            </div>
+            <table className="w-full text-[12px]">
+              <tbody>
+                <PlanRow label="5-hour limit" bucket={rl.fiveHour} />
+                <PlanRow label="weekly · all models" bucket={rl.sevenDay} />
+                <PlanRow label="weekly · opus/sonnet" bucket={rl.sevenDayOpus} />
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-800 flex justify-between text-[11px]">
           <span className="text-[#7dd67d]">
             <Dot tone="ok" />

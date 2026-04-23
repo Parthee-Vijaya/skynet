@@ -46,7 +46,7 @@ export async function runAction(action: Action, meta?: ActionMeta): Promise<Acti
   try {
     switch (action.type) {
       case "notify":
-        return await runNotify(action);
+        return await runNotify(action, meta);
       case "tool":
         return await runTool(action);
       case "llm_notify":
@@ -64,7 +64,7 @@ export async function runAction(action: Action, meta?: ActionMeta): Promise<Acti
   }
 }
 
-async function runNotify(a: NotifyAction): Promise<ActionResult> {
+async function runNotify(a: NotifyAction, meta?: ActionMeta): Promise<ActionResult> {
   const results = await notify({
     title: a.title,
     body: a.body,
@@ -72,6 +72,12 @@ async function runNotify(a: NotifyAction): Promise<ActionResult> {
     tag: a.tag,
     url: a.url,
   });
+  // Per-backend log så man ser hvilken der fejlede (ikke kun X/Y-aggregatet)
+  for (const r of results) {
+    if (!r.ok) {
+      appendLog("warn", `notify[${r.backend}] fejl: ${r.error ?? "ukendt"}`, { ...meta, tool: `notify/${r.backend}` });
+    }
+  }
   const okCount = results.filter((r) => r.ok).length;
   const failures = results.filter((r) => !r.ok);
   if (results.length === 0) {
@@ -214,6 +220,12 @@ async function runLLMNotify(a: LLMNotifyAction, meta?: { automationId?: number; 
     body: finalText,
     priority: a.priority,
   });
+  // Per-backend log så man kan se hvilken specifik backend der fejlede
+  for (const r of notifyResults) {
+    if (!r.ok) {
+      appendLog("warn", `notify[${r.backend}] fejl: ${r.error ?? "ukendt"}`, { ...meta, tool: `notify/${r.backend}` });
+    }
+  }
   const okCount = notifyResults.filter((r) => r.ok).length;
 
   // Valgfrit: send også som iMessage

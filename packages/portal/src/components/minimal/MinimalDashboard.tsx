@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getWidgets } from "./widgets/index";
 import { Pulse, Sep } from "./primitives";
+import { MobileNav } from "./MobileNav";
 
 const SPAN: Record<number, string> = {
   3: "col-span-12 md:col-span-6 lg:col-span-3",
@@ -35,38 +36,24 @@ export function MinimalDashboard() {
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      {/* Top nav / status bar */}
-      <nav
-        className="flex justify-between items-baseline px-6 py-3.5 text-[11px] flex-wrap gap-y-1"
-        style={{ borderBottom: "1px solid #1c1c1c", color: "#6b6b6b" }}
-      >
-        <div>
-          <span className="text-neutral-100">skynet</span>
-          <span className="text-neutral-500">.live</span>
-          <Sep />
-          <span>cockpit · minimal</span>
-        </div>
-        <div className="flex gap-3 text-[10px]">
-          <a href="/" className="hover:text-neutral-100">classic</a>
-          <a href="/minimal" className="text-neutral-100">minimal</a>
-          <a href="/agents" className="hover:text-neutral-100">agents</a>
-          <a href="/automations" className="hover:text-neutral-100">automations</a>
-          <a href="/chat" className="hover:text-neutral-100">chat</a>
-          <a href="/settings" className="hover:text-neutral-100">settings</a>
-        </div>
-        <div className="flex items-center">
-          <Pulse />
-          online<Sep />sampling ≤2/sec<Sep />
-          {now ? now.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}
-        </div>
-      </nav>
+      {/* Top nav / status bar — MobileNav håndterer desktop + mobil */}
+      <MobileNav
+        active="cockpit"
+        subtitle="cockpit · minimal"
+        rightSlot={
+          <div className="flex items-center text-neutral-500">
+            <Pulse />
+            online<Sep />sampling ≤2/sec<Sep />
+            {now ? now.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}
+          </div>
+        }
+      />
 
-      {/* Main grid */}
+      {/* Main grid — responsive gaps + padding (tættere top på mobil) */}
       <main
-        className="mx-auto grid gap-x-8 gap-y-7"
+        className="mx-auto grid gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-6 lg:gap-x-8 lg:gap-y-7 px-4 pt-3 pb-10 sm:px-6 sm:py-6 lg:px-6 lg:py-7"
         style={{
           maxWidth: 1400,
-          padding: "28px 24px 60px",
           gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
         }}
       >
