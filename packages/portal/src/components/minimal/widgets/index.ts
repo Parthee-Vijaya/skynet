@@ -10,6 +10,8 @@ import { NetWidgetMinimal } from "./NetWidget";
 import { DiskWidgetMinimal } from "./DiskWidget";
 import { ServicesWidget } from "./ServicesWidget";
 import { TopReposWidget } from "./TopReposWidget";
+import { WeatherWidgetMinimal } from "./WeatherWidgetMinimal";
+import { EnergyWidgetMinimal } from "./EnergyWidgetMinimal";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -17,6 +19,9 @@ registerWidget({ id: "ribbon",   group: "system",   colSpan: 12, Component: Ribb
 registerWidget({ id: "cpu",      group: "system",   colSpan: 4,  Component: CpuWidgetMinimal });
 registerWidget({ id: "ram",      group: "system",   colSpan: 4,  Component: RamWidgetMinimal });
 registerWidget({ id: "net",      group: "system",   colSpan: 4,  Component: NetWidgetMinimal });
+// ── Row: weather (left) + energy (right) ───────────────────────────────────
+registerWidget({ id: "weather",  group: "ambient",  colSpan: 6,  Component: WeatherWidgetMinimal });
+registerWidget({ id: "energy",   group: "ambient",  colSpan: 6,  Component: EnergyWidgetMinimal });
 // ── Row: disk (left) + services (right, spans this row AND the repos row below) ──
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
 registerWidget({ id: "services", group: "services", colSpan: 6,  rowSpan: 2, Component: ServicesWidget });

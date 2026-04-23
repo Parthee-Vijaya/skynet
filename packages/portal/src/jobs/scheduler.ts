@@ -9,6 +9,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import type { Automation } from "@/lib/agent/types";
 import { listAutomations, recordRun } from "@/lib/agent/automations";
 import { runAction } from "@/lib/agent/actions";
+import { appendLog } from "@/lib/agent/log-buffer";
 
 interface RegisteredJob {
   automationId: number;
@@ -72,9 +73,12 @@ export function reloadScheduler(): { active: number; total: number } {
 }
 
 async function executeAutomation(a: Automation): Promise<void> {
+  const meta = { automationId: a.id, automationName: a.name };
+  appendLog("info", `starter automation '${a.name}'`, meta);
   console.log(`[scheduler] kører '${a.name}' (id=${a.id})`);
-  const result = await runAction(a.action);
+  const result = await runAction(a.action, meta);
   recordRun(a.id, result.ok ? "ok" : "error", result.message);
+  appendLog(result.ok ? "ok" : "error", `'${a.name}' → ${result.message}`, meta);
 }
 
 export function startScheduler(): void {
@@ -98,7 +102,10 @@ export async function runAutomationManually(automationId: number): Promise<{
   const all = listAutomations();
   const a = all.find((x) => x.id === automationId);
   if (!a) return { ok: false, message: "automation findes ikke" };
-  const result = await runAction(a.action);
+  const meta = { automationId: a.id, automationName: a.name };
+  appendLog("info", `manuel kørsel af '${a.name}'`, meta);
+  const result = await runAction(a.action, meta);
   recordRun(a.id, result.ok ? "ok" : "error", result.message);
+  appendLog(result.ok ? "ok" : "error", `'${a.name}' → ${result.message}`, meta);
   return result;
 }

@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Automation, Trigger, Action } from "@/lib/agent/types";
+import type { LogEntry } from "@/lib/agent/log-buffer";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section, Sep } from "@/components/minimal/primitives";
@@ -210,7 +211,7 @@ export default function AutomationsPage() {
                   value={notifyCfg.ntfyTopic}
                   onChange={(e) => setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })}
                   onBlur={(e) => saveNotify({ ntfyTopic: e.target.value })}
-                  placeholder="fx skynet-parthee-xyz"
+                  placeholder="fx skynet-dit-navn-xyz"
                   style={{ ...inputStyle, flex: 1 }}
                 />
                 <span style={{ color: "#6b6b6b" }}>{notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}</span>
@@ -336,10 +337,97 @@ export default function AutomationsPage() {
             ))}
           </div>
         </Section>
+
+        {/* Live log tail */}
+        <AgentLogPanel />
       </main>
 
       <AutomationEditor target={editing} onClose={() => setEditing(null)} onSaved={load} />
     </MinimalPageLayout>
+  );
+}
+
+// ── Live agent log panel ─────────────────────────────────────────────────────
+
+const LOG_COLORS: Record<string, string> = {
+  info:  "#6b6b6b",
+  ok:    "#7dd67d",
+  error: "#d87373",
+  warn:  "#e6b450",
+  tool:  "#9bd0ff",
+};
+
+function AgentLogPanel() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [paused, setPaused] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
+
+  useEffect(() => {
+    const es = new EventSource("/api/agent/logs?tail=80");
+    es.onmessage = (e: MessageEvent) => {
+      if (pausedRef.current) return;
+      try {
+        const entry = JSON.parse(e.data as string) as LogEntry;
+        setLogs((prev) => {
+          const next = [...prev, entry];
+          return next.length > 200 ? next.slice(-200) : next;
+        });
+      } catch { /* noop */ }
+    };
+    return () => es.close();
+  }, []);
+
+  // Auto-scroll to bottom on new entries
+  useEffect(() => {
+    if (!paused) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs, paused]);
+
+  const fmt = (ts: number) => new Date(ts).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  return (
+    <div style={{ fontFamily: "inherit", marginTop: 40 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.25em", textTransform: "uppercase" }}>
+          # agent logs <span style={{ color: "#3a3a3a", marginLeft: 8 }}>live · {logs.length} linjer</span>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setPaused(!paused)} style={{ background: "none", border: "none", color: paused ? "#e6b450" : "#6b6b6b", fontFamily: "inherit", fontSize: 11, cursor: "pointer", padding: 0 }}>
+            {paused ? "▶ genoptag" : "⏸ pause"}
+          </button>
+          <button onClick={() => setLogs([])} style={{ background: "none", border: "none", color: "#3a3a3a", fontFamily: "inherit", fontSize: 11, cursor: "pointer", padding: 0 }}>
+            ryd
+          </button>
+        </div>
+      </div>
+      <div
+        style={{
+          background: "#080808",
+          border: "1px dashed #1c1c1c",
+          padding: "10px 14px",
+          height: 240,
+          overflowY: "auto",
+          fontFamily: "inherit",
+          fontSize: 11,
+        }}
+      >
+        {logs.length === 0 && (
+          <div style={{ color: "#3a3a3a" }}>ingen logs endnu — kør en automation for at se output her</div>
+        )}
+        {logs.map((l) => (
+          <div key={l.id} style={{ display: "flex", gap: 10, marginBottom: 2 }}>
+            <span style={{ color: "#3a3a3a", flexShrink: 0 }}>{fmt(l.ts)}</span>
+            <span style={{ color: LOG_COLORS[l.level] ?? "#6b6b6b", flexShrink: 0, width: 36 }}>{l.level}</span>
+            {l.automationName && (
+              <span style={{ color: "#444", flexShrink: 0 }}>[{l.automationName}]</span>
+            )}
+            <span style={{ color: "#9b9b9b", wordBreak: "break-all" }}>{l.message}</span>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </div>
   );
 }
 

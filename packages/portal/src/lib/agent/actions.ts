@@ -8,13 +8,19 @@ import { notify } from "../notify";
 import { dispatchTool } from "./dispatcher";
 import { getLLMConfig } from "../settings";
 import { TOOLS } from "./tools";
+import { appendLog } from "./log-buffer";
 
 export interface ActionResult {
   ok: boolean;
   message: string;
 }
 
-export async function runAction(action: Action): Promise<ActionResult> {
+export interface ActionMeta {
+  automationId?: number;
+  automationName?: string;
+}
+
+export async function runAction(action: Action, meta?: ActionMeta): Promise<ActionResult> {
   try {
     switch (action.type) {
       case "notify":
@@ -22,7 +28,7 @@ export async function runAction(action: Action): Promise<ActionResult> {
       case "tool":
         return await runTool(action);
       case "llm_notify":
-        return await runLLMNotify(action);
+        return await runLLMNotify(action, meta);
       default: {
         const exhaustive: never = action;
         return { ok: false, message: `Ukendt action-type: ${JSON.stringify(exhaustive)}` };
@@ -80,13 +86,16 @@ async function runTool(a: ToolAction): Promise<ActionResult> {
   };
 }
 
-async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
+async function runLLMNotify(a: LLMNotifyAction, meta?: { automationId?: number; automationName?: string }): Promise<ActionResult> {
   const { baseUrl, apiKey, systemPrompt: defaultSys } = getLLMConfig();
   const sys = a.systemPrompt?.trim() || defaultSys;
   const model = a.model || (await pickDefaultModel(baseUrl, apiKey));
   if (!model) {
+    appendLog("error", "ingen model valgt og ingen default fundet", meta);
     return { ok: false, message: "ingen model valgt og ingen default fundet" };
   }
+
+  appendLog("info", `LLM starter · model=${model.split("/").pop() ?? model}`, meta);
 
   const useTools = a.useTools !== false; // default: tools aktive
   const MAX_TURNS = 5;
@@ -151,15 +160,22 @@ async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
     for (const tc of toolCalls) {
       let parsedArgs: Record<string, unknown> = {};
       try { parsedArgs = JSON.parse(tc.function.arguments); } catch { /* noop */ }
+      appendLog("tool", `→ ${tc.function.name}(${Object.keys(parsedArgs).join(", ")})`, { ...meta, tool: tc.function.name });
       const result = await dispatchTool(
         { id: tc.id, name: tc.function.name, arguments: parsedArgs },
         { allowDestructive: false },
       );
+      appendLog(result.ok ? "ok" : "warn", `← ${tc.function.name}: ${summarize(result.content, 80)}`, { ...meta, tool: tc.function.name });
       conversation.push({ role: "tool", content: result.content, tool_call_id: tc.id });
     }
   }
 
-  if (!finalText) return { ok: false, message: "tom eller ingen respons fra LLM" };
+  if (!finalText) {
+    appendLog("error", "tom eller ingen respons fra LLM", meta);
+    return { ok: false, message: "tom eller ingen respons fra LLM" };
+  }
+
+  appendLog("info", `LLM færdig · ${finalText.length} tegn genereret`, meta);
 
   // Push-notifikation
   const notifyResults = await notify({
@@ -172,6 +188,7 @@ async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
   // Valgfrit: send også som iMessage
   let imessageStatus = "";
   if (a.imessageTo?.trim()) {
+    appendLog("tool", `→ send_imessage til ${a.imessageTo}`, meta);
     const imResult = await dispatchTool(
       {
         id: `imsg_${Date.now().toString(36)}`,
@@ -181,12 +198,12 @@ async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
       { allowDestructive: false },
     );
     imessageStatus = imResult.ok ? " · iMessage sendt" : ` · iMessage fejl: ${summarize(imResult.content, 80)}`;
+    appendLog(imResult.ok ? "ok" : "error", `iMessage: ${imResult.ok ? "sendt" : summarize(imResult.content, 80)}`, meta);
   }
 
-  return {
-    ok: okCount > 0 || !!a.imessageTo,
-    message: `LLM gen. ${finalText.length} tegn · notify ${okCount}/${notifyResults.length}${imessageStatus}`,
-  };
+  const finalMsg = `LLM gen. ${finalText.length} tegn · notify ${okCount}/${notifyResults.length}${imessageStatus}`;
+  appendLog(okCount > 0 ? "ok" : "warn", finalMsg, meta);
+  return { ok: okCount > 0 || !!a.imessageTo, message: finalMsg };
 }
 
 async function pickDefaultModel(baseUrl: string, apiKey: string): Promise<string | null> {

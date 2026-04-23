@@ -3,7 +3,8 @@ import type { GithubData, GithubEventItem, GithubContribDay } from "@/lib/types"
 // GitHub REST API — ingen key krævet for public data (60 req/t ufiltreret).
 // Vi rammer kun ~3 endpoints pr. 10-min refresh, så vi er langt under limit.
 
-const USER = process.env.GITHUB_USER || "Parthee-Vijaya";
+// Set GITHUB_USER env-var (in .env.local or LaunchAgent plist) to your GitHub username.
+const USER = process.env.GITHUB_USER || "";
 
 interface GhUser {
   login: string;

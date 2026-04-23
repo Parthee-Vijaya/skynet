@@ -164,20 +164,21 @@ export function TopReposWidget() {
             <th style={{ textAlign: "left", paddingBottom: 6, fontWeight: 400 }}>repository</th>
             <th style={{ textAlign: "left", paddingBottom: 6, fontWeight: 400, width: 70 }}>lang</th>
             <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 400, width: 48 }}>★</th>
+            <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 400, width: 48 }}>+dag</th>
             <th style={{ textAlign: "right", paddingBottom: 6, fontWeight: 400, width: 40 }}>badge</th>
           </tr>
         </thead>
         <tbody>
           {repos.length === 0 && !error && (
             <tr>
-              <td colSpan={5} style={{ paddingTop: 16, color: "#3a3a3a" }}>
+              <td colSpan={6} style={{ paddingTop: 16, color: "#3a3a3a" }}>
                 henter repos…
               </td>
             </tr>
           )}
           {error && repos.length === 0 && (
             <tr>
-              <td colSpan={5} style={{ paddingTop: 16, color: "#d87373", fontSize: 11 }}>
+              <td colSpan={6} style={{ paddingTop: 16, color: "#d87373", fontSize: 11 }}>
                 GitHub API utilgængelig
               </td>
             </tr>
@@ -264,6 +265,24 @@ export function TopReposWidget() {
                   } as React.CSSProperties}
                 >
                   {fmtStars(repo.stars)}
+                </td>
+
+                {/* Stars today */}
+                <td
+                  style={{
+                    padding: "5px 8px 5px 0",
+                    verticalAlign: "top",
+                    textAlign: "right",
+                    tabularNums: true,
+                  } as React.CSSProperties}
+                >
+                  {repo.starsToday !== null && repo.starsToday > 0 ? (
+                    <span style={{ color: "#7dd67d", fontSize: 10 }}>+{fmtStars(repo.starsToday)}</span>
+                  ) : repo.starsToday === 0 ? (
+                    <span style={{ color: "#3a3a3a", fontSize: 10 }}>—</span>
+                  ) : (
+                    <span style={{ color: "#3a3a3a", fontSize: 10 }}>…</span>
+                  )}
                 </td>
 
                 {/* Badge */}
