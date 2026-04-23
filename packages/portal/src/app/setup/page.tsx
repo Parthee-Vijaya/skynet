@@ -56,6 +56,7 @@ export default function SetupPage() {
   // Profile form
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
+  const [ntfyTopic, setNtfyTopic] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const profileLoaded = useRef(false);
@@ -64,7 +65,10 @@ export default function SetupPage() {
     setScanning(true);
     setScanErr(null);
     try {
-      const r = await fetch("/api/setup", { cache: "no-store" });
+      const [r, nc] = await Promise.all([
+        fetch("/api/setup", { cache: "no-store" }),
+        fetch("/api/automations/notify-config", { cache: "no-store" }),
+      ]);
       const data: SetupResp = await r.json();
       setResp(data);
       // Pre-fill profile fields on first load
@@ -72,6 +76,8 @@ export default function SetupPage() {
         profileLoaded.current = true;
         if (data.profile.name) setName(data.profile.name);
         if (data.profile.location?.label) setCity(data.profile.location.label);
+        const notifyCfg = await nc.json() as { ntfyTopic?: string };
+        if (notifyCfg.ntfyTopic) setNtfyTopic(notifyCfg.ntfyTopic);
       }
     } catch (e) {
       setScanErr(e instanceof Error ? e.message : "fejl");
@@ -83,22 +89,31 @@ export default function SetupPage() {
   useEffect(() => { scan(); }, [scan]);
 
   const saveProfile = async () => {
-    if (!name.trim() && !city.trim()) return;
+    if (!name.trim() && !city.trim() && !ntfyTopic.trim()) return;
     setSaving(true);
     setSaveMsg(null);
     try {
-      const r = await fetch("/api/setup", {
-        method: "POST",
+      const ops: Promise<Response>[] = [];
+      if (name.trim() || city.trim()) {
+        ops.push(fetch("/api/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim() || undefined, city: city.trim() || undefined }),
+        }));
+      }
+      ops.push(fetch("/api/automations/notify-config", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() || undefined, city: city.trim() || undefined }),
-      });
-      const data = await r.json() as { ok: boolean; error?: string; saved?: Record<string, unknown> };
-      if (data.ok) {
-        setSaveMsg({ ok: true, text: "Gemt ✓" });
-        // Re-scan to pick up new location in status
-        scan();
+        body: JSON.stringify({ ntfyTopic: ntfyTopic.trim() }),
+      }));
+      const results = await Promise.all(ops);
+      const failed = results.find((r) => !r.ok);
+      if (failed) {
+        const err = await failed.json() as { error?: string };
+        setSaveMsg({ ok: false, text: err.error ?? "Fejl ved gem" });
       } else {
-        setSaveMsg({ ok: false, text: data.error ?? "Fejl ved gem" });
+        setSaveMsg({ ok: true, text: "Gemt ✓" });
+        scan();
       }
     } catch (e) {
       setSaveMsg({ ok: false, text: e instanceof Error ? e.message : "fejl" });
@@ -180,12 +195,30 @@ export default function SetupPage() {
                 onKeyDown={(e) => e.key === "Enter" && saveProfile()}
               />
             </div>
+
+            {/* ntfy topic */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ display: "block", fontSize: 11, color: "#6b6b6b", marginBottom: 6 }}>
+                ntfy push-topic <span style={{ color: "#3a3a3a" }}>(valgfri — modtag push på iPhone/Android)</span>
+              </label>
+              <input
+                type="text"
+                value={ntfyTopic}
+                onChange={(e) => setNtfyTopic(e.target.value)}
+                placeholder="fx skynet-parthee-xyz  (hent ntfy-appen og abonnér på dit topic)"
+                style={INPUT}
+                onKeyDown={(e) => e.key === "Enter" && saveProfile()}
+              />
+              <div style={{ fontSize: 10, color: "#3a3a3a", marginTop: 4 }}>
+                Gratis · ingen konto · E2E-krypteret · <a href="https://ntfy.sh" target="_blank" rel="noreferrer" style={{ color: "#525252" }}>ntfy.sh</a>
+              </div>
+            </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button
               onClick={saveProfile}
-              disabled={saving || (!name.trim() && !city.trim())}
+              disabled={saving || (!name.trim() && !city.trim() && !ntfyTopic.trim())}
               style={{
                 background: "none",
                 border: "1px dashed #444",
