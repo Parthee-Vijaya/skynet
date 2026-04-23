@@ -8,7 +8,7 @@
 import cron, { type ScheduledTask } from "node-cron";
 import type { Automation } from "@/lib/agent/types";
 import { listAutomations, recordRun } from "@/lib/agent/automations";
-import { runAction } from "@/lib/agent/actions";
+import { runActions } from "@/lib/agent/actions";
 import { appendLog } from "@/lib/agent/log-buffer";
 
 interface RegisteredJob {
@@ -76,7 +76,7 @@ async function executeAutomation(a: Automation): Promise<void> {
   const meta = { automationId: a.id, automationName: a.name };
   appendLog("info", `starter automation '${a.name}'`, meta);
   console.log(`[scheduler] kører '${a.name}' (id=${a.id})`);
-  const result = await runAction(a.action, meta);
+  const result = await runActions(a.actions, meta);
   recordRun(a.id, result.ok ? "ok" : "error", result.message);
   appendLog(result.ok ? "ok" : "error", `'${a.name}' → ${result.message}`, meta);
 }
@@ -104,7 +104,7 @@ export async function runAutomationManually(automationId: number): Promise<{
   if (!a) return { ok: false, message: "automation findes ikke" };
   const meta = { automationId: a.id, automationName: a.name };
   appendLog("info", `manuel kørsel af '${a.name}'`, meta);
-  const result = await runAction(a.action, meta);
+  const result = await runActions(a.actions, meta);
   recordRun(a.id, result.ok ? "ok" : "error", result.message);
   appendLog(result.ok ? "ok" : "error", `'${a.name}' → ${result.message}`, meta);
   return result;

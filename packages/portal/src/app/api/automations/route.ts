@@ -20,9 +20,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return Response.json({ error: "invalid JSON" }, { status: 400 });
   }
-  if (!body.name || !body.trigger || !body.action) {
+  const hasAction = body.action != null || (Array.isArray(body.actions) && body.actions.length > 0);
+  if (!body.name || !body.trigger || !hasAction) {
     return Response.json(
-      { error: "name, trigger og action er påkrævet" },
+      { error: "name, trigger og mindst én action er påkrævet" },
       { status: 400 }
     );
   }

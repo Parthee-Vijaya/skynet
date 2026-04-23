@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Automation, Trigger, Action } from "@/lib/agent/types";
+import type { Automation, Trigger, Action, LLMNotifyAction } from "@/lib/agent/types";
 import type { LogEntry } from "@/lib/agent/log-buffer";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
@@ -25,80 +25,86 @@ const TEMPLATES: Array<{
   name: string;
   description: string;
   trigger: Trigger;
-  action: Action;
+  actions: Action[];
 }> = [
   // ── Daglige briefings ──────────────────────────────────────────────────────
   {
     name: "Morgen-ping",
     description: "Simpel besked hver morgen kl 07:30",
     trigger: { type: "cron", expression: "30 7 * * *" },
-    action: { type: "notify", title: "Godmorgen ☀️", body: "Skynet er klar til dagen — tjek vejr, energi og nyheder.", priority: "default" },
+    actions: [{ type: "notify", title: "Godmorgen ☀️", body: "Skynet er klar til dagen — tjek vejr, energi og nyheder.", priority: "default" }],
   },
   {
     name: "LLM Morgen-briefing",
     description: "AI genererer dansk briefing: vejr + energi + nyheder kl 07:00",
     trigger: { type: "cron", expression: "0 7 * * *" },
-    action: {
-      type: "llm_notify",
-      prompt: `Skriv en kort dansk morgenbriefing i max 4 linjer. Gør følgende:
+    actions: [
+      {
+        type: "llm_notify",
+        prompt: `Skriv en kort dansk morgenbriefing i max 4 linjer. Gør følgende:
 1. Kald read_weather → nævn dagens vejr og temperatur
 2. Kald read_energy → nævn dagens el-spotpris (øre/kWh)
 3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn den vigtigste nyhed
 4. Afslut med en kort opmuntrende sætning
 Svar udelukkende på dansk. Vær konkret og præcis.`,
-      notifyTitle: "☀️ Morgenbriefing",
-      priority: "default",
-      useTools: true,
-    } as Action,
+        notifyTitle: "☀️ Morgenbriefing",
+        priority: "default",
+        useTools: true,
+      } as LLMNotifyAction,
+    ],
   },
   {
     name: "iMessage Morgen-briefing",
     description: "Sender AI-briefing som iMessage + push kl 07:00",
     trigger: { type: "cron", expression: "0 7 * * *" },
-    action: {
-      type: "llm_notify",
-      prompt: `Skriv en kort dansk morgenbriefing i max 5 linjer til en iMessage. Gør følgende:
+    actions: [
+      {
+        type: "llm_notify",
+        prompt: `Skriv en kort dansk morgenbriefing i max 5 linjer til en iMessage. Gør følgende:
 1. Kald read_weather → nævn vejr og temperatur
 2. Kald read_energy → nævn el-spotpris (øre/kWh)
 3. Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' → nævn 2 vigtige nyheder med korte titler
 4. Afslut kort og venligt
 Brug emoji sparsomt. Svar på dansk.`,
-      notifyTitle: "☀️ Morgenbriefing",
-      priority: "default",
-      useTools: true,
-      imessageTo: "+4500000000",
-    } as Action,
+        notifyTitle: "☀️ Morgenbriefing",
+        priority: "default",
+        useTools: true,
+        imessageTo: "+4500000000",
+      } as LLMNotifyAction,
+    ],
   },
   {
     name: "DR Nyheder (daglig)",
     description: "Hent DR-nyheder og send push kl 08:00",
     trigger: { type: "cron", expression: "0 8 * * *" },
-    action: {
-      type: "llm_notify",
-      prompt: "Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
-      notifyTitle: "📰 DR Nyheder",
-      priority: "default",
-      useTools: true,
-    } as Action,
+    actions: [
+      {
+        type: "llm_notify",
+        prompt: "Kald fetch_news med url='https://feeds.dr.dk/dr-nyheder.rss' og limit=6. Opsummer de 3 vigtigste nyheder på dansk i punktform. Max 5 linjer.",
+        notifyTitle: "📰 DR Nyheder",
+        priority: "default",
+        useTools: true,
+      } as LLMNotifyAction,
+    ],
   },
   // ── Tærskler & alarmer ──────────────────────────────────────────────────────
   {
     name: "Disk-alarm >90%",
     description: "Advarsel når disken er næsten fuld",
     trigger: { type: "threshold", metric: "disk_percent", op: ">", value: 90, cooldownSec: 3600 },
-    action: { type: "notify", title: "Disk næsten fuld", body: "Disken er over 90% — ryd op i Downloads/cache", priority: "high", tag: "warning" },
+    actions: [{ type: "notify", title: "Disk næsten fuld", body: "Disken er over 90% — ryd op i Downloads/cache", priority: "high", tag: "warning" }],
   },
   {
     name: "CPU hot >85°C",
     description: "Push når temperaturen er høj i 5 min",
     trigger: { type: "threshold", metric: "temperature", op: ">", value: 85, sustainSec: 300, cooldownSec: 1800 },
-    action: { type: "notify", title: "🔥 CPU varm", body: "Processortemperatur over 85°C i 5+ min — tjek aktivitetsmonitor", priority: "high", tag: "fire" },
+    actions: [{ type: "notify", title: "🔥 CPU varm", body: "Processortemperatur over 85°C i 5+ min — tjek aktivitetsmonitor", priority: "high", tag: "fire" }],
   },
   {
     name: "Lav el-pris (<50 øre)",
     description: "Push når el-spotprisen falder under 50 øre/kWh",
     trigger: { type: "threshold", metric: "energy_price", op: "<", value: 50, cooldownSec: 7200 },
-    action: { type: "notify", title: "⚡ Lav el-pris", body: "Spotprisen er under 50 øre/kWh — godt tidspunkt at lade op.", priority: "default", tag: "energy" },
+    actions: [{ type: "notify", title: "⚡ Lav el-pris", body: "Spotprisen er under 50 øre/kWh — godt tidspunkt at lade op.", priority: "default", tag: "energy" }],
   },
 ];
 
@@ -159,7 +165,7 @@ export default function AutomationsPage() {
   const runNow = async (a: Automation) => { await fetch(`/api/automations/${a.id}/run`, { method: "POST" }); load(); };
   const remove = async (a: Automation) => { if (!confirm(`Slet "${a.name}"?`)) return; await fetch(`/api/automations/${a.id}`, { method: "DELETE" }); load(); };
   const addTemplate = async (t: (typeof TEMPLATES)[number]) => {
-    await fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: t.name, description: t.description, trigger: t.trigger, action: t.action, enabled: false }) });
+    await fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: t.name, description: t.description, trigger: t.trigger, actions: t.actions, enabled: false }) });
     load();
   };
 
@@ -301,7 +307,7 @@ export default function AutomationsPage() {
                       {a.description && <div style={{ color: "#6b6b6b", fontSize: 11 }}>{a.description}</div>}
                     </td>
                     <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {summaryTrigger(a.trigger)}<Sep />{summaryAction(a.action)}
+                      {summaryTrigger(a.trigger)}<Sep />{summaryActions(a.actions)}
                     </td>
                     <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11 }}>
                       {a.lastRunAt ? new Date(a.lastRunAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
@@ -331,7 +337,7 @@ export default function AutomationsPage() {
                 <div style={{ color: "#9bd0ff", fontSize: 12, marginBottom: 4 }}>{t.name}</div>
                 <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>{t.description}</div>
                 <div style={{ color: "#444", fontSize: 10, fontFamily: "inherit" }}>
-                  {summaryTrigger(t.trigger)} → {summaryAction(t.action)}
+                  {summaryTrigger(t.trigger)} → {summaryActions(t.actions)}
                 </div>
               </button>
             ))}
@@ -437,9 +443,15 @@ function summaryTrigger(t: Trigger): string {
   return "manuel";
 }
 
-function summaryAction(a: Action): string {
+function summaryOneAction(a: Action): string {
   if (a.type === "notify") return `notify "${a.title}"`;
   if (a.type === "tool") return `tool ${a.tool}`;
   if (a.type === "llm_notify") return `llm → "${a.notifyTitle}"`;
   return "ukendt";
+}
+
+function summaryActions(actions: Action[]): string {
+  if (!actions || actions.length === 0) return "ingen action";
+  if (actions.length === 1) return summaryOneAction(actions[0]);
+  return `${actions.length} trin: ${actions.map(summaryOneAction).join(" → ")}`;
 }

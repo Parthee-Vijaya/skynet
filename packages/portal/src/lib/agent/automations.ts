@@ -13,23 +13,26 @@ import type {
 
 function rowToAutomation(r: AutomationRow): Automation {
   let trigger: Trigger;
-  let action: Action;
+  let actions: Action[];
   try {
     trigger = JSON.parse(r.trigger_config) as Trigger;
   } catch {
     trigger = { type: "manual" };
   }
   try {
-    action = JSON.parse(r.action_config) as Action;
+    const raw: unknown = JSON.parse(r.action_config);
+    // Backward-compat: gamle rækker har et enkelt JSON-objekt, nye har et array
+    actions = Array.isArray(raw) ? (raw as Action[]) : [raw as Action];
   } catch {
-    action = { type: "notify", title: "Invalid action", body: r.action_config };
+    actions = [{ type: "notify", title: "Invalid action", body: r.action_config }];
   }
   return {
     id: r.id,
     name: r.name,
     description: r.description ?? undefined,
     trigger,
-    action,
+    actions,
+    action: actions[0],
     enabled: r.enabled === 1,
     lastRunAt: r.last_run_at ?? undefined,
     lastStatus: (r.last_status as Automation["lastStatus"]) ?? undefined,
@@ -57,11 +60,16 @@ export interface CreateAutomationInput {
   name: string;
   description?: string;
   trigger: Trigger;
-  action: Action;
+  /** Ny multi-action indgang (foretrukket) */
+  actions?: Action[];
+  /** Gammel single-action indgang — normaliseres til actions[0] */
+  action?: Action;
   enabled?: boolean;
 }
 
 export function createAutomation(input: CreateAutomationInput): Automation {
+  const actions = input.actions ?? (input.action ? [input.action] : []);
+  if (actions.length === 0) throw new Error("mindst én action er påkrævet");
   const now = Date.now();
   const stmt = getDb().prepare(
     `INSERT INTO automations
@@ -73,8 +81,8 @@ export function createAutomation(input: CreateAutomationInput): Automation {
     input.description ?? null,
     input.trigger.type,
     JSON.stringify(input.trigger),
-    input.action.type,
-    JSON.stringify(input.action),
+    actions[0].type,
+    JSON.stringify(actions),
     input.enabled === false ? 0 : 1,
     now,
     now
@@ -89,6 +97,9 @@ export interface UpdateAutomationInput {
   name?: string;
   description?: string;
   trigger?: Trigger;
+  /** Ny multi-action indgang */
+  actions?: Action[];
+  /** Gammel single-action indgang — normaliseres til actions[0] */
   action?: Action;
   enabled?: boolean;
 }
@@ -100,11 +111,14 @@ export function updateAutomation(
   const existing = getAutomation(id);
   if (!existing) return null;
 
+  // Bestem den nye action-kæde: ny actions[] > gammel action > uændret
+  const actions = input.actions ?? (input.action ? [input.action] : existing.actions);
+
   const merged = {
     name: input.name ?? existing.name,
     description: input.description ?? existing.description ?? null,
     trigger: input.trigger ?? existing.trigger,
-    action: input.action ?? existing.action,
+    actions,
     enabled: input.enabled ?? existing.enabled,
   };
 
@@ -120,8 +134,8 @@ export function updateAutomation(
       merged.description,
       merged.trigger.type,
       JSON.stringify(merged.trigger),
-      merged.action.type,
-      JSON.stringify(merged.action),
+      merged.actions[0].type,
+      JSON.stringify(merged.actions),
       merged.enabled ? 1 : 0,
       Date.now(),
       id
