@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import type { Automation, Trigger, Action } from "@/lib/agent/types";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
+import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
+import { Section, Sep } from "@/components/minimal/primitives";
 
 interface NotifyCfg {
   macos: boolean;
@@ -29,63 +30,47 @@ const TEMPLATES: Array<{
     name: "Morgen-ping",
     description: "Kort besked hver morgen kl 07:30",
     trigger: { type: "cron", expression: "30 7 * * *" },
-    action: {
-      type: "notify",
-      title: "Godmorgen",
-      body: "Skynet er klar til dagen ☕",
-      priority: "default",
-    },
+    action: { type: "notify", title: "Godmorgen", body: "Skynet er klar til dagen ☕", priority: "default" },
   },
   {
     name: "Disk-alarm >90%",
     description: "Advarsel når disken er næsten fuld",
-    trigger: {
-      type: "threshold",
-      metric: "disk_percent",
-      op: ">",
-      value: 90,
-      cooldownSec: 3600,
-    },
-    action: {
-      type: "notify",
-      title: "Disk næsten fuld ({value}%)",
-      body: "Disken er over {threshold}% — ryd op i Downloads/cache",
-      priority: "high",
-      tag: "warning",
-    },
+    trigger: { type: "threshold", metric: "disk_percent", op: ">", value: 90, cooldownSec: 3600 },
+    action: { type: "notify", title: "Disk næsten fuld ({value}%)", body: "Disken er over {threshold}% — ryd op i Downloads/cache", priority: "high", tag: "warning" },
   },
   {
     name: "CPU hot >85°C",
     description: "Push når temperaturen er høj i 5 min",
-    trigger: {
-      type: "threshold",
-      metric: "temperature",
-      op: ">",
-      value: 85,
-      sustainSec: 300,
-      cooldownSec: 1800,
-    },
-    action: {
-      type: "notify",
-      title: "CPU varm ({value}°C)",
-      body: "Tjek om en proces er i loop — har været over {threshold}°C i 5+ min",
-      priority: "high",
-      tag: "fire",
-    },
+    trigger: { type: "threshold", metric: "temperature", op: ">", value: 85, sustainSec: 300, cooldownSec: 1800 },
+    action: { type: "notify", title: "CPU varm ({value}°C)", body: "Tjek om en proces er i loop — har været over {threshold}°C i 5+ min", priority: "high", tag: "fire" },
   },
   {
     name: "LLM-briefing kl 07:00",
     description: "LLM genererer kort dansk morgenbriefing",
     trigger: { type: "cron", expression: "0 7 * * *" },
-    action: {
-      type: "llm_notify",
-      prompt:
-        "Skriv en kort dansk morgenbriefing på max 3 linjer. Nævn vejret, dagens el-spotpris og om der er vigtige services der ikke kører. Brug tools når det giver mening.",
-      notifyTitle: "Morgenbriefing",
-      priority: "default",
-    },
+    action: { type: "llm_notify", prompt: "Skriv en kort dansk morgenbriefing på max 3 linjer. Nævn vejret, dagens el-spotpris og om der er vigtige services der ikke kører. Brug tools når det giver mening.", notifyTitle: "Morgenbriefing", priority: "default" },
   },
 ];
+
+const inputStyle = {
+  background: "#111",
+  border: "1px dashed #262626",
+  padding: "6px 10px",
+  color: "#e5e5e5",
+  fontFamily: "inherit",
+  fontSize: 12,
+  outline: "none",
+} as const;
+
+const btnStyle = {
+  background: "none",
+  border: "1px dashed #333",
+  color: "#9bd0ff",
+  padding: "4px 10px",
+  fontFamily: "inherit",
+  fontSize: 11,
+  cursor: "pointer",
+} as const;
 
 export default function AutomationsPage() {
   const [items, setItems] = useState<Automation[]>([]);
@@ -115,432 +100,197 @@ export default function AutomationsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const toggle = async (a: Automation) => {
-    await fetch(`/api/automations/${a.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: !a.enabled }),
-    });
+    await fetch(`/api/automations/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !a.enabled }) });
     load();
   };
-
-  const runNow = async (a: Automation) => {
-    await fetch(`/api/automations/${a.id}/run`, { method: "POST" });
-    load();
-  };
-
-  const remove = async (a: Automation) => {
-    if (!confirm(`Slet "${a.name}"?`)) return;
-    await fetch(`/api/automations/${a.id}`, { method: "DELETE" });
-    load();
-  };
-
+  const runNow = async (a: Automation) => { await fetch(`/api/automations/${a.id}/run`, { method: "POST" }); load(); };
+  const remove = async (a: Automation) => { if (!confirm(`Slet "${a.name}"?`)) return; await fetch(`/api/automations/${a.id}`, { method: "DELETE" }); load(); };
   const addTemplate = async (t: (typeof TEMPLATES)[number]) => {
-    await fetch("/api/automations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: t.name,
-        description: t.description,
-        trigger: t.trigger,
-        action: t.action,
-        enabled: false,
-      }),
-    });
+    await fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: t.name, description: t.description, trigger: t.trigger, action: t.action, enabled: false }) });
     load();
   };
 
   const sendTest = async () => {
-    setTesting(true);
-    setTestMsg("");
+    setTesting(true); setTestMsg("");
     try {
       const res = await fetch("/api/automations/notify-config", { method: "POST" });
-      const data = (await res.json()) as {
-        results: Array<{ backend: string; ok: boolean; error?: string }>;
-      };
-      if (data.results.length === 0) {
-        setTestMsg("Ingen backends aktive — tænd macOS eller konfigurer ntfy/pushover");
-      } else {
-        setTestMsg(
-          data.results
-            .map((r) => `${r.backend}: ${r.ok ? "✓" : "✗ " + (r.error ?? "")}`)
-            .join(" · ")
-        );
-      }
-    } finally {
-      setTesting(false);
-    }
+      const data = (await res.json()) as { results: Array<{ backend: string; ok: boolean; error?: string }> };
+      if (data.results.length === 0) setTestMsg("ingen backends aktive — tænd macOS eller konfigurer ntfy/pushover");
+      else setTestMsg(data.results.map((r) => `${r.backend}: ${r.ok ? "✓" : "✗ " + (r.error ?? "")}`).join(" · "));
+    } finally { setTesting(false); }
   };
 
   const saveNotify = async (patch: Partial<NotifyCfg>) => {
-    await fetch("/api/automations/notify-config", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    await fetch("/api/automations/notify-config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     load();
   };
-
   const saveGmail = async (patch: Partial<GmailCfg> & { appPassword?: string }) => {
-    await fetch("/api/automations/gmail-config", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    await fetch("/api/automations/gmail-config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     load();
   };
-
   const testGmail = async () => {
-    setGmailTesting(true);
-    setGmailMsg("");
+    setGmailTesting(true); setGmailMsg("");
     try {
-      // Gem evt. nyt password først
-      if (gmailPassword.trim()) {
-        await saveGmail({ appPassword: gmailPassword.trim() });
-        setGmailPassword("");
-      }
+      if (gmailPassword.trim()) { await saveGmail({ appPassword: gmailPassword.trim() }); setGmailPassword(""); }
       const res = await fetch("/api/automations/gmail-config", { method: "POST" });
-      const data = (await res.json()) as {
-        ok: boolean;
-        message: string;
-        total?: number;
-      };
-      setGmailMsg(
-        data.ok
-          ? `✓ ${data.message}${data.total != null ? ` · ${data.total} mails i INBOX` : ""}`
-          : `✗ ${data.message}`
-      );
-    } finally {
-      setGmailTesting(false);
-    }
+      const data = (await res.json()) as { ok: boolean; message: string; total?: number };
+      setGmailMsg(data.ok ? `✓ ${data.message}${data.total != null ? ` · ${data.total} mails i INBOX` : ""}` : `✗ ${data.message}`);
+    } finally { setGmailTesting(false); }
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#07090b] text-neutral-100">
-      <header className="border-b border-cyan-400/10 bg-[#0a0e11]/90">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link
-            href="/"
-            className="w-9 h-9 rounded-lg border border-cyan-400/20 flex items-center justify-center text-cyan-300 hover:border-cyan-400/50"
-          >
-            ←
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-lg font-medium text-cyan-100">Automations</h1>
-            <div className="text-[11px] text-neutral-500">
-              Planlæg beskeder og tool-actions baseret på tid eller tærskler
-            </div>
-          </div>
-        </div>
-      </header>
+    <MinimalPageLayout active="automations">
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px 60px", fontFamily: "inherit" }}>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
-        {/* Notifikations-konfig */}
-        <section className="rounded-xl border border-cyan-400/15 bg-[#0a1216]/60 p-4">
-          <h2 className="text-sm font-medium text-cyan-200 mb-3">Notifikations-backends</h2>
+        {/* Notify config */}
+        <Section title="notifikations-backends" className="mb-8">
           {notifyCfg ? (
-            <div className="space-y-3 text-sm">
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notifyCfg.macos}
-                  onChange={(e) =>
-                    saveNotify({ macos: e.target.checked } as Partial<NotifyCfg>)
-                  }
-                  className="accent-cyan-400"
-                />
-                <span className="text-neutral-200">macOS Notification Center</span>
-                <span className="text-[11px] text-neutral-500">
-                  (lokalt, ingen opsætning)
-                </span>
+            <div style={{ fontSize: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={notifyCfg.macos} onChange={(e) => saveNotify({ macos: e.target.checked })} />
+                <span style={{ color: "#e5e5e5" }}>macOS Notification Center</span>
+                <span style={{ color: "#6b6b6b" }}>(lokalt, ingen opsætning)</span>
               </label>
-
-              <div className="flex items-center gap-3">
-                <label className="text-neutral-300 w-32 text-[13px]">ntfy topic</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <span style={{ color: "#6b6b6b", width: 90 }}>ntfy topic</span>
                 <input
                   type="text"
                   value={notifyCfg.ntfyTopic}
-                  onChange={(e) =>
-                    setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })
-                  }
-                  onBlur={(e) =>
-                    saveNotify({ ntfyTopic: e.target.value } as Partial<NotifyCfg>)
-                  }
+                  onChange={(e) => setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })}
+                  onBlur={(e) => saveNotify({ ntfyTopic: e.target.value })}
                   placeholder="fx skynet-parthee-xyz"
-                  className="flex-1 bg-black/40 border border-cyan-400/20 rounded-lg px-3 py-1.5 text-sm font-mono text-neutral-200 focus:outline-none focus:border-cyan-400/50"
+                  style={{ ...inputStyle, flex: 1 }}
                 />
-                <span className="text-[11px] text-neutral-500">
-                  {notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}
-                </span>
+                <span style={{ color: "#6b6b6b" }}>{notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}</span>
               </div>
-
-              <div className="text-[11px] text-neutral-500 pl-[8.5rem]">
-                Hent ntfy-appen til iPhone/Android og abonnér på dit topic — push
-                uden opsætning.
+              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 10 }}>
+                Hent ntfy-appen til iPhone/Android og abonnér på dit topic — push uden opsætning.
               </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={sendTest}
-                  disabled={testing}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-400/30 text-cyan-100 text-[13px] hover:bg-cyan-500/25 disabled:opacity-40"
-                >
-                  {testing ? "sender…" : "Send test-notifikation"}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={sendTest} disabled={testing} style={{ ...btnStyle, opacity: testing ? 0.5 : 1 }}>
+                  {testing ? "sender…" : "→ send test"}
                 </button>
-                {testMsg && (
-                  <span className="text-[11px] font-mono text-neutral-400">{testMsg}</span>
-                )}
+                {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
               </div>
             </div>
           ) : (
-            <div className="text-xs text-neutral-500">indlæser…</div>
+            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
           )}
-        </section>
+        </Section>
 
-        {/* Gmail IMAP-konfig */}
-        <section className="rounded-xl border border-cyan-400/15 bg-[#0a1216]/60 p-4">
-          <h2 className="text-sm font-medium text-cyan-200 mb-3">Gmail triage (IMAP)</h2>
+        {/* Gmail config */}
+        <Section title="gmail triage (imap)" className="mb-8">
           {gmailCfg ? (
-            <div className="space-y-3 text-sm">
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={gmailCfg.enabled}
-                  onChange={(e) => saveGmail({ enabled: e.target.checked })}
-                  className="accent-cyan-400"
-                />
-                <span className="text-neutral-200">Aktivér mail-triage</span>
-                <span className="text-[11px] text-neutral-500">
-                  (kun læs — vi sender aldrig noget)
-                </span>
+            <div style={{ fontSize: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={gmailCfg.enabled} onChange={(e) => saveGmail({ enabled: e.target.checked })} />
+                <span style={{ color: "#e5e5e5" }}>aktivér mail-triage</span>
+                <span style={{ color: "#6b6b6b" }}>(kun læs — vi sender aldrig noget)</span>
               </label>
-
-              <div className="flex items-center gap-3">
-                <label className="text-neutral-300 w-32 text-[13px]">Gmail-adresse</label>
-                <input
-                  type="email"
-                  value={gmailCfg.user}
-                  onChange={(e) => setGmailCfg({ ...gmailCfg, user: e.target.value })}
-                  onBlur={(e) => saveGmail({ user: e.target.value })}
-                  placeholder="dig@gmail.com"
-                  className="flex-1 bg-black/40 border border-cyan-400/20 rounded-lg px-3 py-1.5 text-sm font-mono text-neutral-200 focus:outline-none focus:border-cyan-400/50"
-                />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <span style={{ color: "#6b6b6b", width: 90 }}>gmail-adresse</span>
+                <input type="email" value={gmailCfg.user} onChange={(e) => setGmailCfg({ ...gmailCfg, user: e.target.value })} onBlur={(e) => saveGmail({ user: e.target.value })} placeholder="dig@gmail.com" style={{ ...inputStyle, flex: 1 }} />
               </div>
-
-              <div className="flex items-center gap-3">
-                <label className="text-neutral-300 w-32 text-[13px]">App-password</label>
-                <input
-                  type="password"
-                  value={gmailPassword}
-                  onChange={(e) => setGmailPassword(e.target.value)}
-                  placeholder={gmailCfg.hasPassword ? "(gemt — indtast for at ændre)" : "16 tegn fra Google"}
-                  className="flex-1 bg-black/40 border border-cyan-400/20 rounded-lg px-3 py-1.5 text-sm font-mono text-neutral-200 focus:outline-none focus:border-cyan-400/50"
-                />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <span style={{ color: "#6b6b6b", width: 90 }}>app-password</span>
+                <input type="password" value={gmailPassword} onChange={(e) => setGmailPassword(e.target.value)} placeholder={gmailCfg.hasPassword ? "(gemt — indtast for at ændre)" : "16 tegn fra Google"} style={{ ...inputStyle, flex: 1 }} />
               </div>
-
-              <div className="text-[11px] text-neutral-500 pl-[8.5rem]">
+              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 6 }}>
                 Opret app-password på{" "}
-                <a
-                  href="https://myaccount.google.com/apppasswords"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-cyan-300 hover:underline"
-                >
-                  myaccount.google.com/apppasswords
-                </a>
+                <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>myaccount.google.com/apppasswords</a>
                 {" "}(kræver 2FA). Password bruges kun lokalt — aldrig sendt videre.
               </div>
-
-              <div className="flex items-center gap-3">
-                <label className="text-neutral-300 w-32 text-[13px]">Poll hver</label>
-                <input
-                  type="number"
-                  value={gmailCfg.pollMinutes}
-                  onChange={(e) =>
-                    setGmailCfg({ ...gmailCfg, pollMinutes: parseInt(e.target.value) || 15 })
-                  }
-                  onBlur={(e) => saveGmail({ pollMinutes: parseInt(e.target.value) || 15 })}
-                  min={5}
-                  max={120}
-                  className="w-20 bg-black/40 border border-cyan-400/20 rounded-lg px-3 py-1.5 text-sm font-mono text-neutral-200 focus:outline-none focus:border-cyan-400/50"
-                />
-                <span className="text-[11px] text-neutral-500">minutter</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <span style={{ color: "#6b6b6b", width: 90 }}>poll hver</span>
+                <input type="number" value={gmailCfg.pollMinutes} onChange={(e) => setGmailCfg({ ...gmailCfg, pollMinutes: parseInt(e.target.value) || 15 })} onBlur={(e) => saveGmail({ pollMinutes: parseInt(e.target.value) || 15 })} min={5} max={120} style={{ ...inputStyle, width: 60 }} />
+                <span style={{ color: "#6b6b6b" }}>minutter</span>
               </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={testGmail}
-                  disabled={gmailTesting}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-400/30 text-cyan-100 text-[13px] hover:bg-cyan-500/25 disabled:opacity-40"
-                >
-                  {gmailTesting ? "tester…" : "Test forbindelse"}
-                </button>
-                <a
-                  href="/api/agent/triage-mail?push=1"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 text-[13px] hover:border-neutral-600"
-                >
-                  Kør triage nu
-                </a>
-                {gmailMsg && (
-                  <span className="text-[11px] font-mono text-neutral-400">{gmailMsg}</span>
-                )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={testGmail} disabled={gmailTesting} style={{ ...btnStyle, opacity: gmailTesting ? 0.5 : 1 }}>{gmailTesting ? "tester…" : "→ test forbindelse"}</button>
+                <a href="/api/agent/triage-mail?push=1" target="_blank" rel="noreferrer" style={{ ...btnStyle, textDecoration: "none" }}>kør triage nu</a>
+                {gmailMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{gmailMsg}</span>}
               </div>
             </div>
           ) : (
-            <div className="text-xs text-neutral-500">indlæser…</div>
+            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
           )}
-        </section>
+        </Section>
 
-        {/* Aktive automations */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-cyan-200">Aktive regler</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] text-neutral-500">
-                {items.length} i alt · {items.filter((i) => i.enabled).length} aktive
-              </span>
-              <button
-                onClick={() => setEditing("new")}
-                className="px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-400/30 text-cyan-100 text-[12px] hover:bg-cyan-500/25"
-              >
-                + Ny regel
-              </button>
-            </div>
-          </div>
-
+        {/* Active automations */}
+        <Section title={`aktive regler${items.length > 0 ? ` (${items.filter(i => i.enabled).length}/${items.length})` : ""}`} right={
+          <button onClick={() => setEditing("new")} style={{ background: "none", border: "none", color: "#9bd0ff", fontSize: 11, cursor: "pointer", padding: 0 }}>+ ny regel</button>
+        } className="mb-8">
           {loading ? (
-            <div className="text-xs text-neutral-500 py-8 text-center">indlæser…</div>
+            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
           ) : items.length === 0 ? (
-            <div className="text-xs text-neutral-500 py-8 text-center border border-dashed border-cyan-400/15 rounded-xl">
-              Ingen automations endnu — tryk &quot;+ Ny regel&quot; eller prøv en skabelon nedenfor
+            <div style={{ color: "#6b6b6b", fontSize: 12, borderTop: "1px dashed #1c1c1c", paddingTop: 12 }}>
+              ingen automations endnu — klik &quot;+ ny regel&quot; eller brug en skabelon
             </div>
           ) : (
-            <div className="space-y-2">
-              {items.map((a) => (
-                <AutomationCard
-                  key={a.id}
-                  a={a}
-                  onToggle={() => toggle(a)}
-                  onRun={() => runNow(a)}
-                  onEdit={() => setEditing(a)}
-                  onDelete={() => remove(a)}
-                />
-              ))}
-            </div>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ color: "#6b6b6b", borderBottom: "1px dashed #262626" }}>
+                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: 24 }}></th>
+                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>navn</th>
+                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>trigger → action</th>
+                  <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>sidst kørt</th>
+                  <th style={{ textAlign: "right", padding: "0 0 6px 0", fontWeight: 400 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((a) => (
+                  <tr key={a.id} style={{ borderBottom: "1px dashed #1c1c1c", color: a.enabled ? "#e5e5e5" : "#6b6b6b" }}>
+                    <td style={{ padding: "7px 8px 7px 0" }}>
+                      <button onClick={() => toggle(a)} title={a.enabled ? "aktiv" : "inaktiv"} style={{ background: "none", border: "none", cursor: "pointer", color: a.enabled ? "#7dd67d" : "#6b6b6b", fontSize: 12, padding: 0 }}>●</button>
+                    </td>
+                    <td style={{ padding: "7px 8px 7px 0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ color: "#9bd0ff" }}>{a.name}</span>
+                      {a.description && <div style={{ color: "#6b6b6b", fontSize: 11 }}>{a.description}</div>}
+                    </td>
+                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {summaryTrigger(a.trigger)}<Sep />{summaryAction(a.action)}
+                    </td>
+                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11 }}>
+                      {a.lastRunAt ? new Date(a.lastRunAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      {a.lastStatus && <span style={{ color: a.lastStatus === "ok" ? "#7dd67d" : "#d87373", marginLeft: 4 }}>{a.lastStatus === "ok" ? "✓" : "✗"}</span>}
+                    </td>
+                    <td style={{ padding: "7px 0 7px 0", textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button onClick={() => runNow(a)} style={{ ...btnStyle, marginRight: 4 }}>kør</button>
+                      <button onClick={() => setEditing(a)} style={{ ...btnStyle, marginRight: 4 }}>redigér</button>
+                      <button onClick={() => remove(a)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", fontSize: 12 }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </section>
+        </Section>
 
-        {/* Skabeloner */}
-        <section>
-          <h2 className="text-sm font-medium text-cyan-200 mb-3">Skabeloner — ét klik</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        {/* Templates */}
+        <Section title="skabeloner">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginTop: 4 }}>
             {TEMPLATES.map((t) => (
               <button
                 key={t.name}
                 onClick={() => addTemplate(t)}
-                className="text-left p-4 rounded-xl border border-cyan-400/15 bg-[#0a1216]/60 hover:border-cyan-400/40 transition-colors"
+                style={{ textAlign: "left", background: "#0d0d0d", border: "1px dashed #262626", padding: "12px 14px", cursor: "pointer", fontFamily: "inherit" }}
               >
-                <div className="text-[13px] font-medium text-cyan-100 mb-1">{t.name}</div>
-                <div className="text-[11px] text-neutral-500 mb-2">{t.description}</div>
-                <div className="text-[10px] font-mono text-neutral-600">
+                <div style={{ color: "#9bd0ff", fontSize: 12, marginBottom: 4 }}>{t.name}</div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>{t.description}</div>
+                <div style={{ color: "#444", fontSize: 10, fontFamily: "inherit" }}>
                   {summaryTrigger(t.trigger)} → {summaryAction(t.action)}
                 </div>
               </button>
             ))}
           </div>
-        </section>
+        </Section>
       </main>
 
-      <AutomationEditor
-        target={editing}
-        onClose={() => setEditing(null)}
-        onSaved={load}
-      />
-    </div>
-  );
-}
-
-function AutomationCard({
-  a,
-  onToggle,
-  onRun,
-  onEdit,
-  onDelete,
-}: {
-  a: Automation;
-  onToggle: () => void;
-  onRun: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const statusColor =
-    a.lastStatus === "ok"
-      ? "bg-emerald-400"
-      : a.lastStatus === "error"
-        ? "bg-rose-400"
-        : "bg-neutral-600";
-  return (
-    <div className="rounded-xl border border-cyan-400/15 bg-[#0a1216]/60 px-4 py-3 flex items-center gap-3">
-      <button
-        onClick={onToggle}
-        className={`w-10 h-6 rounded-full shrink-0 relative transition-colors ${
-          a.enabled ? "bg-cyan-500/70" : "bg-neutral-700"
-        }`}
-        title={a.enabled ? "Aktiv — klik for at deaktivere" : "Inaktiv"}
-      >
-        <span
-          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-[left] ${
-            a.enabled ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </button>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-neutral-100 truncate">{a.name}</div>
-          {a.lastRunAt && (
-            <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor}`}
-              title={`seneste: ${a.lastStatus ?? "?"} · ${new Date(a.lastRunAt).toLocaleString("da-DK")}`}
-            />
-          )}
-        </div>
-        {a.description && (
-          <div className="text-[11px] text-neutral-500 truncate">{a.description}</div>
-        )}
-        <div className="text-[10px] font-mono text-neutral-600 truncate">
-          {summaryTrigger(a.trigger)} → {summaryAction(a.action)}
-        </div>
-      </div>
-
-      <button
-        onClick={onRun}
-        className="px-2.5 py-1 rounded-lg border border-cyan-400/20 text-[11px] text-cyan-200 hover:border-cyan-400/50 shrink-0"
-        title="Kør nu"
-      >
-        kør
-      </button>
-      <button
-        onClick={onEdit}
-        className="px-2.5 py-1 rounded-lg border border-cyan-400/20 text-[11px] text-cyan-200 hover:border-cyan-400/50 shrink-0"
-        title="Redigér"
-      >
-        redigér
-      </button>
-      <button
-        onClick={onDelete}
-        className="px-2 py-1 text-neutral-600 hover:text-rose-400 text-[13px] shrink-0"
-        title="Slet"
-      >
-        ✕
-      </button>
-    </div>
+      <AutomationEditor target={editing} onClose={() => setEditing(null)} onSaved={load} />
+    </MinimalPageLayout>
   );
 }
 
