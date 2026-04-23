@@ -28,6 +28,9 @@ export interface WeatherData {
   };
   hourly: Array<{ time: string; temp: number; weatherCode: number }>;
   location: string;
+  /** Koordinater vejr-API'et blev kaldt med — så klienten kan sammenligne
+   *  med browser-geolocation og vise "du er her" vs "vejr fra". */
+  coords: { lat: number; lng: number };
   sun: {
     sunrise: string;
     sunset: string;
@@ -200,7 +203,31 @@ export interface TokenBucket {
   messages: number;
 }
 
+export interface ClaudeRateLimit {
+  /** 0-100, hvor meget af grænsen er brugt */
+  usedPercent: number;
+  /** Unix-timestamp i ms for hvornår grænsen nulstilles */
+  resetsAt: number | null;
+  /** Menneskeligt formateret "om 1t", "om 18t", "nu" */
+  resetsIn: string;
+}
+
+export interface ClaudeRateLimits {
+  /** 5-time vindue · primær brugsgrænse */
+  fiveHour: ClaudeRateLimit | null;
+  /** 7-dags vindue · alle modeller */
+  sevenDay: ClaudeRateLimit | null;
+  /** 7-dags vindue · kun Opus/Sonnet */
+  sevenDayOpus: ClaudeRateLimit | null;
+  /** Hvornår blev data sidst opdateret */
+  updatedAt: number;
+  /** True hvis data er >24h gammel — usikker */
+  stale: boolean;
+}
+
 export interface ClaudeStatusData {
+  /** Valgfri plan-brug fra Claude Code (hvis dump-hook er aktiveret) */
+  rateLimits?: ClaudeRateLimits | null;
   total: TokenBucket;
   today: TokenBucket;
   week: TokenBucket;

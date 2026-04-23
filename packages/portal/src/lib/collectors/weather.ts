@@ -56,6 +56,7 @@ export async function collect(): Promise<WeatherData> {
     },
     hourly,
     location: loc.label,
+    coords: { lat: loc.lat, lng: loc.lng },
     sun: {
       sunrise: fmtTime(times.sunrise),
       sunset: fmtTime(times.sunset),
