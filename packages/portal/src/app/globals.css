@@ -1,0 +1,347 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, monospace;
+
+  --color-bg: #07090b;
+  --color-card: #0d1518;
+  --color-card-hover: #101a1e;
+  --color-border: rgba(0, 217, 255, 0.15);
+  --color-border-strong: rgba(0, 217, 255, 0.45);
+
+  --color-text: #fafafa;
+  --color-text-muted: #a3a3a3;
+  --color-text-subtle: #737373;
+  --color-text-faint: #525252;
+
+  --color-accent-cyan: #00d9ff;
+  --color-accent-sky: #38bdf8;
+  --color-accent-violet: #a78bfa;
+  --color-accent-amber: #fbbf24;
+  --color-accent-emerald: #34d399;
+  --color-accent-rose: #fb7185;
+}
+
+/* Theme variables — default values, ThemeProvider overrides via inline style on <html>. */
+:root {
+  --j-acc: #38bdf8;
+  --j-acc-rgb: 56, 189, 248;
+}
+
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(var(--j-acc-rgb), 0.2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--j-acc-rgb), 0.4); }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in { animation: fadeIn 0.4s ease-out; }
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+}
+.pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
+
+@keyframes holoScan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(250%); opacity: 0; }
+}
+.holo-scan-line {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(var(--j-acc-rgb), 0.08) 50%, transparent 100%);
+  height: 40%;
+  animation: holoScan 8s linear infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@keyframes holoPulseBorder {
+  0%, 100% { border-color: rgba(var(--j-acc-rgb), 0.15); box-shadow: 0 4px 24px rgba(var(--j-acc-rgb), 0.02); }
+  50% { border-color: rgba(var(--j-acc-rgb), 0.55); box-shadow: 0 0 24px rgba(var(--j-acc-rgb), 0.18); }
+}
+.holo-pulse { animation: holoPulseBorder 4s ease-in-out infinite; }
+
+@keyframes titleGlow {
+  0%, 100% { text-shadow: 0 0 20px rgba(var(--j-acc-rgb), 0.3); }
+  50% { text-shadow: 0 0 32px rgba(var(--j-acc-rgb), 0.5); }
+}
+.holo-title-glow { animation: titleGlow 6s ease-in-out infinite; }
+
+/* ───────────────────────────────────────────────────────────────────
+   THEME OVERRIDES — single-accent mode
+   Omdirigerer alle Tailwind cyan-* klasser til --j-acc så valgt
+   accent-farve slår igennem alle widgets uden de skal ændres.
+   ─────────────────────────────────────────────────────────────────── */
+
+html[data-theme-mode="single"] .text-cyan-100,
+html[data-theme-mode="single"] .text-cyan-200,
+html[data-theme-mode="single"] .text-cyan-300,
+html[data-theme-mode="single"] .text-cyan-400 { color: var(--j-acc); }
+html[data-theme-mode="single"] .text-cyan-400\/50 { color: rgba(var(--j-acc-rgb), 0.5); }
+html[data-theme-mode="single"] .text-cyan-400\/60 { color: rgba(var(--j-acc-rgb), 0.6); }
+html[data-theme-mode="single"] .text-cyan-400\/70 { color: rgba(var(--j-acc-rgb), 0.7); }
+html[data-theme-mode="single"] .text-cyan-400\/80 { color: rgba(var(--j-acc-rgb), 0.8); }
+html[data-theme-mode="single"] .text-cyan-300\/80 { color: rgba(var(--j-acc-rgb), 0.8); }
+
+html[data-theme-mode="single"] .border-cyan-400\/10 { border-color: rgba(var(--j-acc-rgb), 0.10); }
+html[data-theme-mode="single"] .border-cyan-400\/15 { border-color: rgba(var(--j-acc-rgb), 0.15); }
+html[data-theme-mode="single"] .border-cyan-400\/20 { border-color: rgba(var(--j-acc-rgb), 0.20); }
+html[data-theme-mode="single"] .border-cyan-400\/25 { border-color: rgba(var(--j-acc-rgb), 0.25); }
+html[data-theme-mode="single"] .border-cyan-400\/30 { border-color: rgba(var(--j-acc-rgb), 0.30); }
+html[data-theme-mode="single"] .border-cyan-400\/45 { border-color: rgba(var(--j-acc-rgb), 0.45); }
+html[data-theme-mode="single"] .border-cyan-400\/50 { border-color: rgba(var(--j-acc-rgb), 0.50); }
+
+html[data-theme-mode="single"] .bg-cyan-400 { background-color: var(--j-acc); }
+html[data-theme-mode="single"] .bg-cyan-500\/5 { background-color: rgba(var(--j-acc-rgb), 0.05); }
+html[data-theme-mode="single"] .bg-cyan-400\/10 { background-color: rgba(var(--j-acc-rgb), 0.10); }
+html[data-theme-mode="single"] .bg-cyan-400\/20 { background-color: rgba(var(--j-acc-rgb), 0.20); }
+html[data-theme-mode="single"] .bg-cyan-400\/25 { background-color: rgba(var(--j-acc-rgb), 0.25); }
+
+html[data-theme-mode="single"] .hover\:border-cyan-400\/45:hover { border-color: rgba(var(--j-acc-rgb), 0.45); }
+html[data-theme-mode="single"] .hover\:text-cyan-300:hover { color: var(--j-acc); }
+
+/* ───────────────────────────────────────────────────────────────────
+   MULTI-MODE — Glass Aurora palette
+   Al primær tekst → hvid. Accent-farver varierer per widget-kategori
+   via widget-root data-attribut.
+   ─────────────────────────────────────────────────────────────────── */
+
+html[data-theme-mode="multi"] {
+  --j-acc: #ffffff;
+  --j-acc-rgb: 255, 255, 255;
+
+  --j-cpu:      #a78bfa; /* violet */
+  --j-cpu-rgb:  167, 139, 250;
+  --j-mem:      #67e8f9; /* cyan */
+  --j-mem-rgb:  103, 232, 249;
+  --j-status:   #34d399; /* emerald */
+  --j-status-rgb: 52, 211, 153;
+  --j-weather:  #fbbf24; /* amber */
+  --j-weather-rgb: 251, 191, 36;
+  --j-traffic:  #fb923c; /* orange */
+  --j-traffic-rgb: 251, 146, 60;
+  --j-energy:   #4ade80; /* lime-green */
+  --j-energy-rgb: 74, 222, 128;
+  --j-space:    #c084fc; /* purple */
+  --j-space-rgb: 192, 132, 252;
+  --j-flights:  #38bdf8; /* sky */
+  --j-flights-rgb: 56, 189, 248;
+  --j-quake:    #fb7185; /* rose */
+  --j-quake-rgb: 251, 113, 133;
+  --j-news:     #f0abfc; /* fuchsia-light */
+  --j-news-rgb: 240, 171, 252;
+  --j-apod:     #e879f9; /* fuchsia */
+  --j-apod-rgb: 232, 121, 249;
+  --j-plex:     #facc15; /* yellow */
+  --j-plex-rgb: 250, 204, 21;
+}
+
+/* I multi-mode: tekst → hvid, accent-farver pr widget via data-widget attribut. */
+html[data-theme-mode="multi"] .text-cyan-100,
+html[data-theme-mode="multi"] .text-cyan-200,
+html[data-theme-mode="multi"] .text-cyan-300,
+html[data-theme-mode="multi"] .text-cyan-400 { color: #ffffff; }
+html[data-theme-mode="multi"] .text-cyan-400\/50 { color: rgba(255,255,255,0.55); }
+html[data-theme-mode="multi"] .text-cyan-400\/60 { color: rgba(255,255,255,0.65); }
+html[data-theme-mode="multi"] .text-cyan-400\/70 { color: rgba(255,255,255,0.75); }
+html[data-theme-mode="multi"] .text-cyan-400\/80 { color: rgba(255,255,255,0.85); }
+
+/* Per-widget accent override — widget-roden sætter --j-acc til sin egen farve */
+html[data-theme-mode="multi"] [data-widget="cpu"]     { --j-acc: var(--j-cpu);     --j-acc-rgb: var(--j-cpu-rgb); }
+html[data-theme-mode="multi"] [data-widget="memory"]  { --j-acc: var(--j-mem);     --j-acc-rgb: var(--j-mem-rgb); }
+html[data-theme-mode="multi"] [data-widget="status"]  { --j-acc: var(--j-status);  --j-acc-rgb: var(--j-status-rgb); }
+html[data-theme-mode="multi"] [data-widget="weather"] { --j-acc: var(--j-weather); --j-acc-rgb: var(--j-weather-rgb); }
+html[data-theme-mode="multi"] [data-widget="traffic"] { --j-acc: var(--j-traffic); --j-acc-rgb: var(--j-traffic-rgb); }
+html[data-theme-mode="multi"] [data-widget="energy"]  { --j-acc: var(--j-energy);  --j-acc-rgb: var(--j-energy-rgb); }
+html[data-theme-mode="multi"] [data-widget="space"]   { --j-acc: var(--j-space);   --j-acc-rgb: var(--j-space-rgb); }
+html[data-theme-mode="multi"] [data-widget="flights"] { --j-acc: var(--j-flights); --j-acc-rgb: var(--j-flights-rgb); }
+html[data-theme-mode="multi"] [data-widget="quake"]   { --j-acc: var(--j-quake);   --j-acc-rgb: var(--j-quake-rgb); }
+html[data-theme-mode="multi"] [data-widget="news"]    { --j-acc: var(--j-news);    --j-acc-rgb: var(--j-news-rgb); }
+html[data-theme-mode="multi"] [data-widget="apod"]    { --j-acc: var(--j-apod);    --j-acc-rgb: var(--j-apod-rgb); }
+html[data-theme-mode="multi"] [data-widget="plex"]    { --j-acc: var(--j-plex);    --j-acc-rgb: var(--j-plex-rgb); }
+
+/* I multi-mode bliver cyan-border → per-widget accent, så rammer matcher */
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/10 { border-color: rgba(var(--j-acc-rgb), 0.10); }
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/15 { border-color: rgba(var(--j-acc-rgb), 0.20); }
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/20 { border-color: rgba(var(--j-acc-rgb), 0.25); }
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/25 { border-color: rgba(var(--j-acc-rgb), 0.30); }
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/30 { border-color: rgba(var(--j-acc-rgb), 0.35); }
+html[data-theme-mode="multi"] [data-widget] .border-cyan-400\/45 { border-color: rgba(var(--j-acc-rgb), 0.50); }
+
+html[data-theme-mode="multi"] [data-widget] .bg-cyan-400 { background-color: var(--j-acc); }
+html[data-theme-mode="multi"] [data-widget] .bg-cyan-500\/5 { background-color: rgba(var(--j-acc-rgb), 0.06); }
+html[data-theme-mode="multi"] [data-widget] .bg-cyan-400\/10 { background-color: rgba(var(--j-acc-rgb), 0.12); }
+
+/* ───────────────────────────────────────────────────────────────────
+   CHAT — Open WebUI-inspireret markdown-styling
+   Klassen .chat-md bruges kring ReactMarkdown-render i chat.
+   ─────────────────────────────────────────────────────────────────── */
+.chat-md {
+  color: #e5e5e5;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.chat-md > *:first-child { margin-top: 0; }
+.chat-md > *:last-child { margin-bottom: 0; }
+
+.chat-md h1, .chat-md h2, .chat-md h3, .chat-md h4 {
+  color: #f0fdff;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+.chat-md h1 { font-size: 1.6em; border-bottom: 1px solid rgba(0, 217, 255, 0.15); padding-bottom: 0.3em; }
+.chat-md h2 { font-size: 1.35em; color: #a5f3fc; }
+.chat-md h3 { font-size: 1.15em; color: #c4ecef; }
+.chat-md h4 { font-size: 1em; color: #d4f1f4; }
+
+.chat-md p { margin: 0.7em 0; }
+
+.chat-md strong { color: #ffffff; font-weight: 600; }
+.chat-md em { color: #d4d4d4; }
+
+.chat-md a { color: #67e8f9; text-decoration: underline; text-decoration-color: rgba(103, 232, 249, 0.4); text-underline-offset: 2px; }
+.chat-md a:hover { color: #a5f3fc; text-decoration-color: #a5f3fc; }
+
+.chat-md ul, .chat-md ol {
+  margin: 0.7em 0;
+  padding-left: 1.6em;
+}
+.chat-md ul { list-style-type: disc; }
+.chat-md ol { list-style-type: decimal; }
+.chat-md li { margin: 0.3em 0; }
+.chat-md li::marker { color: #67e8f9; }
+
+.chat-md blockquote {
+  border-left: 3px solid rgba(0, 217, 255, 0.4);
+  margin: 1em 0;
+  padding: 0.3em 0 0.3em 1em;
+  color: #a3a3a3;
+  background: rgba(0, 217, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+}
+
+.chat-md code {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fde68a;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  border: 1px solid rgba(0, 217, 255, 0.1);
+}
+
+.chat-md pre {
+  background: #0a0e10;
+  border: 1px solid rgba(0, 217, 255, 0.15);
+  border-radius: 10px;
+  padding: 0.9em 1em;
+  margin: 1em 0;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.55;
+}
+.chat-md pre code {
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  padding: 0;
+  font-size: 1em;
+}
+
+.chat-md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.92em;
+  border: 1px solid rgba(0, 217, 255, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chat-md th {
+  background: rgba(0, 217, 255, 0.08);
+  color: #a5f3fc;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.55em 0.9em;
+  border-bottom: 1px solid rgba(0, 217, 255, 0.25);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chat-md td {
+  padding: 0.55em 0.9em;
+  border-bottom: 1px solid rgba(0, 217, 255, 0.08);
+  color: #d4d4d4;
+}
+.chat-md tr:last-child td { border-bottom: none; }
+.chat-md tr:hover td { background: rgba(0, 217, 255, 0.03); }
+
+.chat-md hr {
+  border: none;
+  border-top: 1px solid rgba(0, 217, 255, 0.15);
+  margin: 1.5em 0;
+}
+
+.chat-md img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.7em 0;
+}
+
+/* User-besked i Open WebUI-stil: kompakt, højrestillet, lys baggrund */
+.chat-user-bubble {
+  background: rgba(30, 41, 51, 0.7);
+  border: 1px solid rgba(0, 217, 255, 0.12);
+  border-radius: 18px 18px 4px 18px;
+  padding: 0.7em 1em;
+  color: #f5f5f5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  font-size: 14.5px;
+}
+
+/* Verbose metrics chips */
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.22em 0.65em;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.metric-chip-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}

@@ -1,0 +1,49 @@
+# SwiftLint config for Jarvis. Opinionated but not punitive.
+# Goal: catch real smells, ignore style-bike-shedding (line length fights are
+# already lost in a SwiftUI view). Tighten over time as the codebase cleans up.
+
+included:
+  - Jarvis
+  - JarvisTests
+
+excluded:
+  - build
+  - build-debug
+  - .build
+  - scripts
+  - Jarvis.xcodeproj
+
+disabled_rules:
+  - line_length               # SwiftUI views + multi-line string literals
+  - todo                      # We intentionally leave TODOs for future α/β work
+  - trailing_whitespace       # Editor-managed
+  - multiple_closures_with_trailing_closure
+  - identifier_name           # Too noisy for short loop vars etc.
+  - type_body_length          # Some service classes legitimately pass the default
+  - file_length               # Same as above
+  - function_body_length      # Some SwiftUI view builders are long by nature
+  - cyclomatic_complexity     # State machines trip this unnecessarily
+  - large_tuple
+  - nesting
+  - force_cast                # AX APIs return CFTypeRef; documented force_cast is fine
+
+opt_in_rules:
+  - empty_count
+  - toggle_bool
+  - redundant_nil_coalescing
+  - closure_spacing
+  - operator_usage_whitespace
+  - explicit_init
+  - collection_alignment
+  - sorted_first_last
+  - fallthrough
+  - first_where
+  - last_where
+  - unneeded_parentheses_in_closure_argument
+
+# Severity bumps — prefer warnings over errors in the first pass.
+force_try:
+  severity: warning
+
+force_unwrapping:
+  severity: warning

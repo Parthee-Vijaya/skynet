@@ -1,0 +1,35 @@
+{
+  "name": "skynet",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/highlight",
+    "packages/relay",
+    "packages/daemon",
+    "packages/cli",
+    "packages/portal"
+  ],
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "dev:portal": "npm run dev --workspace=@skynet/portal",
+    "dev:daemon": "npm run dev --workspace=@skynet/daemon",
+    "build": "npm run build --workspaces --if-present",
+    "build:daemon": "npm run build --workspace=@skynet/highlight && npm run build --workspace=@skynet/relay && npm run build --workspace=@skynet/daemon && npm run build --workspace=@skynet/cli",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "start": "npm run start --workspace=@skynet/daemon",
+    "postinstall": "node scripts/postinstall-patches.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
+    "concurrently": "^9.2.1",
+    "patch-package": "^8.0.1",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}

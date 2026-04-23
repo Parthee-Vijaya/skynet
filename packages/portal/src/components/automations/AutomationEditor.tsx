@@ -1,0 +1,644 @@
+"use client";
+import { useEffect, useState } from "react";
+import type {
+  Automation,
+  Trigger,
+  Action,
+  CronTrigger,
+  ThresholdTrigger,
+  NotifyAction,
+  LLMNotifyAction,
+  ToolAction,
+} from "@/lib/agent/types";
+
+interface Props {
+  /** Hvis null: opret ny. Hvis Automation: redigér eksisterende. */
+  target: Automation | "new" | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+type DraftTrigger =
+  | (CronTrigger & { type: "cron" })
+  | (ThresholdTrigger & { type: "threshold" })
+  | { type: "manual" };
+
+type DraftAction =
+  | (NotifyAction & { type: "notify" })
+  | (LLMNotifyAction & { type: "llm_notify" })
+  | (ToolAction & { type: "tool" });
+
+function emptyDraft(): {
+  name: string;
+  description: string;
+  enabled: boolean;
+  trigger: DraftTrigger;
+  action: DraftAction;
+} {
+  return {
+    name: "",
+    description: "",
+    enabled: true,
+    trigger: { type: "cron", expression: "0 7 * * *" },
+    action: {
+      type: "llm_notify",
+      prompt: "Skriv en kort venlig dansk besked om dagens vejr og el-spotpris.",
+      notifyTitle: "Morgenbesked",
+      priority: "default",
+    },
+  };
+}
+
+export function AutomationEditor({ target, onClose, onSaved }: Props) {
+  const [draft, setDraft] = useState(emptyDraft());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isEdit = target !== null && target !== "new";
+
+  useEffect(() => {
+    if (target && target !== "new") {
+      setDraft({
+        name: target.name,
+        description: target.description ?? "",
+        enabled: target.enabled,
+        trigger: target.trigger as DraftTrigger,
+        action: target.action as DraftAction,
+      });
+    } else {
+      setDraft(emptyDraft());
+    }
+    setError(null);
+  }, [target]);
+
+  if (target === null) return null;
+
+  const save = async () => {
+    setError(null);
+    if (!draft.name.trim()) {
+      setError("Navn er påkrævet");
+      return;
+    }
+    setSaving(true);
+    try {
+      const url = isEdit
+        ? `/api/automations/${(target as Automation).id}`
+        : "/api/automations";
+      const method = isEdit ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.name.trim(),
+          description: draft.description.trim() || undefined,
+          enabled: draft.enabled,
+          trigger: draft.trigger as Trigger,
+          action: draft.action as Action,
+        }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeTriggerType = (type: "cron" | "threshold" | "manual") => {
+    if (type === "cron") {
+      setDraft({ ...draft, trigger: { type: "cron", expression: "0 7 * * *" } });
+    } else if (type === "threshold") {
+      setDraft({
+        ...draft,
+        trigger: {
+          type: "threshold",
+          metric: "disk_percent",
+          op: ">",
+          value: 90,
+          cooldownSec: 3600,
+        },
+      });
+    } else {
+      setDraft({ ...draft, trigger: { type: "manual" } });
+    }
+  };
+
+  const changeActionType = (type: "notify" | "llm_notify" | "tool") => {
+    if (type === "notify") {
+      setDraft({
+        ...draft,
+        action: {
+          type: "notify",
+          title: "Skynet",
+          body: "Ny besked fra Skynet",
+          priority: "default",
+        },
+      });
+    } else if (type === "llm_notify") {
+      setDraft({
+        ...draft,
+        action: {
+          type: "llm_notify",
+          prompt: "Skriv en kort dansk besked om ...",
+          notifyTitle: "Skynet",
+          priority: "default",
+        },
+      });
+    } else {
+      setDraft({
+        ...draft,
+        action: {
+          type: "tool",
+          tool: "read_system_status",
+          args: {},
+          allowDestructive: false,
+        },
+      });
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl bg-[#0a1216] border border-cyan-400/25 rounded-2xl shadow-2xl my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-3 border-b border-cyan-400/10 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-cyan-100">
+            {isEdit ? `Redigér: ${(target as Automation).name}` : "Ny automation"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-neutral-500 hover:text-neutral-200 text-lg"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Navn + beskrivelse */}
+          <Field label="Navn">
+            <input
+              type="text"
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              className={inputCls}
+              placeholder="Fx 'Morgenbriefing'"
+            />
+          </Field>
+          <Field label="Beskrivelse (valgfri)">
+            <input
+              type="text"
+              value={draft.description}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+
+          {/* Trigger-sektion */}
+          <section className="border-t border-cyan-400/10 pt-4">
+            <Label>TRIGGER</Label>
+            <div className="flex gap-2 mt-1 mb-3">
+              {(["cron", "threshold", "manual"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => changeTriggerType(t)}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] border transition-colors ${
+                    draft.trigger.type === t
+                      ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-100"
+                      : "border-cyan-400/15 text-neutral-400 hover:border-cyan-400/40"
+                  }`}
+                >
+                  {t === "cron" ? "Tid (cron)" : t === "threshold" ? "Tærskel" : "Manuel"}
+                </button>
+              ))}
+            </div>
+
+            {draft.trigger.type === "cron" && (
+              <div className="space-y-2">
+                <Field label="Cron-expression">
+                  <input
+                    type="text"
+                    value={draft.trigger.expression}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        trigger: { ...draft.trigger, expression: e.target.value } as DraftTrigger,
+                      })
+                    }
+                    className={`${inputCls} font-mono`}
+                    placeholder="0 7 * * *"
+                  />
+                </Field>
+                <div className="text-[11px] text-neutral-500 font-mono">
+                  min · time · dag · mdr · uge · &nbsp;&nbsp;Fx &quot;0 7 * * *&quot; = 07:00 hver dag ·
+                  &quot;*/15 * * * *&quot; = hvert 15. min · &quot;0 22 * * 0&quot; = 22:00 søndage
+                </div>
+              </div>
+            )}
+
+            {draft.trigger.type === "threshold" && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Metric">
+                  <select
+                    value={draft.trigger.metric}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        trigger: { ...draft.trigger, metric: e.target.value } as DraftTrigger,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    <option value="cpu">CPU (%)</option>
+                    <option value="mem">RAM (%)</option>
+                    <option value="disk_percent">Disk (%)</option>
+                    <option value="temperature">Temperatur (°C)</option>
+                    <option value="netIn">Net ind (B/s)</option>
+                    <option value="netOut">Net ud (B/s)</option>
+                  </select>
+                </Field>
+                <Field label="Sammenligning">
+                  <div className="flex gap-2">
+                    <select
+                      value={draft.trigger.op}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          trigger: {
+                            ...draft.trigger,
+                            op: e.target.value as ThresholdTrigger["op"],
+                          } as DraftTrigger,
+                        })
+                      }
+                      className={`${inputCls} w-20`}
+                    >
+                      <option>{">"}</option>
+                      <option>{">="}</option>
+                      <option>{"<"}</option>
+                      <option>{"<="}</option>
+                      <option>{"=="}</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={draft.trigger.value}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          trigger: {
+                            ...draft.trigger,
+                            value: Number(e.target.value),
+                          } as DraftTrigger,
+                        })
+                      }
+                      className={`${inputCls} flex-1`}
+                    />
+                  </div>
+                </Field>
+                <Field label="Cooldown (sek)">
+                  <input
+                    type="number"
+                    value={draft.trigger.cooldownSec ?? 3600}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        trigger: {
+                          ...draft.trigger,
+                          cooldownSec: Number(e.target.value),
+                        } as DraftTrigger,
+                      })
+                    }
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Sustain (sek, valgfri)">
+                  <input
+                    type="number"
+                    value={draft.trigger.sustainSec ?? 0}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        trigger: {
+                          ...draft.trigger,
+                          sustainSec: Number(e.target.value) || undefined,
+                        } as DraftTrigger,
+                      })
+                    }
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
+            )}
+
+            {draft.trigger.type === "manual" && (
+              <div className="text-[12px] text-neutral-500">
+                Kører kun når du trykker &quot;kør&quot; manuelt.
+              </div>
+            )}
+          </section>
+
+          {/* Action-sektion */}
+          <section className="border-t border-cyan-400/10 pt-4">
+            <Label>ACTION</Label>
+            <div className="flex gap-2 mt-1 mb-3">
+              {(["notify", "llm_notify", "tool"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => changeActionType(t)}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] border transition-colors ${
+                    draft.action.type === t
+                      ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-100"
+                      : "border-cyan-400/15 text-neutral-400 hover:border-cyan-400/40"
+                  }`}
+                >
+                  {t === "notify"
+                    ? "Simpel besked"
+                    : t === "llm_notify"
+                      ? "LLM-genereret besked"
+                      : "Kør tool"}
+                </button>
+              ))}
+            </div>
+
+            {draft.action.type === "notify" && (
+              <div className="space-y-2">
+                <Field label="Titel">
+                  <input
+                    type="text"
+                    value={draft.action.title}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: { ...draft.action, title: e.target.value } as DraftAction,
+                      })
+                    }
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Besked">
+                  <textarea
+                    value={draft.action.body}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: { ...draft.action, body: e.target.value } as DraftAction,
+                      })
+                    }
+                    rows={3}
+                    className={inputCls}
+                  />
+                </Field>
+                <PriorityPicker
+                  value={draft.action.priority ?? "default"}
+                  onChange={(p) =>
+                    setDraft({
+                      ...draft,
+                      action: { ...draft.action, priority: p } as DraftAction,
+                    })
+                  }
+                />
+                {draft.trigger.type === "threshold" && (
+                  <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-2 py-1.5 border border-cyan-400/10">
+                    Tip: brug {"{metric}"}, {"{value}"}, {"{threshold}"} og {"{op}"} i
+                    titel/besked — fx &quot;Disk fuld ({"{value}"}%)&quot;.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {draft.action.type === "llm_notify" && (
+              <div className="space-y-2">
+                <Field label="Notifikations-titel">
+                  <input
+                    type="text"
+                    value={draft.action.notifyTitle}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: { ...draft.action, notifyTitle: e.target.value } as DraftAction,
+                      })
+                    }
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Prompt til LLM">
+                  <textarea
+                    value={draft.action.prompt}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: { ...draft.action, prompt: e.target.value } as DraftAction,
+                      })
+                    }
+                    rows={6}
+                    className={`${inputCls} font-mono text-[12px]`}
+                    placeholder="Fortæl LLM'en hvad den skal skrive. Hold det kort — output pushes som notifikation."
+                  />
+                </Field>
+                <Field label="Model (valgfri — default: første tilgængelige)">
+                  <input
+                    type="text"
+                    value={draft.action.model ?? ""}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: {
+                          ...draft.action,
+                          model: e.target.value || undefined,
+                        } as DraftAction,
+                      })
+                    }
+                    className={`${inputCls} font-mono text-[12px]`}
+                    placeholder="fx mistral-small-3.1-24b-instruct-2503-mp"
+                  />
+                </Field>
+                <PriorityPicker
+                  value={draft.action.priority ?? "default"}
+                  onChange={(p) =>
+                    setDraft({
+                      ...draft,
+                      action: { ...draft.action, priority: p } as DraftAction,
+                    })
+                  }
+                />
+                <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
+                  <strong className="text-cyan-300">Eksempel-prompt:</strong>
+                  <br />
+                  &quot;Skriv en kort dansk morgenbriefing på max 3 linjer. Nævn
+                  vejret og dagens el-spotpris.&quot;
+                  <br />
+                  <strong className="text-cyan-300 mt-1 inline-block">
+                    Bemærk:
+                  </strong>{" "}
+                  prompten har adgang til data om vejr, energi, system og
+                  services (sendes automatisk til LLM&apos;en før prompten).
+                </div>
+              </div>
+            )}
+
+            {draft.action.type === "tool" && (
+              <div className="space-y-2">
+                <Field label="Tool-navn">
+                  <select
+                    value={draft.action.tool}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: { ...draft.action, tool: e.target.value } as DraftAction,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    <option value="list_services">list_services</option>
+                    <option value="control_service">control_service</option>
+                    <option value="list_apps">list_apps</option>
+                    <option value="control_app">control_app</option>
+                    <option value="read_system_status">read_system_status</option>
+                    <option value="read_disk">read_disk</option>
+                    <option value="read_weather">read_weather</option>
+                    <option value="read_energy">read_energy</option>
+                    <option value="run_discovery">run_discovery</option>
+                  </select>
+                </Field>
+                <Field label="Argumenter (JSON)">
+                  <textarea
+                    value={JSON.stringify(draft.action.args, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        const args = JSON.parse(e.target.value);
+                        setDraft({
+                          ...draft,
+                          action: { ...draft.action, args } as DraftAction,
+                        });
+                      } catch {
+                        // ignore — ugyldig JSON, lad brugeren skrive færdigt
+                      }
+                    }}
+                    rows={4}
+                    className={`${inputCls} font-mono text-[12px]`}
+                    placeholder='{"label":"com.tailscale.tailscaled","action":"start"}'
+                  />
+                </Field>
+                <label className="flex items-center gap-2 text-[12px] text-amber-300">
+                  <input
+                    type="checkbox"
+                    checked={draft.action.allowDestructive === true}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: {
+                          ...draft.action,
+                          allowDestructive: e.target.checked,
+                        } as DraftAction,
+                      })
+                    }
+                    className="accent-amber-400"
+                  />
+                  Tillad destruktive actions (stop, restart, quit)
+                </label>
+              </div>
+            )}
+          </section>
+
+          {/* Enabled toggle */}
+          <section className="border-t border-cyan-400/10 pt-4">
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={draft.enabled}
+                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
+                className="accent-cyan-400 w-4 h-4"
+              />
+              <span className="text-neutral-200">Aktiveret</span>
+            </label>
+          </section>
+
+          {error && (
+            <div className="text-[12px] text-rose-300 bg-rose-950/40 border border-rose-500/30 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <footer className="px-5 py-3 border-t border-cyan-400/10 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-[13px] text-neutral-400 hover:text-neutral-200"
+          >
+            Annullér
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg text-[13px] bg-cyan-500/20 border border-cyan-400/40 text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-40"
+          >
+            {saving ? "gemmer…" : isEdit ? "Gem ændringer" : "Opret"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const inputCls =
+  "w-full bg-black/40 border border-cyan-400/20 rounded-lg px-3 py-1.5 text-[13px] text-neutral-100 focus:outline-none focus:border-cyan-400/50";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-mono mb-1">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] uppercase tracking-[0.25em] text-cyan-400/80 font-mono">
+      {children}
+    </div>
+  );
+}
+
+function PriorityPicker({
+  value,
+  onChange,
+}: {
+  value: "low" | "default" | "high";
+  onChange: (v: "low" | "default" | "high") => void;
+}) {
+  return (
+    <Field label="Prioritet">
+      <div className="flex gap-2">
+        {(["low", "default", "high"] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => onChange(p)}
+            className={`px-3 py-1.5 rounded-lg text-[12px] border transition-colors ${
+              value === p
+                ? p === "high"
+                  ? "border-rose-400/50 bg-rose-500/15 text-rose-200"
+                  : p === "low"
+                    ? "border-neutral-400/40 bg-neutral-700/20 text-neutral-300"
+                    : "border-cyan-400/50 bg-cyan-400/15 text-cyan-100"
+                : "border-neutral-500/20 text-neutral-400 hover:border-cyan-400/40"
+            }`}
+          >
+            {p === "low" ? "lav" : p === "default" ? "normal" : "høj"}
+          </button>
+        ))}
+      </div>
+    </Field>
+  );
+}
