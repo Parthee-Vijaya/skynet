@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { LLMConfig } from "@/lib/settings";
+import type { LLMConfig, LocationSetting } from "@/lib/settings";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section } from "@/components/minimal/primitives";
 
 interface SettingsResp {
   llm: LLMConfig;
   defaults: LLMConfig;
+  userName: string;
+  location: LocationSetting;
 }
 
 interface ModelsResp {
@@ -36,12 +38,48 @@ export default function SettingsPage() {
   const [test, setTest] = useState<ModelsResp | null>(null);
   const [testing, setTesting] = useState(false);
 
+  // Profile
+  const [userName, setUserName] = useState("");
+  const [city, setCity] = useState("");
+  const [locationLabel, setLocationLabel] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((data: SettingsResp) => { setLlm(data.llm); setDefaults(data.defaults); })
+      .then((data: SettingsResp) => {
+        setLlm(data.llm);
+        setDefaults(data.defaults);
+        setUserName(data.userName ?? "");
+        setLocationLabel(data.location?.label ?? "");
+      })
       .catch(() => {});
   }, []);
+
+  const saveProfile = async () => {
+    setSavingProfile(true); setSavedProfile(false); setProfileError("");
+    try {
+      const body: Record<string, string> = {};
+      if (userName.trim()) body.userName = userName.trim();
+      if (city.trim()) body.city = city.trim();
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { ok: boolean; error?: string; location?: LocationSetting };
+      if (!res.ok || !json.ok) {
+        setProfileError(json.error ?? "Fejl ved gem");
+      } else {
+        setSavedProfile(true);
+        if (json.location?.label) setLocationLabel(json.location.label);
+        setCity("");
+        setTimeout(() => setSavedProfile(false), 2000);
+      }
+    } finally { setSavingProfile(false); }
+  };
 
   const save = async () => {
     if (!llm) return;
@@ -78,6 +116,52 @@ export default function SettingsPage() {
   return (
     <MinimalPageLayout active="settings">
       <main style={{ maxWidth: 700, margin: "0 auto", padding: "28px 24px 60px", fontFamily: "inherit" }}>
+
+        {/* ── Profil ──────────────────────────────────────────────────────── */}
+        <Section title="profil" className="mb-8">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>navn</div>
+                <input
+                  type="text"
+                  value={userName}
+                  placeholder="fx Parthee"
+                  onChange={(e) => setUserName(e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+                <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>Vises i velkomst-hilsen på dashboardet</div>
+              </div>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>
+                  by (vejr)
+                  {locationLabel && <span style={{ color: "#444", marginLeft: 6 }}>· nu: {locationLabel}</span>}
+                </div>
+                <input
+                  type="text"
+                  value={city}
+                  placeholder={locationLabel || "fx København"}
+                  onChange={(e) => setCity(e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+                <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>Bruges til vejr- og energidata. Geocodes automatisk.</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                onClick={saveProfile}
+                disabled={savingProfile}
+                style={{ background: "none", border: "1px dashed #444", color: savingProfile ? "#6b6b6b" : "#f5f5f5", padding: "5px 14px", fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
+              >
+                {savingProfile ? "gemmer…" : "→ gem profil"}
+              </button>
+              {savedProfile && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
+              {profileError && <span style={{ color: "#d87373", fontSize: 11 }}>{profileError}</span>}
+            </div>
+          </div>
+        </Section>
+
         <Section title="llm / lm studio" className="mb-8">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Field label="base url" help="LM Studio's OpenAI-kompatible endpoint (typisk http://localhost:1234/v1)" value={llm.baseUrl} onChange={(v) => setLlm({ ...llm, baseUrl: v })} onReset={() => resetKey("baseUrl")} />

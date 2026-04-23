@@ -4,17 +4,19 @@ import dynamic from "next/dynamic";
 import { QUOTES } from "@/lib/quotes";
 import { Sep } from "../primitives";
 
-function useUserName() {
+function useProfile() {
   const [name, setName] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
   useEffect(() => {
-    fetch("/api/setup", { cache: "no-store" })
+    fetch("/api/settings", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d: { profile?: { name?: string } }) => {
-        if (d?.profile?.name) setName(d.profile.name);
+      .then((d: { userName?: string; location?: { label?: string } }) => {
+        if (d?.userName) setName(d.userName);
+        if (d?.location?.label) setCity(d.location.label);
       })
       .catch(() => {});
   }, []);
-  return name;
+  return { name, city };
 }
 
 // Dynamic import — Three.js kan ikke SSR
@@ -68,7 +70,7 @@ function isoWeek(d: Date): number {
 export function HeroWidget() {
   const now = useClock();
   const { quote, idx } = useRotatingQuote();
-  const userName = useUserName();
+  const { name: userName, city } = useProfile();
   const pad = (n: number) => String(n).padStart(2, "0");
   const time = now ? `${pad(now.getHours())}:${pad(now.getMinutes())}` : "--:--";
   const date = now
@@ -96,6 +98,9 @@ export function HeroWidget() {
         <div className="font-mono text-[12px] text-neutral-500 mt-2.5">{date}</div>
         <div className="font-mono text-[13px] text-neutral-200 mt-1">
           {hello}, <b className="text-neutral-50 font-medium">{userName ?? "parthee"}</b>.
+          {city && (
+            <span className="text-neutral-500 ml-3 text-[11px]">📍 {city}</span>
+          )}
         </div>
         <p className="font-mono text-[13px] text-neutral-200 mt-5 max-w-[540px] leading-relaxed min-h-[1.6em]">
           <span className="text-neutral-500 mr-1">—</span>
