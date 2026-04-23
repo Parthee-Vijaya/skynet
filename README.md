@@ -69,12 +69,16 @@ Lokal AI-chat drevet af LM Studio på din Mac. Model-picker øverst — skifter 
 - **Services & porte** — scanner via `lsof`, viser status, kategori og PID
 - **LM Studio chat** — lokal model, streaming, tool-calling, Markdown
 - **Agent-daemon** — AI-agenter der kører autonomt (WebSocket-protokol)
-- **Automations** — cron + tærskel triggers, LLM-actions med tools, push + iMessage delivery
+- **Automations** — cron + tærskel triggers, kædede actions, LLM-actions med tools, push + iMessage delivery
+- **Proaktive agents** — LLM kan returnere `NONE` for at skippe notifikation · kun pinger når noget er handlingsværdigt
 - **iMessage delivery** — send LLM-genererede briefings direkte til din iPhone
 - **Nyhedsfeeds** — `fetch_news` tool parser RSS-feeds (DR, TV2, Børsen…)
 - **Web tools** — `web_fetch` + `web_search` (DuckDuckGo) til LLM-tool-loop
 - **macOS-integrationer** — kalender, påmindelser, apps (`open -a`), LaunchAgents
 - **ntfy push** — pushes til iPhone/Android uden Apple Developer-konto
+- **PWA / iOS home-screen** — installér som app via Safari "Føj til hjemmeskærm" · manifest, service-worker, standalone-mode
+- **Siri-endpoint** — `/api/siri?q=...` returnerer kort plain-text · fede Apple Shortcut → "Hey Siri, spørg Skynet ..."
+- **Plex nu-afspilles** — live streams, progress, bibliotek-stats i cockpit
 
 ---
 
@@ -192,6 +196,25 @@ launchctl kickstart -k gui/$(id -u)/com.skynet.daemon
 1. Tilføj schema i `src/lib/agent/tools.ts`
 2. Tilføj handler i `src/lib/agent/dispatcher.ts`
 3. Tool er automatisk tilgængeligt i LLM-tool-loop og `ToolAction`-automationer.
+
+---
+
+## iOS / Siri
+
+**PWA på iPhone hjemmeskærm:**
+
+1. Åbn `http://<din-mac>:3100/minimal` i Safari på iPhone (samme WiFi eller via Tailscale)
+2. Del-knap → **"Føj til hjemmeskærm"**
+3. Åbner i standalone-mode · live vejr/energi/status opdateres hvert 15 min selv når skærmen er væk
+
+**Siri via Apple Shortcuts:**
+
+1. Opret en ny shortcut → **"Hent URL"** action → `http://<din-mac>:3100/api/siri?q=[Diktér tekst]`
+2. Sæt headers til `Accept: text/plain` · brug `POST` hvis du vil lade spørgsmålet være længere
+3. Tilføj **"Tal tekst"** action efter med output fra forrige step
+4. Navngiv shortcut "Spørg Skynet" → **"Hey Siri, spørg Skynet"** virker nu
+
+LLM'en har adgang til alle Skynet tools (vejr, energi, kalender, nyheder, web-søgning) og svaret er begrænset til 2-3 korte danske sætninger.
 
 ---
 
