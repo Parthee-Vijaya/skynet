@@ -270,6 +270,66 @@ async function execute(
       return await res.json();
     }
 
+    // ── iMessage ─────────────────────────────────────────────────────────
+    case "send_imessage": {
+      const to = String(args.to ?? "").trim();
+      const msg = String(args.message ?? "").trim();
+      if (!to || !msg) throw new Error("to og message er påkrævet");
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execFileP = promisify(execFile);
+      // Escape for AppleScript string literals
+      const safeMsg = msg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').slice(0, 2000);
+      const safeTo = to.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const script = [
+        'tell application "Messages"',
+        '  set targetService to first service whose service type = iMessage',
+        `  send "${safeMsg}" to buddy "${safeTo}" of targetService`,
+        "end tell",
+      ].join("\n");
+      await execFileP("/usr/bin/osascript", ["-e", script], { timeout: 12_000 });
+      return { ok: true, to, sent: true, message: "iMessage sendt" };
+    }
+
+    // ── News (RSS) ────────────────────────────────────────────────────────
+    case "fetch_news": {
+      const feedUrl = String(args.url ?? "").trim();
+      const limit = Math.min(typeof args.limit === "number" ? Math.round(args.limit) : 8, 20);
+      if (!feedUrl.startsWith("http://") && !feedUrl.startsWith("https://")) {
+        throw new Error("url skal starte med http:// eller https://");
+      }
+      const rssRes = await fetch(feedUrl, {
+        headers: {
+          "User-Agent": "SkynetBot/1.0",
+          Accept: "application/rss+xml,application/xml,text/xml,*/*",
+        },
+        signal: AbortSignal.timeout(10_000),
+        redirect: "follow",
+      });
+      if (!rssRes.ok) throw new Error(`RSS fetch fejlede: HTTP ${rssRes.status}`);
+      const xml = await rssRes.text();
+      // Simpel regex-baseret RSS-parser (dækker RSS 2.0 og Atom)
+      const items: Array<{ title: string; link: string; date: string; description: string }> = [];
+      const itemRe = /<(?:item|entry)[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+      let m: RegExpExecArray | null;
+      while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
+        const b = m[1];
+        const stripHtml = (s: string) =>
+          s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/\s{2,}/g, " ").trim();
+        const cdata = (tag: string) =>
+          (b.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i")) ??
+           b.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")))?.[1]?.trim() ?? "";
+        const title = stripHtml(cdata("title"));
+        const link =
+          (b.match(/<link[^>]*href=["']([^"']+)["']/i))?.[1]?.trim() ??
+          stripHtml(cdata("link")).split(" ")[0] ?? "";
+        const date = (b.match(/<(?:pubDate|published|updated)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated)>/i))?.[1]?.trim() ?? "";
+        const description = stripHtml(cdata("description") || cdata("summary") || cdata("content")).slice(0, 250);
+        if (title) items.push({ title, link, date, description });
+      }
+      return { url: feedUrl, items, count: items.length };
+    }
+
     // ── Web: Fetch ────────────────────────────────────────────────────────
     case "web_fetch": {
       const url = String(args.url ?? "").trim();

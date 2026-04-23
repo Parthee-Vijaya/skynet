@@ -77,6 +77,8 @@ export interface LLMNotifyAction {
   priority?: "low" | "default" | "high";
   /** Aktivér tool-calling (web_fetch, web_search, system-tools). Default: true */
   useTools?: boolean;
+  /** Hvis sat: send LLM-resultatet som iMessage til dette nummer/Apple-ID i tillæg til push-notifikation */
+  imessageTo?: string;
 }
 
 export type Action = NotifyAction | ToolAction | LLMNotifyAction;

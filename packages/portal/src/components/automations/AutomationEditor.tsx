@@ -504,12 +504,29 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
                     })
                   }
                 />
+                <Field label="Send som iMessage til (valgfri)">
+                  <input
+                    type="text"
+                    value={(draft.action as LLMNotifyAction).imessageTo ?? ""}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        action: {
+                          ...draft.action,
+                          imessageTo: e.target.value || undefined,
+                        } as DraftAction,
+                      })
+                    }
+                    className={inputCls}
+                    placeholder="+4512345678 eller navn@icloud.com (tom = kun push)"
+                  />
+                </Field>
                 <div className="text-[11px] text-neutral-500 bg-cyan-400/5 rounded px-3 py-2 border border-cyan-400/10 leading-relaxed">
                   <strong className="text-cyan-300">Med tools aktiveret</strong> kan LLM&apos;en
-                  søge på nettet, hente URL&apos;er, tjekke vejr, el-pris, system-status mm.
+                  søge på nettet, hente nyheder (fetch_news), tjekke vejr, el-pris, system-status mm.
                   <br />
                   <span className="text-neutral-600">
-                    Tip: &quot;Søg efter dagens el-spotpris og skriv en kort dansk briefing.&quot;
+                    Tip: &quot;Hent danske nyheder fra DR og skriv en kort morgenbriefing på dansk.&quot;
                   </span>
                 </div>
               </div>
@@ -528,15 +545,32 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
                     }
                     className={inputCls}
                   >
-                    <option value="list_services">list_services</option>
-                    <option value="control_service">control_service</option>
-                    <option value="list_apps">list_apps</option>
-                    <option value="control_app">control_app</option>
-                    <option value="read_system_status">read_system_status</option>
-                    <option value="read_disk">read_disk</option>
-                    <option value="read_weather">read_weather</option>
-                    <option value="read_energy">read_energy</option>
-                    <option value="run_discovery">run_discovery</option>
+                    <optgroup label="Beskeder">
+                      <option value="send_imessage">send_imessage</option>
+                    </optgroup>
+                    <optgroup label="Services & Apps">
+                      <option value="list_services">list_services</option>
+                      <option value="control_service">control_service</option>
+                      <option value="list_apps">list_apps</option>
+                      <option value="control_app">control_app</option>
+                    </optgroup>
+                    <optgroup label="System">
+                      <option value="read_system_status">read_system_status</option>
+                      <option value="read_disk">read_disk</option>
+                      <option value="read_weather">read_weather</option>
+                      <option value="read_energy">read_energy</option>
+                      <option value="run_discovery">run_discovery</option>
+                    </optgroup>
+                    <optgroup label="Web & Nyheder">
+                      <option value="fetch_news">fetch_news</option>
+                      <option value="web_fetch">web_fetch</option>
+                      <option value="web_search">web_search</option>
+                    </optgroup>
+                    <optgroup label="Kalender & Påmindelser">
+                      <option value="list_calendar_events">list_calendar_events</option>
+                      <option value="list_reminders">list_reminders</option>
+                      <option value="add_reminder">add_reminder</option>
+                    </optgroup>
                   </select>
                 </Field>
                 <Field label="Argumenter (JSON)">

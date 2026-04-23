@@ -294,6 +294,56 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── iMessage ────────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "send_imessage",
+      description:
+        "Send en iMessage til en kontakt, telefonnummer eller Apple-ID via macOS Messages.app. Brug til at levere briefings, nyheder eller alerts direkte til brugerens iPhone.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: {
+            type: "string",
+            description:
+              "Modtager: telefonnummer med landekode (fx '+4512345678') eller iCloud-e-mail (fx 'navn@icloud.com')",
+          },
+          message: {
+            type: "string",
+            description: "Beskedteksten der skal sendes. Max ~2000 tegn.",
+          },
+        },
+        required: ["to", "message"],
+      },
+    },
+  },
+
+  // ── News (RSS) ───────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "fetch_news",
+      description:
+        "Hent de nyeste nyheder fra en RSS-feed URL. Returnerer op til 10 overskrifter med titel, dato og uddrag. Brug til morgen-briefings, nyheds-alerts mm. Kendte danske feeds: DR='https://feeds.dr.dk/dr-nyheder.rss', TV2='https://feeds.tv2.dk/nyheder', Børsen='https://borsen.dk/rss'.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description:
+              "RSS-feed URL, fx 'https://feeds.dr.dk/dr-nyheder.rss'",
+          },
+          limit: {
+            type: "number",
+            description: "Maks antal nyheder (default: 8, max: 20)",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+
   // ── Web: Fetch + Search ─────────────────────────────────────────────────
   {
     type: "function",

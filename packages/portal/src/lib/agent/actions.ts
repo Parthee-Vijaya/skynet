@@ -161,15 +161,31 @@ async function runLLMNotify(a: LLMNotifyAction): Promise<ActionResult> {
 
   if (!finalText) return { ok: false, message: "tom eller ingen respons fra LLM" };
 
+  // Push-notifikation
   const notifyResults = await notify({
     title: a.notifyTitle,
     body: finalText,
     priority: a.priority,
   });
   const okCount = notifyResults.filter((r) => r.ok).length;
+
+  // Valgfrit: send også som iMessage
+  let imessageStatus = "";
+  if (a.imessageTo?.trim()) {
+    const imResult = await dispatchTool(
+      {
+        id: `imsg_${Date.now().toString(36)}`,
+        name: "send_imessage",
+        arguments: { to: a.imessageTo.trim(), message: `${a.notifyTitle}\n\n${finalText}` },
+      },
+      { allowDestructive: false },
+    );
+    imessageStatus = imResult.ok ? " · iMessage sendt" : ` · iMessage fejl: ${summarize(imResult.content, 80)}`;
+  }
+
   return {
-    ok: okCount > 0,
-    message: `LLM gen. ${finalText.length} tegn · notify ${okCount}/${notifyResults.length}`,
+    ok: okCount > 0 || !!a.imessageTo,
+    message: `LLM gen. ${finalText.length} tegn · notify ${okCount}/${notifyResults.length}${imessageStatus}`,
   };
 }
 
