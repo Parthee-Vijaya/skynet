@@ -293,6 +293,95 @@ export const TOOLS: ToolSchema[] = [
       },
     },
   },
+
+  // ── iMessage ────────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "send_imessage",
+      description:
+        "Send en iMessage til en kontakt, telefonnummer eller Apple-ID via macOS Messages.app. Brug til at levere briefings, nyheder eller alerts direkte til brugerens iPhone.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: {
+            type: "string",
+            description:
+              "Modtager: telefonnummer med landekode (fx '+4512345678') eller iCloud-e-mail (fx 'navn@icloud.com')",
+          },
+          message: {
+            type: "string",
+            description: "Beskedteksten der skal sendes. Max ~2000 tegn.",
+          },
+        },
+        required: ["to", "message"],
+      },
+    },
+  },
+
+  // ── News (RSS) ───────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "fetch_news",
+      description:
+        "Hent de nyeste nyheder fra en RSS-feed URL. Returnerer op til 10 overskrifter med titel, dato og uddrag. Brug til morgen-briefings, nyheds-alerts mm. Kendte danske feeds: DR='https://feeds.dr.dk/dr-nyheder.rss', TV2='https://feeds.tv2.dk/nyheder', Børsen='https://borsen.dk/rss'.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description:
+              "RSS-feed URL, fx 'https://feeds.dr.dk/dr-nyheder.rss'",
+          },
+          limit: {
+            type: "number",
+            description: "Maks antal nyheder (default: 8, max: 20)",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+
+  // ── Web: Fetch + Search ─────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "web_fetch",
+      description:
+        "Hent en URL og returner sidens tekst-indhold (HTML strippes). Brug til at læse nyheder, dokumentation, priser, statusser eller andet fra nettet. Max ~4000 tegn returneres.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "Den fulde URL der skal hentes, fx 'https://example.com/article'",
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Søg på nettet og returner de 5 bedste resultater med titel, URL og uddrag. Brug til at finde aktuelle nyheder, facts eller information du ikke kender på forhånd.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeforespørgslen, fx 'el-spotpris Danmark i dag'",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
 ];
 
 /** Tools hvor action er destruktiv → kræver X-Confirm: true */

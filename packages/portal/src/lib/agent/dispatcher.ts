@@ -263,17 +263,184 @@ async function execute(
 
     // ── Discovery ─────────────────────────────────────────────────────────
     case "run_discovery": {
-      // Direkte fetch mod eget endpoint er simplere end at importere logikken
-      // (den har en del fs/child_process deps der er tunge at genbruge)
       const res = await fetch("http://localhost:3100/api/control/discover", {
-        headers: {
-          // Sikre same-origin-auth virker
-          Origin: "http://localhost:3100",
-          Host: "localhost:3100",
-        },
+        headers: { Origin: "http://localhost:3100", Host: "localhost:3100" },
       });
       if (!res.ok) throw new Error(`discover fejlede: HTTP ${res.status}`);
       return await res.json();
+    }
+
+    // ── iMessage ─────────────────────────────────────────────────────────
+    case "send_imessage": {
+      const to = String(args.to ?? "").trim();
+      const msg = String(args.message ?? "").trim();
+      if (!to || !msg) throw new Error("to og message er påkrævet");
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execFileP = promisify(execFile);
+      // Escape for AppleScript string literals
+      const safeMsg = msg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').slice(0, 2000);
+      const safeTo = to.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const script = [
+        'tell application "Messages"',
+        '  set targetService to first service whose service type = iMessage',
+        `  send "${safeMsg}" to buddy "${safeTo}" of targetService`,
+        "end tell",
+      ].join("\n");
+      await execFileP("/usr/bin/osascript", ["-e", script], { timeout: 12_000 });
+      return { ok: true, to, sent: true, message: "iMessage sendt" };
+    }
+
+    // ── News (RSS) ────────────────────────────────────────────────────────
+    case "fetch_news": {
+      const feedUrl = String(args.url ?? "").trim();
+      const limit = Math.min(typeof args.limit === "number" ? Math.round(args.limit) : 8, 20);
+      if (!feedUrl.startsWith("http://") && !feedUrl.startsWith("https://")) {
+        throw new Error("url skal starte med http:// eller https://");
+      }
+      const rssRes = await fetch(feedUrl, {
+        headers: {
+          "User-Agent": "SkynetBot/1.0",
+          Accept: "application/rss+xml,application/xml,text/xml,*/*",
+        },
+        signal: AbortSignal.timeout(10_000),
+        redirect: "follow",
+      });
+      if (!rssRes.ok) throw new Error(`RSS fetch fejlede: HTTP ${rssRes.status}`);
+      const xml = await rssRes.text();
+      // Simpel regex-baseret RSS-parser (dækker RSS 2.0 og Atom)
+      const items: Array<{ title: string; link: string; date: string; description: string }> = [];
+      const itemRe = /<(?:item|entry)[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+      let m: RegExpExecArray | null;
+      while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
+        const b = m[1];
+        const stripHtml = (s: string) =>
+          s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/\s{2,}/g, " ").trim();
+        const cdata = (tag: string) =>
+          (b.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i")) ??
+           b.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i")))?.[1]?.trim() ?? "";
+        const title = stripHtml(cdata("title"));
+        const link =
+          (b.match(/<link[^>]*href=["']([^"']+)["']/i))?.[1]?.trim() ??
+          stripHtml(cdata("link")).split(" ")[0] ?? "";
+        const date = (b.match(/<(?:pubDate|published|updated)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated)>/i))?.[1]?.trim() ?? "";
+        const description = stripHtml(cdata("description") || cdata("summary") || cdata("content")).slice(0, 250);
+        if (title) items.push({ title, link, date, description });
+      }
+      return { url: feedUrl, items, count: items.length };
+    }
+
+    // ── Web: Fetch ────────────────────────────────────────────────────────
+    case "web_fetch": {
+      const url = String(args.url ?? "").trim();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        throw new Error("url skal starte med http:// eller https://");
+      }
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; SkynetBot/1.0; +https://localhost)",
+          Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(10_000),
+        redirect: "follow",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+      const ct = res.headers.get("content-type") ?? "";
+      const raw = await res.text();
+      // Strip HTML tags og kondenser whitespace
+      const text = ct.includes("html")
+        ? raw
+            .replace(/<script[\s\S]*?<\/script>/gi, "")
+            .replace(/<style[\s\S]*?<\/style>/gi, "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/&amp;/gi, "&")
+            .replace(/&lt;/gi, "<")
+            .replace(/&gt;/gi, ">")
+            .replace(/&quot;/gi, '"')
+            .replace(/\s{2,}/g, " ")
+            .trim()
+        : raw.trim();
+      const MAX = 4000;
+      return {
+        url,
+        content: text.length > MAX ? text.slice(0, MAX) + "…[trunkeret]" : text,
+        length: text.length,
+        truncated: text.length > MAX,
+      };
+    }
+
+    // ── Web: Search (DuckDuckGo Instant Answers + HTML scrape) ───────────
+    case "web_search": {
+      const query = String(args.query ?? "").trim();
+      if (!query) throw new Error("query mangler");
+
+      // DuckDuckGo Instant Answer API (gratis, ingen nøgle)
+      const iaUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      const iaRes = await fetch(iaUrl, {
+        headers: { "User-Agent": "SkynetBot/1.0" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!iaRes.ok) throw new Error(`DuckDuckGo API HTTP ${iaRes.status}`);
+      const ia = (await iaRes.json()) as {
+        AbstractText?: string;
+        AbstractURL?: string;
+        AbstractSource?: string;
+        RelatedTopics?: Array<{
+          Text?: string;
+          FirstURL?: string;
+          Topics?: Array<{ Text?: string; FirstURL?: string }>;
+        }>;
+        Results?: Array<{ Text?: string; FirstURL?: string }>;
+        Answer?: string;
+      };
+
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+
+      // Instant Answer / Abstract
+      if (ia.AbstractText) {
+        results.push({
+          title: ia.AbstractSource ?? "Wikipedia",
+          url: ia.AbstractURL ?? "",
+          snippet: ia.AbstractText.slice(0, 400),
+        });
+      }
+      if (ia.Answer) {
+        results.push({ title: "Direkte svar", url: "", snippet: ia.Answer });
+      }
+
+      // Related topics
+      for (const t of ia.RelatedTopics ?? []) {
+        if (results.length >= 5) break;
+        if (t.Text && t.FirstURL) {
+          results.push({ title: t.Text.slice(0, 80), url: t.FirstURL, snippet: t.Text.slice(0, 300) });
+        }
+        // Nested topics
+        for (const sub of t.Topics ?? []) {
+          if (results.length >= 5) break;
+          if (sub.Text && sub.FirstURL) {
+            results.push({ title: sub.Text.slice(0, 80), url: sub.FirstURL, snippet: sub.Text.slice(0, 300) });
+          }
+        }
+      }
+
+      // Top results
+      for (const r of ia.Results ?? []) {
+        if (results.length >= 5) break;
+        if (r.Text && r.FirstURL) {
+          results.push({ title: r.Text.slice(0, 80), url: r.FirstURL, snippet: r.Text.slice(0, 300) });
+        }
+      }
+
+      return {
+        query,
+        results,
+        count: results.length,
+        note: results.length === 0
+          ? "Ingen øjeblikkelige resultater — prøv web_fetch på en specifik URL"
+          : undefined,
+      };
     }
 
     default:

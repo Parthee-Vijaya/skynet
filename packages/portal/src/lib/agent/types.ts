@@ -66,7 +66,7 @@ export interface ToolAction {
  */
 export interface LLMNotifyAction {
   type: "llm_notify";
-  /** Model-id der skal bruges (fx "mistralai/mistral-small-3.2") */
+  /** Model-id der skal bruges, fx "mistralai/mistral-small-3.2" eller "gpt-oss-20b" */
   model?: string;
   /** User-prompt til LLM */
   prompt: string;
@@ -75,6 +75,10 @@ export interface LLMNotifyAction {
   /** Titel til notifikation */
   notifyTitle: string;
   priority?: "low" | "default" | "high";
+  /** Aktivér tool-calling (web_fetch, web_search, system-tools). Default: true */
+  useTools?: boolean;
+  /** Hvis sat: send LLM-resultatet som iMessage til dette nummer/Apple-ID i tillæg til push-notifikation */
+  imessageTo?: string;
 }
 
 export type Action = NotifyAction | ToolAction | LLMNotifyAction;

@@ -9,14 +9,18 @@ import { RamWidgetMinimal } from "./RamWidget";
 import { NetWidgetMinimal } from "./NetWidget";
 import { DiskWidgetMinimal } from "./DiskWidget";
 import { ServicesWidget } from "./ServicesWidget";
+import { TopReposWidget } from "./TopReposWidget";
 
-registerWidget({ id: "hero", group: "hero", colSpan: 8, Component: HeroWidget });
-registerWidget({ id: "claude", group: "claude", colSpan: 4, Component: ClaudeWidget });
-registerWidget({ id: "ribbon", group: "system", colSpan: 12, Component: RibbonWidget });
-registerWidget({ id: "cpu", group: "system", colSpan: 4, Component: CpuWidgetMinimal });
-registerWidget({ id: "ram", group: "system", colSpan: 4, Component: RamWidgetMinimal });
-registerWidget({ id: "net", group: "system", colSpan: 4, Component: NetWidgetMinimal });
-registerWidget({ id: "disk", group: "system", colSpan: 6, Component: DiskWidgetMinimal });
-registerWidget({ id: "services", group: "services", colSpan: 6, Component: ServicesWidget });
+registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
+registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
+registerWidget({ id: "ribbon",   group: "system",   colSpan: 12, Component: RibbonWidget });
+registerWidget({ id: "cpu",      group: "system",   colSpan: 4,  Component: CpuWidgetMinimal });
+registerWidget({ id: "ram",      group: "system",   colSpan: 4,  Component: RamWidgetMinimal });
+registerWidget({ id: "net",      group: "system",   colSpan: 4,  Component: NetWidgetMinimal });
+// ── Row: disk (left) + services (right, spans this row AND the repos row below) ──
+registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
+registerWidget({ id: "services", group: "services", colSpan: 6,  rowSpan: 2, Component: ServicesWidget });
+// ── Row: top-repos fills left 6 cols; services continues on right ──────────
+registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
 
 export { getWidgets } from "../widget-registry";
