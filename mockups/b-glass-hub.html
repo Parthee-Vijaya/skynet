@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · Mockup B — Glass Card Hub (PWA)</title>
+<style>
+  :root {
+    --bg1:#1e1b4b; --bg2:#0f172a; --ink:#fff; --dim:rgba(255,255,255,.6); --line:rgba(255,255,255,.12);
+    --ok:#22c55e; --warn:#eab308; --err:#ef4444; --acc:#a5b4fc; --glass:rgba(255,255,255,.07);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background: radial-gradient(1200px 600px at 70% -10%, #4c1d95 0%, transparent 60%), radial-gradient(900px 500px at -10% 100%, #0ea5e9 0%, transparent 50%), linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--ink); font-family: -apple-system, "SF Pro Text", "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height:100vh; }
+  .nav { position:sticky; top:0; backdrop-filter: blur(18px); background:rgba(15,23,42,.6); border-bottom:1px solid var(--line); padding:10px 16px; display:flex; gap:10px; z-index:20; }
+  .nav a { color:var(--dim); text-decoration:none; font-size:12px; padding:5px 10px; border-radius:8px; border:1px solid transparent; }
+  .nav a.on { color:var(--ink); border-color:var(--line); background:var(--glass); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 16px 80px; }
+  .hero { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 18px; }
+  .hero .h { font-size:13px; color:var(--dim); }
+  .hero h1 { font-size:28px; font-weight:700; margin:2px 0 0; letter-spacing:-0.02em; }
+  .pill { font-size:11px; background:rgba(34,197,94,.18); color:#86efac; padding:4px 10px; border-radius:999px; border:1px solid rgba(34,197,94,.35); }
+
+  .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+  .card { background: var(--glass); backdrop-filter: blur(20px); border:1px solid var(--line); border-radius:18px; padding:16px; }
+  .card h3 { margin:0 0 6px; font-size:11px; letter-spacing:1.5px; color:var(--dim); font-weight:600; text-transform:uppercase; }
+  .big { font-size:28px; font-weight:300; letter-spacing:-0.02em; }
+  .sub { font-size:11px; color:var(--dim); }
+  .ok { color:#86efac; } .warn { color:#fde047; } .err { color:#fca5a5; } .acc { color:var(--acc); } .mute { color:var(--dim); }
+
+  .c-weather { grid-column: span 5; background: linear-gradient(135deg, rgba(56,189,248,.22), rgba(99,102,241,.08)); }
+  .c-agents  { grid-column: span 3; background: linear-gradient(135deg, rgba(99,102,241,.25), rgba(99,102,241,.06)); }
+  .c-ntfy    { grid-column: span 4; background: linear-gradient(135deg, rgba(34,197,94,.22), rgba(34,197,94,.04)); }
+  .c-cpu     { grid-column: span 2; }
+  .c-disk    { grid-column: span 2; }
+  .c-cal     { grid-column: span 4; }
+  .c-chat    { grid-column: span 4; }
+  .c-autom   { grid-column: span 7; }
+  .c-map     { grid-column: span 5; background: linear-gradient(135deg, rgba(139,92,246,.20), rgba(139,92,246,.04)); }
+
+  .kpi-row { display:flex; align-items:flex-end; justify-content:space-between; }
+  .ring { width:64px; height:64px; border-radius:50%; background: conic-gradient(#22c55e var(--p), rgba(255,255,255,.08) 0); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; }
+  .ring::before { content:""; position:absolute; width:54px; height:54px; border-radius:50%; background:rgba(15,23,42,.7); }
+  .ring span { position:relative; }
+
+  .evt { display:flex; gap:8px; align-items:flex-start; font-size:12px; padding:6px 0; border-top:1px solid var(--line); }
+  .evt:first-child { border-top:0; padding-top:2px; }
+  .evt .i { width:18px; text-align:center; }
+  .evt .t { color:var(--dim); font-size:10px; margin-left:auto; }
+
+  .tabbar { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,.75); backdrop-filter: blur(18px); border:1px solid var(--line); border-radius: 999px; padding: 8px 14px; display:flex; gap:20px; z-index:30; }
+  .tabbar button { background:none; border:0; color:var(--dim); font-size:16px; cursor:pointer; }
+  .tabbar .active { color:var(--ink); }
+
+  .phone { width: 320px; border: 8px solid #18181b; border-radius: 40px; background: linear-gradient(180deg,var(--bg1),var(--bg2)); padding: 20px 14px 70px; margin: 32px auto 0; box-shadow: 0 30px 80px rgba(0,0,0,.6); position:relative; }
+  .phone h1 { font-size:18px; margin:8px 0 12px; }
+  .phone .card { padding:11px 12px; border-radius:14px; }
+  .phone .big { font-size:20px; }
+  .phone .grid { grid-template-columns: repeat(4,1fr); gap:8px; }
+  .phone .c-weather { grid-column: span 4; }
+  .phone .c-agents { grid-column: span 2; }
+  .phone .c-ntfy   { grid-column: span 4; }
+  .phone .c-cpu    { grid-column: span 2; }
+  .phone .c-disk   { grid-column: span 2; }
+  .phone .tabbar { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); padding:6px 10px; gap:14px; }
+
+  .arch { margin-top: 32px; background: var(--glass); border:1px solid var(--line); border-radius:18px; padding:18px; font-size:13px; }
+  .arch h3 { margin:0 0 10px; font-size:11px; letter-spacing:1.5px; color:var(--acc); text-transform:uppercase; }
+  .arch pre { margin:0; color:var(--dim); white-space:pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; margin:3px 4px 0 0; }
+  .tag.keep { background: rgba(34,197,94,.15); color:#86efac; border:1px solid rgba(34,197,94,.35); }
+  .tag.cut  { background: rgba(239,68,68,.12); color:#fca5a5; border:1px solid rgba(239,68,68,.3); text-decoration: line-through; }
+  .tag.maybe { background: rgba(234,179,8,.12); color:#fde047; border:1px solid rgba(234,179,8,.3); }
+
+  .footer { color:var(--dim); font-size:11px; text-align:center; margin-top:40px; }
+  @media (max-width: 900px) {
+    .c-weather,.c-agents,.c-ntfy,.c-cpu,.c-disk,.c-cal,.c-chat,.c-autom,.c-map { grid-column: span 12; }
+  }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← Mockups</a>
+    <a href="a-command-deck.html">A · Command Deck</a>
+    <a class="on">B · Glass Hub (PWA)</a>
+    <a href="c-event-feed.html">C · Event Feed</a>
+  </div>
+
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="h">God aften, Parthee</div>
+        <h1>Skynet</h1>
+        <div class="sub">skynet.parthee.dev · Tailscale · installeret som PWA</div>
+      </div>
+      <div class="pill">● tunnel up · 3 enheder tilsluttet</div>
+    </div>
+
+    <div class="grid">
+      <div class="card c-weather">
+        <h3>Vejr · København</h3>
+        <div class="kpi-row">
+          <div>
+            <div class="big">12° let overskyet</div>
+            <div class="sub">vind 4 m/s · regn 20% · solnedgang 17:42</div>
+          </div>
+          <div style="font-size:40px">🌥️</div>
+        </div>
+      </div>
+
+      <div class="card c-agents">
+        <h3>Agents</h3>
+        <div class="big">2 <span class="sub">kører</span></div>
+        <div class="sub">email-triage · pr-watcher</div>
+        <div class="sub mute" style="margin-top:6px">+ 6 idle</div>
+      </div>
+
+      <div class="card c-ntfy">
+        <h3>Ntfy · parthee-skynet</h3>
+        <div class="evt"><div class="i">✅</div><div>PR #42 merged</div><div class="t">2m</div></div>
+        <div class="evt"><div class="i">📅</div><div>Dentist kl 09:00</div><div class="t">5t</div></div>
+        <div class="evt"><div class="i">📧</div><div>3 nye mails klassificeret</div><div class="t">12m</div></div>
+        <div class="evt"><div class="i warn">⚠️</div><div>Disk 90% på main</div><div class="t">1t</div></div>
+      </div>
+
+      <div class="card c-cpu">
+        <h3>CPU</h3>
+        <div style="position:relative;display:flex;align-items:center;gap:10px"><div class="ring" style="--p:43deg"><span>12%</span></div><div class="sub">4 kerner</div></div>
+      </div>
+      <div class="card c-disk">
+        <h3>Disk</h3>
+        <div style="position:relative;display:flex;align-items:center;gap:10px"><div class="ring" style="--p:220deg;background:conic-gradient(#eab308 220deg,rgba(255,255,255,.08) 0)"><span>61%</span></div><div class="sub">712 GB fri</div></div>
+      </div>
+
+      <div class="card c-cal">
+        <h3>Kalender · i dag</h3>
+        <div class="evt"><div class="i">🦷</div><div>Dentist</div><div class="t">09:00</div></div>
+        <div class="evt"><div class="i">💻</div><div>Standup · Claude team</div><div class="t">10:30</div></div>
+        <div class="evt"><div class="i">🍽️</div><div>Frokost m. Sofie</div><div class="t">12:15</div></div>
+        <div class="evt"><div class="i">📞</div><div>Kundekald · Autobot</div><div class="t">14:00</div></div>
+      </div>
+
+      <div class="card c-chat">
+        <h3>Chat · Claude</h3>
+        <div style="background:rgba(0,0,0,.25);border-radius:10px;padding:10px;font-size:12px">
+          <div style="color:var(--acc)">Du</div>
+          <div>Hvor mange åbne PRs har jeg?</div>
+          <div style="color:#86efac;margin-top:8px">Skynet</div>
+          <div>Du har 3 åbne: #42 (merged), #48 (review), #51 (draft). Vil du have mig til at bumpe dem?</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px"><input style="flex:1;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--ink);padding:8px 12px;border-radius:10px;font-size:12px" placeholder="Spørg Skynet…" /><button style="background:var(--ok);border:0;color:#052e16;border-radius:10px;padding:0 14px;font-weight:600">↑</button></div>
+      </div>
+
+      <div class="card c-autom">
+        <h3>Automations · 6 aktive</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px">
+          <div class="evt"><div class="i">⚡</div><div>mail.important → ntfy</div><div class="t ok">on</div></div>
+          <div class="evt"><div class="i">⏰</div><div>cron 07:00 → morning-brief</div><div class="t ok">on</div></div>
+          <div class="evt"><div class="i">🔔</div><div>disk>85% → ntfy warn</div><div class="t ok">on</div></div>
+          <div class="evt"><div class="i">📥</div><div>pr.open → slack</div><div class="t mute">off</div></div>
+          <div class="evt"><div class="i">🎯</div><div>calendar → siri reminder</div><div class="t ok">on</div></div>
+          <div class="evt"><div class="i">🏠</div><div>home.arrive → unlock</div><div class="t ok">on</div></div>
+        </div>
+      </div>
+
+      <div class="card c-map">
+        <h3>Enheder · Tailscale</h3>
+        <div class="evt"><div class="i">🖥️</div><div>mac-studio <span class="sub">100.64.0.12</span></div><div class="t ok">online</div></div>
+        <div class="evt"><div class="i">📱</div><div>iphone-parthee <span class="sub">100.64.0.18</span></div><div class="t ok">online</div></div>
+        <div class="evt"><div class="i">💻</div><div>mbp-work <span class="sub">100.64.0.22</span></div><div class="t mute">idle 2t</div></div>
+        <div class="evt"><div class="i">📟</div><div>ipad-air <span class="sub">100.64.0.33</span></div><div class="t mute">offline</div></div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <button class="active">🏠</button>
+      <button>🤖</button>
+      <button>💬</button>
+      <button>⚡</button>
+      <button>⚙️</button>
+    </div>
+
+    <!-- Mobile preview -->
+    <div class="phone">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="sub">God aften</div>
+          <h1>Skynet</h1>
+        </div>
+        <div class="pill" style="font-size:10px">● up</div>
+      </div>
+      <div class="grid">
+        <div class="card c-weather">
+          <h3>Vejr</h3>
+          <div class="big">12° 🌥️</div>
+          <div class="sub">let overskyet</div>
+        </div>
+        <div class="card c-agents">
+          <h3>Agents</h3>
+          <div class="big">2</div>
+          <div class="sub">kører</div>
+        </div>
+        <div class="card c-cpu">
+          <h3>CPU</h3>
+          <div class="big">12%</div>
+        </div>
+        <div class="card c-disk">
+          <h3>Disk</h3>
+          <div class="big warn">61%</div>
+        </div>
+        <div class="card c-ntfy">
+          <h3>Ntfy</h3>
+          <div class="evt"><div class="i">✅</div><div>PR #42</div><div class="t">2m</div></div>
+          <div class="evt"><div class="i">📅</div><div>Dentist 09:00</div><div class="t">5t</div></div>
+          <div class="evt"><div class="i warn">⚠️</div><div>Disk 90%</div><div class="t">1t</div></div>
+        </div>
+      </div>
+      <div class="tabbar"><button class="active">🏠</button><button>🤖</button><button>💬</button><button>⚡</button><button>⚙️</button></div>
+    </div>
+
+    <div class="arch">
+      <h3>Arkitektur</h3>
+<pre>Mac (altid tændt)
+  ├─ daemon          :6767
+  ├─ portal (Next.js):3100   + PWA manifest + service worker (offline shell)
+  └─ tailscale       — sikker mesh mellem alle dine enheder
+
+iPhone / iPad
+  └─ Safari → skynet.tail-xxxx.ts.net
+     "Føj til hjemmeskærm" → standalone PWA m. bottom-nav
+     ntfy-app: subscribe topic "parthee-skynet" for push
+
+ntfy (én-vejs primært)
+  daemon → ntfy   (alerts, reminders, build, calendar)
+  kritiske: priority=5 → bypass silent mode
+</pre>
+      <h3 style="margin-top:14px">Pakker</h3>
+      <div>
+        <span class="tag keep">portal</span>
+        <span class="tag keep">daemon</span>
+        <span class="tag keep">cli</span>
+        <span class="tag keep">relay</span>
+        <span class="tag maybe">highlight</span>
+        <span class="tag cut">hud (Swift)</span>
+      </div>
+      <h3 style="margin-top:14px">Widgets · 14 af 29</h3>
+      <div>
+        <span class="tag keep">Status</span><span class="tag keep">Agents</span><span class="tag keep">Weather</span><span class="tag keep">Calendar</span><span class="tag keep">Chat</span><span class="tag keep">Automations</span><span class="tag keep">Cpu</span><span class="tag keep">Memory</span><span class="tag keep">Disk</span><span class="tag keep">Network</span><span class="tag keep">Github</span><span class="tag keep">Devices</span><span class="tag keep">Reminders</span><span class="tag keep">Ntfy</span>
+        <span class="tag cut">Apod</span><span class="tag cut">Earthquakes</span><span class="tag cut">Flights</span><span class="tag cut">Lightning</span><span class="tag cut">Markets</span><span class="tag cut">Moon</span><span class="tag cut">News</span><span class="tag cut">Nzb</span><span class="tag cut">Plex</span><span class="tag cut">SpaceWeather</span><span class="tag cut">Traffic</span><span class="tag cut">Vpn</span><span class="tag cut">ClaudeStatus</span><span class="tag cut">Energy</span><span class="tag cut">Air</span>
+      </div>
+    </div>
+
+    <div class="footer">Mockup B · Skynet 2026 · PWA + Tailscale</div>
+  </div>
+</body>
+</html>

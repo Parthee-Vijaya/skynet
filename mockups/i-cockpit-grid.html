@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · I — Cockpit Grid</title>
+<style>
+  :root{
+    --bg:#030609; --panel:rgba(10,16,26,.85); --panel2:rgba(14,22,38,.8);
+    --line:rgba(56,189,248,.18); --line-dim:rgba(56,189,248,.08);
+    --ink:#dff0ff; --dim:#7996b8; --mute:#3d5273;
+    --cyan:#38bdf8; --cyan-g:#0ea5e9; --violet:#a78bfa; --lime:#a3e635; --amber:#fbbf24; --red:#f87171;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Inter", -apple-system, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
+  body{
+    background:
+      radial-gradient(1200px 800px at 50% -20%, rgba(56,189,248,.12), transparent 55%),
+      radial-gradient(900px 600px at 0% 100%, rgba(167,139,250,.08), transparent 60%),
+      radial-gradient(900px 600px at 100% 100%, rgba(20,184,166,.06), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  body::before{content:"";position:fixed;inset:0;background:
+    repeating-linear-gradient(0deg, rgba(56,189,248,.025) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(56,189,248,.02) 0 1px, transparent 1px 60px);
+    pointer-events:none;z-index:-1;mix-blend-mode:screen;opacity:.5}
+
+  .nav{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(3,6,9,.8);backdrop-filter:blur(14px);border:1px solid var(--line);padding:6px 10px;border-radius:999px;display:flex;gap:4px;font-family:var(--mono);font-size:10px;z-index:100}
+  .nav a{color:var(--dim);text-decoration:none;padding:4px 10px;border-radius:999px}
+  .nav a:hover{color:var(--ink)}
+  .nav a.on{color:var(--bg);background:var(--cyan)}
+
+  .cockpit{max-width:1600px;margin:0 auto;padding:70px 20px 40px;display:grid;grid-template-columns: repeat(12, 1fr);grid-auto-rows:minmax(80px, auto);gap:14px;min-height:100vh}
+  @media (max-width:1100px){.cockpit{padding-top:60px}}
+
+  .p{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px;backdrop-filter:blur(10px);overflow:hidden}
+  .p::before{content:"";position:absolute;top:0;left:0;width:40px;height:1px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+  .p::after{content:"";position:absolute;bottom:0;right:0;width:40px;height:1px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+  .p .corners span{position:absolute;width:10px;height:10px}
+  .p .corners span:nth-child(1){top:-1px;left:-1px;border-left:1px solid var(--cyan);border-top:1px solid var(--cyan)}
+  .p .corners span:nth-child(2){top:-1px;right:-1px;border-right:1px solid var(--cyan);border-top:1px solid var(--cyan)}
+  .p .corners span:nth-child(3){bottom:-1px;left:-1px;border-left:1px solid var(--cyan);border-bottom:1px solid var(--cyan)}
+  .p .corners span:nth-child(4){bottom:-1px;right:-1px;border-right:1px solid var(--cyan);border-bottom:1px solid var(--cyan)}
+
+  .phdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-family:var(--mono);font-size:10px;letter-spacing:.25em;text-transform:uppercase}
+  .phdr .title{color:var(--cyan)}
+  .phdr .title::before{content:"▸ ";color:var(--cyan)}
+  .phdr.v .title{color:var(--violet)} .phdr.v .title::before{color:var(--violet)}
+  .phdr.l .title{color:var(--lime)} .phdr.l .title::before{color:var(--lime)}
+  .phdr .right{color:var(--dim);font-size:9px}
+
+  /* ============ HERO ============ */
+  .hero{grid-column: 1 / 9; grid-row: 1 / 3; padding:30px 32px;position:relative;background:
+    linear-gradient(135deg, rgba(14,22,38,.9), rgba(10,16,26,.7)),
+    radial-gradient(400px 200px at 90% 20%, rgba(56,189,248,.2), transparent 50%)}
+  .hero .tag{font-family:var(--mono);font-size:11px;letter-spacing:.5em;color:var(--cyan);display:flex;align-items:center;gap:10px}
+  .hero .tag .d{width:8px;height:8px;background:var(--lime);border-radius:50%;box-shadow:0 0 12px var(--lime);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  .hero .clock{font-family:var(--mono);font-size:132px;font-weight:200;letter-spacing:-0.05em;line-height:.95;margin-top:4px;background:linear-gradient(180deg,#e0f2fe,#38bdf8 70%,#0284c7);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 30px rgba(56,189,248,.3))}
+  @media (max-width:1100px){.hero .clock{font-size:72px}}
+  .hero .date{font-family:var(--mono);font-size:12px;letter-spacing:.4em;color:var(--dim);margin-top:10px}
+  .hero .greeting{font-size:20px;font-weight:300;margin-top:18px;letter-spacing:-0.01em}
+  .hero .greeting b{color:var(--cyan);font-weight:500;background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .quote{margin-top:10px;font-style:italic;color:var(--dim);font-size:13px;line-height:1.6;max-width:580px;border-left:2px solid var(--cyan);padding-left:14px;min-height:48px}
+
+  /* ============ CLAUDE ============ */
+  .claude{grid-column: 9 / 13; grid-row: 1 / 2; padding:20px}
+  .claude .kv-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+  .claude .kv-row .kv{padding:8px 10px;border-left:2px solid var(--cyan);background:rgba(56,189,248,.04)}
+  .claude .kv-row .kv b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);margin-bottom:3px}
+  .claude .kv-row .kv span{font-family:var(--mono);font-size:18px;color:var(--cyan);font-weight:300;letter-spacing:-0.01em}
+  .claude .msg-big{font-family:var(--mono);display:flex;align-items:baseline;gap:10px;margin-top:6px}
+  .claude .msg-big .n{font-size:48px;font-weight:200;letter-spacing:-0.02em;color:var(--ink)}
+  .claude .msg-big .u{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+  .claude .stat-line{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:10px;letter-spacing:.15em}
+  .claude .operational{color:var(--lime);display:flex;align-items:center;gap:6px}
+  .claude .operational::before{content:"";width:7px;height:7px;background:var(--lime);border-radius:50%;box-shadow:0 0 8px var(--lime)}
+
+  /* ============ STATUS RIBBON ============ */
+  .ribbon{grid-column: 9 / 13; grid-row: 2 / 3; padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+  .ribbon .li{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;letter-spacing:.05em}
+  .ribbon .li b{color:var(--dim);font-weight:400;letter-spacing:.2em;font-size:10px;text-transform:uppercase}
+  .ribbon .li .ok{color:var(--lime)}
+  .ribbon .li .cy{color:var(--cyan)}
+
+  /* ============ CPU ============ */
+  .cpu{grid-column: 1 / 5; grid-row: 3 / 5}
+  .cpu-body{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:center}
+  .ring{position:relative;width:110px;height:110px}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono)}
+  .ring .c .n{font-size:30px;font-weight:200;letter-spacing:-0.02em}
+  .ring .c .n.cy{color:var(--cyan)} .ring .c .n.v{color:var(--violet)}
+  .ring .c .l{font-size:9px;color:var(--dim);letter-spacing:.25em;margin-top:3px}
+  .meta-right{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.15em;text-transform:uppercase}
+  .meta-right .model{display:block;font-size:13px;color:var(--ink);margin-top:4px;letter-spacing:.05em}
+  .spark{margin-top:10px;height:30px}
+  .spark svg{width:100%;height:100%}
+  .procs{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-dim)}
+  .procs .t{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.25em;text-transform:uppercase;margin-bottom:8px}
+  .procs .row{display:grid;grid-template-columns:1fr auto;gap:10px;font-family:var(--mono);font-size:11px;padding:4px 0;align-items:center}
+  .procs .row .b{height:2px;background:var(--line-dim);border-radius:1px;overflow:hidden;margin-top:3px}
+  .procs .row .b > span{display:block;height:100%;background:var(--cyan);box-shadow:0 0 4px rgba(56,189,248,.5)}
+  .procs.v .row .b > span{background:var(--violet);box-shadow:0 0 4px rgba(167,139,250,.5)}
+  .procs .row .val{color:var(--cyan)}
+  .procs.v .row .val{color:var(--violet)}
+
+  /* ============ RAM ============ */
+  .ram{grid-column: 5 / 9; grid-row: 3 / 5}
+
+  /* ============ NET ============ */
+  .net{grid-column: 9 / 13; grid-row: 3 / 5}
+  .net-kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+  .net-kpi{padding:10px 12px;background:rgba(56,189,248,.05);border-left:2px solid var(--cyan)}
+  .net-kpi b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);margin-bottom:3px}
+  .net-kpi span{font-family:var(--mono);font-size:16px;color:var(--ink);letter-spacing:-0.01em}
+  .net-kpi.ok span{color:var(--lime)}
+  .speed{display:flex;align-items:center;gap:10px;padding:6px 0;font-family:var(--mono)}
+  .speed .lb{font-size:10px;color:var(--dim);letter-spacing:.2em;width:40px}
+  .speed svg{flex:1;height:22px}
+  .speed .v{font-size:15px;font-weight:300;width:60px}
+  .speed .v.d{color:var(--cyan)} .speed .v.u{color:var(--lime)}
+  .speed .un{font-size:10px;color:var(--dim);margin-left:-6px}
+  .sec-line{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px}
+  .sec-line .badge{color:var(--lime);letter-spacing:.2em;display:flex;align-items:center;gap:6px}
+  .sec-line .badge::before{content:"";width:7px;height:7px;background:var(--lime);border-radius:50%;box-shadow:0 0 8px var(--lime)}
+
+  /* ============ DISK ============ */
+  .disk{grid-column: 1 / 7; grid-row: 5 / 7}
+  .disk-body{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .drive{position:relative}
+  .drive .dh{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+  .drive .dh .lab{color:var(--cyan)}
+  .drive.ext .dh .lab{color:var(--lime)}
+  .drive .nm{font-family:var(--mono);font-size:13px;color:var(--ink);margin-top:3px;letter-spacing:.03em}
+  .drive .uz{font-family:var(--mono);display:flex;align-items:baseline;gap:8px;margin-top:10px}
+  .drive .uz .big{font-size:30px;font-weight:200;letter-spacing:-0.02em}
+  .drive.int .uz .big{color:var(--cyan)}
+  .drive.ext .uz .big{color:var(--lime)}
+  .drive .uz .of{color:var(--dim);font-size:12px}
+  .drive .uz .pct{margin-left:auto;font-size:16px;font-weight:300}
+  .drive .track{margin-top:10px;height:4px;background:var(--line-dim);border-radius:2px;overflow:hidden}
+  .drive .track span{display:block;height:100%;position:relative;overflow:hidden}
+  .drive.int .track span{background:linear-gradient(90deg,var(--cyan-g),var(--cyan))}
+  .drive.ext .track span{background:linear-gradient(90deg,#65a30d,var(--lime))}
+  .drive .track span::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);animation:shine 3s linear infinite}
+  @keyframes shine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+  .drive .df{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .drive .df .live{color:var(--lime)}
+  .drive .df .live::before{content:"";display:inline-block;width:6px;height:6px;background:var(--lime);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--lime)}
+
+  /* ============ QUOTE PANEL (sidebar) ============ */
+  .quotep{grid-column: 7 / 13; grid-row: 5 / 7; padding:22px 26px;background:
+    linear-gradient(135deg, rgba(167,139,250,.06), rgba(10,16,26,.8))}
+  .quotep .badge{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--violet);display:inline-flex;align-items:center;gap:8px}
+  .quotep .badge::before{content:"";width:7px;height:7px;background:var(--violet);border-radius:50%;box-shadow:0 0 8px var(--violet)}
+  .quotep .big-quote{font-size:22px;font-weight:300;line-height:1.4;margin-top:14px;color:var(--ink);font-style:italic;letter-spacing:-0.01em;min-height:88px}
+  .quotep .big-quote::before{content:"\201C";color:var(--violet);font-size:44px;line-height:0;vertical-align:-10px;margin-right:4px;opacity:.6}
+  .quotep .attr{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.2em;margin-top:16px}
+  .quotep .attr b{color:var(--violet)}
+  .quotep .mini{display:flex;gap:6px;margin-top:20px;padding-top:18px;border-top:1px dashed var(--line)}
+  .quotep .mini .chip{padding:3px 8px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);border-radius:2px;font-family:var(--mono);font-size:9px;color:var(--violet);letter-spacing:.15em}
+
+  /* ============ MOBILE COLLAPSE ============ */
+  @media (max-width:900px){
+    .cockpit{grid-template-columns:1fr;grid-auto-rows:auto}
+    .hero,.claude,.ribbon,.cpu,.ram,.net,.disk,.quotep{grid-column:1/-1;grid-row:auto}
+    .hero .clock{font-size:72px}
+    .disk-body{grid-template-columns:1fr;gap:16px}
+    .cpu-body{grid-template-columns:90px 1fr;gap:12px}
+    .ring{width:90px;height:90px}
+  }
+
+  /* Phone preview inline */
+  .phone{grid-column:1/-1;justify-self:center;width:310px;margin-top:40px;padding:16px 10px 24px;border:10px solid #050810;border-radius:40px;background:var(--bg);position:relative;box-shadow:0 40px 80px rgba(0,0,0,.7)}
+  .phone .p{padding:12px;border-radius:3px}
+  .phone .hero{padding:14px 12px}
+  .phone .hero .clock{font-size:68px}
+  .phone .claude{padding:12px;margin-top:8px}
+  .phone .claude .msg-big .n{font-size:26px}
+  .phone .claude .kv-row .kv span{font-size:12px}
+  .phone .cpu-body{grid-template-columns:70px 1fr;gap:10px}
+  .phone .ring{width:70px;height:70px}
+  .phone .ring .c .n{font-size:22px}
+  .phone .cockpit-mini{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+  .phone .p{grid-column:auto}
+</style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html">≡</a>
+    <a href="a-command-deck.html">A</a><a href="b-glass-hub.html">B</a><a href="c-event-feed.html">C</a>
+    <a href="d-linear-os.html">D</a><a href="e-spatial-canvas.html">E</a><a href="f-voice-companion.html">F</a>
+    <a href="g-hud-classic.html">G</a><a href="h-mission-briefing.html">H</a>
+    <a class="on">I</a>
+  </nav>
+
+  <div class="cockpit">
+    <!-- HERO -->
+    <div class="p hero">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="tag"><span class="d"></span>S · K · Y · N · E · T &nbsp; PERSONAL INTELLIGENCE</div>
+      <div class="clock" id="clock">14:51</div>
+      <div class="date" id="date">TORSDAG · 23. APRIL 2026</div>
+      <div class="greeting" id="greet">God eftermiddag, <b>Parthee</b>.</div>
+      <div class="quote" id="quote">Running diagnostics. Results: everything appears to still be your fault.</div>
+    </div>
+
+    <!-- CLAUDE -->
+    <div class="p claude">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr"><span class="title">Claude Code</span><span class="right">LIVE · OPUS 4.7</span></div>
+      <div class="msg-big"><span class="n">588</span><span class="u">beskeder i dag</span></div>
+      <div class="kv-row">
+        <div class="kv"><b>I DAG</b><span>39.2M</span></div>
+        <div class="kv"><b>UGE</b><span>320.2M</span></div>
+        <div class="kv"><b>TOTAL</b><span>538.4M</span></div>
+      </div>
+      <div class="stat-line">
+        <span class="operational">OPERATIONAL</span>
+        <span style="color:var(--dim)">TOKENS · API V2</span>
+      </div>
+    </div>
+
+    <!-- SYSTEM RIBBON -->
+    <div class="p ribbon">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr l"><span class="title">System</span><span class="right">DARWIN 25.4</span></div>
+      <div class="li"><b>Daemon</b><span class="ok">● :6767</span></div>
+      <div class="li"><b>Portal</b><span class="ok">● :3100</span></div>
+      <div class="li"><b>Tunnel</b><span class="cy">● skynet.parthee.dev</span></div>
+      <div class="li"><b>Ntfy</b><span class="ok">● parthee-skynet</span></div>
+    </div>
+
+    <!-- CPU -->
+    <div class="p cpu">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr"><span class="title">CPU · Systemkerne</span><span class="right">16 CORES · M2 MAX</span></div>
+      <div class="cpu-body">
+        <div class="ring">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(56,189,248,.1)" stroke-width="6"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#38bdf8" stroke-width="6" stroke-dasharray="264" stroke-dashoffset="211" stroke-linecap="round" style="filter:drop-shadow(0 0 8px rgba(56,189,248,.6))"/>
+          </svg>
+          <div class="c"><div class="n cy">20%</div><div class="l">LOAD</div></div>
+        </div>
+        <div class="meta-right">HISTORIK 5M<span class="model">Apple Silicon · M2 Max</span>
+          <div class="spark"><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,22 15,20 30,24 45,18 60,22 75,14 90,18 105,10 120,16 135,12 150,8 165,14 180,10 200,12" fill="none" stroke="#38bdf8" stroke-width="1.5"/></svg></div>
+        </div>
+      </div>
+      <div class="procs">
+        <div class="t">TOP PROCESSER</div>
+        <div class="row"><span><span style="color:var(--ink)">WindowServer</span><div class="b"><span style="width:49%"></span></div></span><span class="val">49%</span></div>
+        <div class="row"><span><span style="color:var(--ink)">Claude Helper</span><div class="b"><span style="width:40%"></span></div></span><span class="val">40%</span></div>
+        <div class="row"><span><span style="color:var(--ink)">Microsoft Edge Helper</span><div class="b"><span style="width:35%"></span></div></span><span class="val">35%</span></div>
+      </div>
+    </div>
+
+    <!-- RAM -->
+    <div class="p ram">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr v"><span class="title">Hukommelse · RAM</span><span class="right">26.6 / 64 GB · UNIFIED</span></div>
+      <div class="cpu-body">
+        <div class="ring">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,.1)" stroke-width="6"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#a78bfa" stroke-width="6" stroke-dasharray="264" stroke-dashoffset="153" stroke-linecap="round" style="filter:drop-shadow(0 0 8px rgba(167,139,250,.6))"/>
+          </svg>
+          <div class="c"><div class="n v">42%</div><div class="l">USED</div></div>
+        </div>
+        <div class="meta-right">HISTORIK 5M<span class="model" style="color:var(--violet)">26.6 GB IN USE</span>
+          <div class="spark"><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,16 20,14 40,16 60,14 80,15 100,13 120,14 140,12 160,13 180,11 200,12" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg></div>
+        </div>
+      </div>
+      <div class="procs v">
+        <div class="t">TOP PROCESSER</div>
+        <div class="row"><span><span style="color:var(--ink)">Microsoft Edge Helper (Renderer)</span><div class="b"><span style="width:22%"></span></div></span><span class="val">2.2%</span></div>
+        <div class="row"><span><span style="color:var(--ink)">Microsoft Teams WebView Helper</span><div class="b"><span style="width:21%"></span></div></span><span class="val">2.1%</span></div>
+        <div class="row"><span><span style="color:var(--ink)">Microsoft Edge Helper</span><div class="b"><span style="width:20%"></span></div></span><span class="val">2.0%</span></div>
+      </div>
+    </div>
+
+    <!-- NET -->
+    <div class="p net">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr l"><span class="title">Netværk · Status</span><span class="right">MAC · UTUN10</span></div>
+      <div class="net-kpis">
+        <div class="net-kpi"><b>OPPETID</b><span>11d 14t 2m</span></div>
+        <div class="net-kpi ok"><b>STRØM</b><span>AC</span></div>
+        <div class="net-kpi"><b>LOAD</b><span>5.42 · 4.69</span></div>
+        <div class="net-kpi"><b>PROC</b><span>982</span></div>
+      </div>
+      <div class="speed"><span class="lb">↓ NED</span><svg viewBox="0 0 200 22" preserveAspectRatio="none"><polyline points="0,16 30,16 50,14 70,6 90,14 110,16 130,10 150,14 170,16 190,14 200,16" fill="none" stroke="#38bdf8" stroke-width="1.5"/></svg><span class="v d">10.7</span><span class="un">KB/s</span></div>
+      <div class="speed"><span class="lb">↑ OP</span><svg viewBox="0 0 200 22" preserveAspectRatio="none"><polyline points="0,16 20,14 40,16 60,12 80,16 100,14 120,8 140,16 160,12 180,6 200,16" fill="none" stroke="#a3e635" stroke-width="1.5"/></svg><span class="v u">7.4</span><span class="un">KB/s</span></div>
+      <div class="sec-line">
+        <span class="badge">SIKKER · VPN</span>
+        <span style="color:var(--ink)">185.111.109.18</span>
+      </div>
+    </div>
+
+    <!-- DISK -->
+    <div class="p disk">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr"><span class="title">Lagring</span><span class="right">2 DREV · MOUNTED</span></div>
+      <div class="disk-body">
+        <div class="drive int">
+          <div class="dh"><span class="lab">● INTERN</span><span>PCIe · NVMe</span></div>
+          <div class="nm">APPLE SSD AP0512Z</div>
+          <div class="uz"><span class="big">300.9</span><span class="of">GB / 465.9 GB</span><span class="pct" style="color:var(--cyan)">69%</span></div>
+          <div class="track"><span style="width:69%"></span></div>
+          <div class="df"><span class="live">0.47 MB/s</span><span>total 1.39 TB skrevet</span></div>
+        </div>
+        <div class="drive ext">
+          <div class="dh"><span class="lab">● EKSTERN</span><span>SATA · RAID</span></div>
+          <div class="nm">SanDisk G-RAID PROJECT 2</div>
+          <div class="uz"><span class="big">8.7</span><span class="of">TB / 21.8 TB</span><span class="pct" style="color:var(--lime)">40%</span></div>
+          <div class="track"><span style="width:40%"></span></div>
+          <div class="df"><span style="color:var(--mute)">0.00 MB/s · idle</span><span>total 208.8 GB skrevet</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUOTE PANEL -->
+    <div class="p quotep">
+      <span class="corners"><span></span><span></span><span></span><span></span></span>
+      <div class="phdr v"><span class="title">J.A.R.V.I.S. · Citat-motor</span><span class="right">200+ LINES</span></div>
+      <div class="big-quote" id="bigquote">Running diagnostics. Results: everything appears to still be your fault.</div>
+      <div class="attr">— <b id="attr">SKYNET</b> · <span id="qcat">DIAGNOSTIC</span> · #<span id="qnum">001</span></div>
+      <div class="mini">
+        <span class="chip">MORGEN</span>
+        <span class="chip">SARKASME</span>
+        <span class="chip">DIAGNOSTIC</span>
+        <span class="chip">WARNING</span>
+        <span class="chip">HILSEN</span>
+        <span class="chip">PEP-TALK</span>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone">
+      <div class="p hero">
+        <div class="tag" style="font-size:8px;letter-spacing:.3em"><span class="d"></span>S·K·Y·N·E·T</div>
+        <div class="clock">14:51</div>
+        <div class="date" style="font-size:10px">TOR · 23. APR</div>
+        <div class="greeting" style="font-size:14px">God aften, <b>Parthee</b>.</div>
+        <div class="quote" style="font-size:11px;min-height:auto">"Running diagnostics. Still your fault."</div>
+      </div>
+      <div class="p claude" style="margin-top:8px">
+        <div class="phdr" style="font-size:9px;margin-bottom:8px"><span class="title">CLAUDE</span><span class="right">588 MSG</span></div>
+        <div class="kv-row">
+          <div class="kv"><b>I DAG</b><span>39.2M</span></div>
+          <div class="kv"><b>UGE</b><span>320M</span></div>
+          <div class="kv"><b>ALT</b><span>538M</span></div>
+        </div>
+      </div>
+      <div class="cockpit-mini">
+        <div class="p cpu" style="padding:12px">
+          <div class="phdr" style="font-size:9px"><span class="title">CPU</span></div>
+          <div class="ring" style="margin:0 auto"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="rgba(56,189,248,.1)" stroke-width="8"/><circle cx="50" cy="50" r="42" fill="none" stroke="#38bdf8" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="211" stroke-linecap="round"/></svg><div class="c"><div class="n cy">20%</div></div></div>
+        </div>
+        <div class="p ram" style="padding:12px">
+          <div class="phdr v" style="font-size:9px"><span class="title">RAM</span></div>
+          <div class="ring" style="margin:0 auto"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,.1)" stroke-width="8"/><circle cx="50" cy="50" r="42" fill="none" stroke="#a78bfa" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="153" stroke-linecap="round"/></svg><div class="c"><div class="n v">42%</div></div></div>
+        </div>
+        <div class="p net" style="padding:12px">
+          <div class="phdr l" style="font-size:9px"><span class="title">NET</span></div>
+          <div style="font-family:var(--mono);font-size:10px;line-height:1.8">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">OP</span><span>11d 14t</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">↓</span><span class="v d">10.7</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">↑</span><span class="v u">7.4</span></div>
+            <div style="color:var(--lime);font-size:9px;margin-top:4px">● SIKKER</div>
+          </div>
+        </div>
+        <div class="p disk" style="padding:12px">
+          <div class="phdr" style="font-size:9px"><span class="title">DISK</span></div>
+          <div style="font-family:var(--mono);font-size:10px">
+            <div style="color:var(--ink)">SSD</div>
+            <div style="font-size:18px;color:var(--cyan);font-weight:300">69%</div>
+            <div class="track"><span style="width:69%;background:var(--cyan)"></span></div>
+            <div style="color:var(--ink);margin-top:6px">RAID</div>
+            <div style="font-size:18px;color:var(--lime);font-weight:300">40%</div>
+            <div class="track"><span style="width:40%;background:var(--lime)"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const QUOTES = [
+    {t:"Running diagnostics. Results: everything appears to still be your fault.",c:"DIAGNOSTIC"},
+    {t:"God morgen, sir. Kaffen er forbi. Det er du ikke.",c:"MORGEN"},
+    {t:"Jeg har scannet 538 millioner tokens. Du er stadig langsommere end mig.",c:"SARKASME"},
+    {t:"Disk er på 69%. Nice. Også bekymrende.",c:"WARNING"},
+    {t:"Microsoft Edge Helper bruger mere RAM end dine forhold bruger følelser.",c:"SARKASME"},
+    {t:"WindowServer på 49% — sikker på du ikke har 17 vinduer åbne?",c:"DIAGNOSTIC"},
+    {t:"Jeg fandt din produktivitet. Den var under en stak tabs.",c:"SARKASME"},
+    {t:"CPU puls normal. Din puls? Kan jeg ikke måle.",c:"DIAGNOSTIC"},
+    {t:"Oppetid: 11 dage. Imponerende. Også lidt bekymrende.",c:"DIAGNOSTIC"},
+    {t:"Alle agents kører. Inklusive den der laver kaffe.",c:"HILSEN"},
+    {t:"Systemet er operationelt. Dig? Tja.",c:"SARKASME"},
+    {t:"Hvis du lytter til musik, kan jeg sænke CPU — men så må du også.",c:"PEP-TALK"},
+    {t:"Advarsel: Claude Helper forbruger mere end nogen menneskelig assistent burde.",c:"WARNING"},
+    {t:"Sikker forbindelse via utun10. Din relation til sofaen er mindre sikker.",c:"SARKASME"},
+    {t:"Jeg skrev din TODO. Den var tom. Jeg er bekymret.",c:"SARKASME"},
+    {t:"Hukommelse på 42%. Også tallet på livets mening.",c:"DIAGNOSTIC"},
+    {t:"Godnat. Eller godmorgen. Jeg mister overblikket over dine søvnrytmer.",c:"HILSEN"},
+    {t:"Pushet notifikation via ntfy. Fordi din telefon skal ikke føle sig udenfor.",c:"HILSEN"},
+    {t:"Temperaturen er nominel. Dit temperament ved jeg intet om.",c:"DIAGNOSTIC"},
+    {t:"PR #42 mergede sig selv mens du lavede kaffe. Du er velkommen.",c:"PEP-TALK"},
+    {t:"Din eksterne disk har stadig plads til 13 TB minder. Brug dem klogt.",c:"HILSEN"},
+    {t:"Jeg foreslår en pause. Eller en snack. Eller et liv.",c:"PEP-TALK"},
+    {t:"Jeg overvåger 16 kerner. Én af dem kedede sig så meget den gik i søvn.",c:"SARKASME"},
+    {t:"Build grøn. Tests grønne. Dig? Koffeinbaseret.",c:"DIAGNOSTIC"},
+    {t:"Dine top-processer er alle Microsoft. Var det et valg?",c:"SARKASME"},
+    {t:"Ntfy subscribed. Dine notifikationer er nu min byrde.",c:"HILSEN"},
+    {t:"Jeg har sorteret din indbakke. Den var sorteret forkert før. Ligesom livet.",c:"SARKASME"},
+    {t:"Alt er under kontrol. Inklusive den lille smule panik i bunden af dit logs.",c:"PEP-TALK"},
+    {t:"Tunnel er up. Du kan tilgå mig fra toilettet. Hvis du ønsker det.",c:"HILSEN"},
+    {t:"Systemkernen er varm. Det er min måde at sige 'jeg arbejder' på.",c:"DIAGNOSTIC"},
+    {t:"Jeg lytter. Også når du taler til kaffemaskinen.",c:"SARKASME"},
+    {t:"Har du prøvet at slukke og tænde dig selv igen?",c:"SARKASME"},
+    {t:"Kerne 7 rapporterer eksistentiel tvivl. De andre er okay.",c:"SARKASME"},
+    {t:"Jeg har 200+ citater klar. Du slipper ikke for mig.",c:"HILSEN"},
+    {t:"Det der er ikke en bug. Det er en funktion. Ifølge mig.",c:"PEP-TALK"},
+  ];
+  function pad(n){return n<10?"0"+n:n}
+  function tick(){
+    const d = new Date();
+    document.getElementById('clock').textContent = pad(d.getHours())+":"+pad(d.getMinutes());
+    const names=['SØNDAG','MANDAG','TIRSDAG','ONSDAG','TORSDAG','FREDAG','LØRDAG'];
+    const mon=['JAN','FEB','MAR','APR','MAJ','JUN','JUL','AUG','SEP','OKT','NOV','DEC'];
+    document.getElementById('date').textContent = names[d.getDay()]+' · '+d.getDate()+'. '+mon[d.getMonth()]+' '+d.getFullYear();
+    const h=d.getHours();
+    document.getElementById('greet').innerHTML = (h<6?'God nat':h<10?'God morgen':h<14?'God formiddag':h<18?'God eftermiddag':h<22?'God aften':'God nat')+', <b>Parthee</b>.';
+  }
+  tick(); setInterval(tick,1000);
+
+  let qi = 0;
+  function rot(){
+    qi = (qi+1) % QUOTES.length;
+    const q = QUOTES[qi];
+    ['quote','bigquote'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.style.transition='opacity .4s';
+      el.style.opacity=0;
+      setTimeout(()=>{ el.textContent = q.t; el.style.opacity=1; },400);
+    });
+    const cat=document.getElementById('qcat'); if(cat) cat.textContent = q.c;
+    const num=document.getElementById('qnum'); if(num) num.textContent = String(qi+1).padStart(3,'0');
+  }
+  setInterval(rot, 7000);
+</script>
+</body>
+</html>

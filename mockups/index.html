@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skynet Mockups</title>
+<style>
+  :root{--cyan:#38bdf8;--violet:#a78bfa;--lime:#4ade80;--mono:'JetBrains Mono',ui-monospace,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:#05060a;color:#e2e8f0;font-family:var(--mono);min-height:100vh;padding:48px 24px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:42px;letter-spacing:.18em;margin:0 0 8px;color:var(--cyan)}
+  .sub{color:#64748b;letter-spacing:.2em;font-size:11px;margin-bottom:40px;text-transform:uppercase}
+  .section-title{color:var(--violet);font-size:11px;letter-spacing:.3em;margin:32px 0 16px;text-transform:uppercase}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  a.card{display:block;padding:20px;border:1px solid rgba(56,189,248,.25);background:rgba(15,23,42,.4);text-decoration:none;color:inherit;position:relative;transition:all .2s}
+  a.card:hover{border-color:var(--cyan);background:rgba(56,189,248,.08);transform:translateY(-2px)}
+  a.card::before,a.card::after{content:"";position:absolute;width:10px;height:10px;border:1px solid var(--cyan)}
+  a.card::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  a.card::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .tag{color:var(--lime);font-size:10px;letter-spacing:.25em}
+  .name{font-size:18px;margin:8px 0 4px;color:#f1f5f9}
+  .desc{font-size:12px;color:#94a3b8;line-height:1.5}
+  .group-final a.card{border-color:rgba(74,222,128,.4)}
+  .group-final a.card::before,.group-final a.card::after{border-color:var(--lime)}
+  .group-final .tag{color:var(--lime)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SKYNET · MOCKUPS</h1>
+  <div class="sub">Vælg en retning — localhost preview</div>
+
+  <div class="section-title">◢ Final set (scoped: clock, greeting, quotes, CPU/RAM/Net/Disk, Claude Code)</div>
+  <div class="grid group-final">
+    <a class="card" href="g-hud-classic.html"><div class="tag">G</div><div class="name">HUD Classic</div><div class="desc">Tæt på original J.A.R.V.I.S. 4-kolonne widget-grid.</div></a>
+    <a class="card" href="h-mission-briefing.html"><div class="tag">H</div><div class="name">Mission Briefing</div><div class="desc">Kæmpe centreret ur, 2x2 widget-rækker.</div></a>
+    <a class="card" href="i-cockpit-grid.html"><div class="tag">I</div><div class="name">Cockpit Grid</div><div class="desc">Tæt 12-kolonne cockpit + quote-motor sidebar.</div></a>
+    <a class="card" href="j-starquake.html"><div class="tag">J</div><div class="name">Starquake</div><div class="desc">Brutalist monospace, tabular, ingen borders (à la graykode.github.io/starquake).</div></a>
+    <a class="card" href="k-cockpit-minimal.html"><div class="tag">K</div><div class="name">Cockpit · Minimal</div><div class="desc">Cockpit-grid struktur + starquake-minimalisme. Rings uden glow, dashed dividers, monospace.</div></a>
+  </div>
+
+  <div class="section-title">◢ Tidligere iterationer</div>
+  <div class="grid">
+    <a class="card" href="a-command-deck.html"><div class="tag">A</div><div class="name">Command Deck</div><div class="desc">Terminal-æstetik.</div></a>
+    <a class="card" href="b-glass-hub.html"><div class="tag">B</div><div class="name">Glass Hub</div><div class="desc">iOS glass cards PWA.</div></a>
+    <a class="card" href="c-event-feed.html"><div class="tag">C</div><div class="name">Event Feed</div><div class="desc">ntfy-first light feed.</div></a>
+    <a class="card" href="d-linear-os.html"><div class="tag">D</div><div class="name">Linear OS</div><div class="desc">Linear bento dark + ⌘K.</div></a>
+    <a class="card" href="e-spatial-canvas.html"><div class="tag">E</div><div class="name">Spatial Canvas</div><div class="desc">Apple Sequoia spatial widgets.</div></a>
+    <a class="card" href="f-voice-companion.html"><div class="tag">F</div><div class="name">Voice Companion</div><div class="desc">Voice orb centerpiece.</div></a>
+  </div>
+</div>
+</body>
+</html>

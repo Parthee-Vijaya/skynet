@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · D — Linear OS</title>
+<style>
+  :root {
+    --bg:#08090b; --surface:#0d0f13; --surface-2:#12141a; --line:#1c1f26;
+    --ink:#e8ecf1; --dim:#8b92a3; --mute:#545a6a;
+    --violet:#a78bfa; --cyan:#22d3ee; --pink:#f472b6; --lime:#a3e635; --amber:#fbbf24; --red:#f87171;
+    --grad: linear-gradient(135deg, #a78bfa 0%, #22d3ee 100%);
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); font-family: "Inter", -apple-system, system-ui, sans-serif; -webkit-font-smoothing:antialiased; letter-spacing:-0.01em; }
+  body::before { content:""; position:fixed; inset:0; background: radial-gradient(900px 500px at 15% -5%, rgba(167,139,250,.15), transparent 60%), radial-gradient(800px 400px at 100% 110%, rgba(34,211,238,.12), transparent 60%); pointer-events:none; z-index:-1; }
+
+  .shell { display:grid; grid-template-columns: 220px 1fr 320px; min-height:100vh; }
+  @media (max-width: 1100px) { .shell { grid-template-columns: 1fr; } .side, .right { display:none; } }
+
+  .side { border-right:1px solid var(--line); padding:16px 12px; position:sticky; top:0; height:100vh; }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; letter-spacing:0.02em; margin-bottom:20px; padding:6px 8px; }
+  .brand .logo { width:22px; height:22px; border-radius:6px; background:var(--grad); display:inline-block; }
+  .side .sec { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--mute); padding:0 8px; margin-top:14px; margin-bottom:4px; }
+  .side a { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:6px; color:var(--dim); text-decoration:none; font-size:13px; }
+  .side a:hover { background:var(--surface); color:var(--ink); }
+  .side a.on { background:var(--surface-2); color:var(--ink); }
+  .side a .k { margin-left:auto; font-size:10px; color:var(--mute); border:1px solid var(--line); padding:1px 5px; border-radius:4px; }
+
+  .main { padding: 20px 28px 40px; min-width:0; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; }
+  .crumb { font-size:12px; color:var(--dim); }
+  .crumb b { color:var(--ink); font-weight:500; }
+
+  .cmdk { flex:1; max-width:480px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:7px 12px; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--mute); cursor:pointer; }
+  .cmdk .k { margin-left:auto; border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:10px; }
+  .cmdk:hover { border-color:#2a2e38; }
+
+  .pill { font-size:11px; padding:3px 9px; border-radius:999px; background:rgba(163,230,53,.1); color:var(--lime); border:1px solid rgba(163,230,53,.3); display:inline-flex; align-items:center; gap:6px; }
+  .pill .d { width:6px; height:6px; background:var(--lime); border-radius:50%; box-shadow: 0 0 8px var(--lime); }
+
+  h1 { font-size:24px; font-weight:600; margin:0 0 2px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:22px; }
+
+  .bento { display:grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: minmax(90px, auto); gap:10px; }
+  .tile { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; position:relative; overflow:hidden; }
+  .tile::after { content:""; position:absolute; inset:0; background: radial-gradient(400px 200px at 100% 0%, rgba(255,255,255,.03), transparent 50%); pointer-events:none; }
+  .tile h3 { margin:0; font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:0.08em; font-weight:500; }
+  .tile .num { font-size:28px; font-weight:600; letter-spacing:-0.02em; margin-top:4px; }
+  .tile .foot { font-size:11px; color:var(--dim); margin-top:6px; }
+
+  .t-hero   { grid-column: span 4; grid-row: span 2; background: linear-gradient(135deg, rgba(167,139,250,.12), rgba(34,211,238,.06)); border-color: rgba(167,139,250,.2); }
+  .t-agents { grid-column: span 2; }
+  .t-cpu    { grid-column: span 2; }
+  .t-mem    { grid-column: span 2; }
+  .t-disk   { grid-column: span 2; }
+  .t-ntfy   { grid-column: span 3; grid-row: span 2; }
+  .t-auto   { grid-column: span 3; grid-row: span 2; }
+  .t-chat   { grid-column: span 6; }
+
+  .spark { display:flex; gap:2px; align-items:flex-end; height:40px; margin-top:10px; }
+  .spark span { flex:1; background: linear-gradient(180deg, var(--cyan), rgba(34,211,238,.1)); border-radius:2px 2px 0 0; }
+
+  .agents-list { margin-top:10px; }
+  .agent-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--line); font-size:12px; }
+  .agent-row:first-child { border-top:0; }
+  .agent-row .dot { width:7px; height:7px; border-radius:50%; background:var(--mute); }
+  .agent-row .dot.on { background:var(--lime); box-shadow:0 0 6px var(--lime); }
+  .agent-row .name { flex:1; color:var(--ink); }
+  .agent-row .meta { color:var(--dim); font-size:11px; }
+
+  .ntfy-list { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+  .ntfy-row { display:grid; grid-template-columns: 24px 1fr auto; gap:10px; font-size:12px; align-items:center; padding:8px 10px; background:var(--surface-2); border-radius:8px; border:1px solid var(--line); }
+  .ntfy-row .ic { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .ic.ok   { background:rgba(163,230,53,.15); color:var(--lime); }
+  .ic.warn { background:rgba(251,191,36,.15); color:var(--amber); }
+  .ic.err  { background:rgba(248,113,113,.15); color:var(--red); }
+  .ic.info { background:rgba(34,211,238,.15); color:var(--cyan); }
+  .ntfy-row .t { color:var(--mute); font-size:11px; }
+
+  .auto-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
+  .auto-row:first-child { border-top:0; }
+  .auto-row .trg { color:var(--violet); font-family: ui-monospace, Menlo, monospace; font-size:11px; }
+  .auto-row .arr { color:var(--mute); }
+  .auto-row .act { color:var(--cyan); font-family: ui-monospace, Menlo, monospace; font-size:11px; }
+  .toggle { margin-left:auto; width:28px; height:16px; background:var(--lime); border-radius:999px; position:relative; }
+  .toggle::after { content:""; position:absolute; right:2px; top:2px; width:12px; height:12px; background:var(--bg); border-radius:50%; }
+  .toggle.off { background:var(--line); }
+  .toggle.off::after { right:auto; left:2px; }
+
+  .chat-input { display:flex; gap:8px; align-items:center; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; }
+  .chat-input input { flex:1; background:transparent; border:0; color:var(--ink); outline:none; font-family:inherit; font-size:13px; }
+  .chat-input .btn { background:var(--grad); color:#08090b; font-weight:600; padding:5px 10px; border-radius:6px; font-size:12px; border:0; cursor:pointer; }
+
+  .grad-text { background: var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  .right { border-left:1px solid var(--line); padding:18px 16px; }
+  .right h4 { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:var(--mute); margin:18px 0 6px; font-weight:500; }
+  .right h4:first-child { margin-top:0; }
+  .stat { display:flex; justify-content:space-between; padding:4px 0; font-size:12px; }
+  .stat b { color:var(--dim); font-weight:400; }
+  .device { display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:12px; }
+  .device .n { display:flex; gap:8px; align-items:center; }
+
+  /* mobile preview */
+  .phone { width:300px; margin:40px auto 0; border:8px solid #14161c; border-radius:36px; padding:18px 12px 70px; background:var(--bg); position:relative; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+  .phone .bento { grid-template-columns: repeat(2,1fr); gap:8px; grid-auto-rows: minmax(60px,auto); }
+  .phone .tile { padding:10px; border-radius:10px; }
+  .phone .num { font-size:18px; }
+  .phone .t-hero { grid-column: span 2; grid-row: span 1; }
+  .phone .t-agents,.phone .t-cpu,.phone .t-mem,.phone .t-disk { grid-column: span 1; }
+  .phone .t-ntfy { grid-column: span 2; grid-row: span 1; }
+  .phone .t-auto,.phone .t-chat { grid-column: span 2; }
+  .phone .cmdk { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); width:90%; border-radius:999px; background:rgba(255,255,255,.06); backdrop-filter:blur(18px); }
+
+  .arch { margin-top:30px; border:1px solid var(--line); border-radius:12px; padding:18px; background:var(--surface); }
+  .arch h3 { margin:0 0 8px; font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.1em; }
+  .arch pre { background:var(--bg); padding:12px; border-radius:8px; color:var(--dim); font-family: ui-monospace, Menlo, monospace; font-size:12px; overflow:auto; margin:0; border:1px solid var(--line); }
+  .tag { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; border:1px solid var(--line); color:var(--dim); margin:3px 4px 0 0; font-family: ui-monospace, Menlo, monospace; }
+  .tag.keep { color:var(--lime); border-color:rgba(163,230,53,.35); background:rgba(163,230,53,.06); }
+  .tag.cut { color:var(--red); border-color:rgba(248,113,113,.3); text-decoration:line-through; }
+
+  .nav-top { display:flex; gap:6px; margin-bottom:14px; font-size:11px; }
+  .nav-top a { color:var(--dim); text-decoration:none; padding:3px 9px; border:1px solid var(--line); border-radius:6px; }
+  .nav-top a.on { color:var(--ink); background:var(--surface-2); border-color:rgba(167,139,250,.35); }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="side">
+      <div class="brand"><span class="logo"></span> Skynet</div>
+      <div class="sec">Workspace</div>
+      <a class="on">◇ Overview <span class="k">G</span></a>
+      <a>🤖 Agents <span class="k">A</span></a>
+      <a>⚡ Automations <span class="k">F</span></a>
+      <a>💬 Chat <span class="k">C</span></a>
+      <a>📨 Feed <span class="k">I</span></a>
+      <div class="sec">System</div>
+      <a>📡 Ntfy</a>
+      <a>🌐 Tunnel</a>
+      <a>🖥️ Devices</a>
+      <a>⚙️ Settings <span class="k">,</span></a>
+      <div class="sec">You</div>
+      <a>parthee@mac · pro</a>
+    </nav>
+
+    <main class="main">
+      <div class="nav-top">
+        <a href="a-command-deck.html">A</a>
+        <a href="b-glass-hub.html">B</a>
+        <a href="c-event-feed.html">C</a>
+        <a class="on">D · Linear OS</a>
+        <a href="e-spatial-canvas.html">E · Spatial</a>
+        <a href="f-voice-companion.html">F · Voice</a>
+      </div>
+
+      <div class="topbar">
+        <div class="crumb">Workspace / <b>Overview</b></div>
+        <div class="cmdk">◎ Kør kommando, søg, spørg Skynet… <span class="k">⌘ K</span></div>
+        <div class="pill"><span class="d"></span> alle systemer oppe</div>
+      </div>
+
+      <h1>Godmorgen, <span class="grad-text">Parthee</span></h1>
+      <div class="sub">2 agents kører · 6 automations aktive · 4 ntfy i dag · tunnel skynet.parthee.dev</div>
+
+      <div class="bento">
+        <div class="tile t-hero">
+          <h3>Dagens fokus</h3>
+          <div style="font-size:20px;font-weight:500;margin-top:10px;line-height:1.4">
+            Deploy <span class="grad-text">v0.3.1</span> venter på godkendelse.<br/>
+            <span style="color:var(--dim);font-size:14px">Tests grønne · 1 PR merged · udløber om 11 min</span>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <button class="btn" style="background:var(--lime);color:#0b1300;border:0;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer">Godkend deploy</button>
+            <button style="background:var(--surface-2);color:var(--ink);border:1px solid var(--line);padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer">Se diff</button>
+          </div>
+          <div class="spark"><span style="height:20%"></span><span style="height:35%"></span><span style="height:28%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:70%"></span><span style="height:60%"></span><span style="height:85%"></span><span style="height:78%"></span><span style="height:90%"></span><span style="height:72%"></span><span style="height:95%"></span></div>
+          <div class="foot">build-frekvens · sidste 12t</div>
+        </div>
+
+        <div class="tile t-agents">
+          <h3>Agents</h3>
+          <div class="num">2<span style="font-size:14px;color:var(--dim);margin-left:6px">kører</span></div>
+          <div class="foot">+ 6 idle</div>
+          <div class="agents-list">
+            <div class="agent-row"><span class="dot on"></span><span class="name">email-triage</span><span class="meta">4m</span></div>
+            <div class="agent-row"><span class="dot on"></span><span class="name">pr-watcher</span><span class="meta">22m</span></div>
+          </div>
+        </div>
+
+        <div class="tile t-cpu">
+          <h3>CPU</h3>
+          <div class="num">12%</div>
+          <div class="spark"><span style="height:30%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span><span style="height:45%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span><span style="height:25%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span><span style="height:50%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span><span style="height:35%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span><span style="height:20%;background:linear-gradient(180deg,var(--lime),rgba(163,230,53,.1))"></span></div>
+        </div>
+
+        <div class="tile t-mem">
+          <h3>Memory</h3>
+          <div class="num">48<span style="font-size:14px;color:var(--dim)">%</span></div>
+          <div class="foot">15.4 / 32 GB</div>
+        </div>
+
+        <div class="tile t-disk">
+          <h3>Disk</h3>
+          <div class="num" style="color:var(--amber)">61<span style="font-size:14px;color:var(--dim)">%</span></div>
+          <div class="foot">nærmer sig grænsen</div>
+        </div>
+
+        <div class="tile t-ntfy">
+          <h3>Ntfy · parthee-skynet</h3>
+          <div class="ntfy-list">
+            <div class="ntfy-row"><div class="ic ok">✓</div><div><div>PR #42 merged</div><div style="color:var(--dim);font-size:11px">auth refactor</div></div><div class="t">2m</div></div>
+            <div class="ntfy-row"><div class="ic info">◆</div><div><div>Dentist kl 09:00</div><div style="color:var(--dim);font-size:11px">i morgen</div></div><div class="t">5t</div></div>
+            <div class="ntfy-row"><div class="ic warn">⚠</div><div><div>Disk 90%</div><div style="color:var(--dim);font-size:11px">/dev/disk1s2</div></div><div class="t">1t</div></div>
+            <div class="ntfy-row"><div class="ic info">↩</div><div><div>Kommando fra iPhone</div><div style="color:var(--dim);font-size:11px">/agent run morning-brief</div></div><div class="t">47m</div></div>
+          </div>
+        </div>
+
+        <div class="tile t-auto">
+          <h3>Automations · 6</h3>
+          <div style="margin-top:10px">
+            <div class="auto-row"><span class="trg">mail.important</span><span class="arr">→</span><span class="act">ntfy.push</span><div class="toggle"></div></div>
+            <div class="auto-row"><span class="trg">cron 07:00</span><span class="arr">→</span><span class="act">morning-brief</span><div class="toggle"></div></div>
+            <div class="auto-row"><span class="trg">disk &gt; 85%</span><span class="arr">→</span><span class="act">ntfy.warn</span><div class="toggle"></div></div>
+            <div class="auto-row"><span class="trg">pr.open</span><span class="arr">→</span><span class="act">slack.notify</span><div class="toggle off"></div></div>
+            <div class="auto-row"><span class="trg">cal.event</span><span class="arr">→</span><span class="act">siri.reminder</span><div class="toggle"></div></div>
+            <div class="auto-row"><span class="trg">home.arrive</span><span class="arr">→</span><span class="act">door.unlock</span><div class="toggle"></div></div>
+          </div>
+        </div>
+
+        <div class="tile t-chat">
+          <h3>Spørg Skynet</h3>
+          <div style="margin-top:10px;font-size:13px;color:var(--dim);line-height:1.6">
+            <span style="color:var(--violet)">› du</span> hvor mange åbne prs har jeg?<br/>
+            <span style="color:var(--cyan)">› skynet</span> 3 åbne · #42 merged · #48 i review · #51 draft. skal jeg bumpe #48?
+          </div>
+          <div class="chat-input">
+            <span style="color:var(--mute)">›</span>
+            <input placeholder="Skriv… eller brug /agent, /deploy, /brief" />
+            <button class="btn">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="brand" style="margin:0;padding:0"><span class="logo" style="width:16px;height:16px"></span> Skynet</div>
+          <div class="pill" style="font-size:9px"><span class="d"></span> up</div>
+        </div>
+        <div class="bento">
+          <div class="tile t-hero">
+            <h3>Deploy venter</h3>
+            <div style="font-size:13px;margin-top:4px">v0.3.1 · tests grønne</div>
+            <div style="margin-top:8px;display:flex;gap:4px">
+              <button style="flex:1;background:var(--lime);border:0;color:#0b1300;padding:6px;border-radius:6px;font-size:11px;font-weight:600">Godkend</button>
+              <button style="background:var(--surface-2);border:1px solid var(--line);color:var(--ink);padding:6px 10px;border-radius:6px;font-size:11px">Diff</button>
+            </div>
+          </div>
+          <div class="tile t-agents"><h3>Agents</h3><div class="num">2</div></div>
+          <div class="tile t-cpu"><h3>CPU</h3><div class="num">12%</div></div>
+          <div class="tile t-mem"><h3>Mem</h3><div class="num">48%</div></div>
+          <div class="tile t-disk"><h3>Disk</h3><div class="num" style="color:var(--amber)">61%</div></div>
+          <div class="tile t-ntfy">
+            <h3>Ntfy</h3>
+            <div class="ntfy-list" style="margin-top:6px">
+              <div class="ntfy-row" style="padding:6px 8px"><div class="ic ok">✓</div><div style="font-size:11px">PR #42</div><div class="t">2m</div></div>
+              <div class="ntfy-row" style="padding:6px 8px"><div class="ic warn">⚠</div><div style="font-size:11px">Disk 90%</div><div class="t">1t</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="cmdk">◎ ⌘ K · spørg eller kør</div>
+      </div>
+
+      <div class="arch">
+        <h3>Arkitektur</h3>
+<pre>Mac
+  ├─ daemon  :6767      agents + scheduler + ntfy workers (in/out)
+  ├─ portal  :3100      Next.js, keyboard-first, ⌘K palette
+  └─ cloudflared        skynet.parthee.dev (header-token auth)
+
+Mobile
+  └─ PWA (standalone)   samme UI, bento kollapser til 2 kolonner
+     ntfy app           subscribe "parthee-skynet"
+
+Stack-valg
+  • Tailwind v4 + shadcn-style tokens     · mørk OLED-venlig palette
+  • cmdk (command palette)                · ⌘K → alt er tilgængeligt
+  • Keyboard shortcuts overalt            · G overview, A agents, F auto, C chat
+</pre>
+        <h3 style="margin-top:14px">Pakker</h3>
+        <div>
+          <span class="tag keep">portal</span><span class="tag keep">daemon</span><span class="tag keep">cli</span>
+          <span class="tag cut">relay</span><span class="tag cut">highlight</span><span class="tag cut">hud</span>
+        </div>
+      </div>
+    </main>
+
+    <aside class="right">
+      <h4>System</h4>
+      <div class="stat"><b>daemon</b><span style="color:var(--lime)">● up · 4d 12t</span></div>
+      <div class="stat"><b>portal</b><span style="color:var(--lime)">● up · :3100</span></div>
+      <div class="stat"><b>tunnel</b><span style="color:var(--lime)">● cloudflare</span></div>
+      <div class="stat"><b>ntfy</b><span style="color:var(--lime)">● subscribed</span></div>
+
+      <h4>Enheder</h4>
+      <div class="device"><div class="n">🖥️ mac-studio</div><span style="color:var(--lime);font-size:11px">online</span></div>
+      <div class="device"><div class="n">📱 iphone</div><span style="color:var(--lime);font-size:11px">online</span></div>
+      <div class="device"><div class="n">📟 ipad</div><span style="color:var(--mute);font-size:11px">offline</span></div>
+
+      <h4>Shortcuts</h4>
+      <div class="stat"><b>⌘ K</b><span>command palette</span></div>
+      <div class="stat"><b>G → A</b><span>agents</span></div>
+      <div class="stat"><b>G → F</b><span>automations</span></div>
+      <div class="stat"><b>N</b><span>ny automation</span></div>
+      <div class="stat"><b>/</b><span>search feed</span></div>
+
+      <h4>Aktivitet</h4>
+      <div style="font-size:11px;color:var(--dim);line-height:1.8">
+        03:41 ✓ build ok<br/>
+        03:28 ✓ pr #42 merged<br/>
+        02:15 ◆ cal reminder<br/>
+        01:02 ⚠ disk warn<br/>
+        00:47 ↩ cmd /agent run
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

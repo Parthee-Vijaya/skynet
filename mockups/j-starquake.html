@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>J · skynet.live</title>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --fg:#e5e5e5;
+    --dim:#6b6b6b;
+    --faint:#2a2a2a;
+    --hot:#f5f5f5;
+    --ok:#7dd67d;
+    --warn:#e6b450;
+    --bad:#d87373;
+    --link:#9bd0ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:.01em;}
+  a{color:var(--link);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 80px}
+  .masthead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:2px}
+  .masthead h1{margin:0;font-size:13px;font-weight:500;letter-spacing:0}
+  .masthead h1 .dim{color:var(--dim)}
+  .masthead .meta{color:var(--dim);font-size:12px}
+  .sub{color:var(--dim);font-size:12px;margin:0 0 22px}
+  .sub b{color:var(--fg);font-weight:500}
+  .dot{color:var(--faint);padding:0 6px}
+  .nav{color:var(--dim);font-size:12px;margin:0 0 16px;display:flex;gap:14px;flex-wrap:wrap}
+  .nav a{color:var(--dim)}
+  .nav a:hover{color:var(--fg);text-decoration:none}
+  .nav .here{color:var(--fg)}
+
+  h2{font-size:12px;font-weight:500;margin:28px 0 6px;color:var(--dim);letter-spacing:.02em}
+  h2::before{content:"# "}
+
+  /* tabular rows, no borders */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:2px 8px 2px 0;font-weight:400;vertical-align:top}
+  th{color:var(--dim);font-weight:500;padding-bottom:4px}
+  tr:hover td{background:#111}
+  .num{color:var(--fg);font-variant-numeric:tabular-nums}
+  .dimc{color:var(--dim)}
+  .ok{color:var(--ok)}
+  .warn{color:var(--warn)}
+  .bad{color:var(--bad)}
+  .tag{color:var(--dim);font-size:11px}
+  .hi{color:var(--hot)}
+
+  /* bar */
+  .bar{display:inline-block;width:120px;height:6px;background:#1a1a1a;position:relative;vertical-align:middle;margin:0 6px}
+  .bar span{display:block;height:100%;background:var(--fg)}
+  .bar.ok span{background:var(--ok)}
+  .bar.warn span{background:var(--warn)}
+  .bar.bad span{background:var(--bad)}
+
+  /* sparkline */
+  .spark{display:inline-block;height:14px;vertical-align:middle;margin-left:8px}
+  .spark polyline{fill:none;stroke:var(--fg);stroke-width:1;opacity:.8}
+
+  /* ticker */
+  .tick{color:var(--dim);font-size:12px;margin:4px 0 0}
+  .tick b{color:var(--fg);font-weight:500}
+
+  /* hero strip */
+  .hero{display:flex;align-items:baseline;gap:14px;margin:10px 0 4px;flex-wrap:wrap}
+  .hero .clock{font-size:44px;font-weight:300;color:var(--hot);letter-spacing:-.01em;line-height:1}
+  .hero .date{color:var(--dim);font-size:12px}
+  .hero .hello{color:var(--fg);font-size:12px}
+
+  .quote{color:var(--fg);font-size:13px;margin:8px 0 2px;min-height:1.5em}
+  .quote::before{content:"— "}
+  .quote small{color:var(--dim);font-size:11px;margin-left:8px}
+
+  /* status line (top) */
+  .status{color:var(--dim);font-size:11px;display:flex;gap:0;align-items:center;flex-wrap:wrap}
+  .status .pulse{display:inline-block;width:6px;height:6px;background:var(--ok);border-radius:50%;margin-right:6px;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  hr{border:0;border-top:1px dashed var(--faint);margin:24px 0 8px}
+
+  /* column split */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+  @media (max-width:720px){.cols{grid-template-columns:1fr}}
+
+  footer{color:var(--dim);font-size:11px;margin-top:40px;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>skynet<span class="dim">.live</span> — <span class="dim">jarvis terminal</span></h1>
+    <span class="meta status"><span class="pulse"></span> online <span class="dot">·</span> sampling ≤2/sec <span class="dot">·</span> tunnel up</span>
+  </div>
+  <div class="sub">operational <span class="dot">·</span> host <b>m2-max</b> <span class="dot">·</span> uptime <b>11d 14t 2m</b> <span class="dot">·</span> ntfy <b class="ok">connected</b></div>
+
+  <div class="nav">
+    <a href="index.html">← index</a>
+    <a href="g-hud-classic.html">g</a>
+    <a href="h-mission-briefing.html">h</a>
+    <a href="i-cockpit-grid.html">i</a>
+    <span class="here">j · starquake</span>
+  </div>
+
+  <!-- hero -->
+  <div class="hero">
+    <div class="clock" id="clock">14:51</div>
+    <div class="date" id="date">torsdag · 23 apr 2026 · uge 17</div>
+    <div class="hello" id="hello">god eftermiddag, parthee</div>
+  </div>
+  <div class="quote" id="quote">verden kører på koffein og dårlige beslutninger. god morgen. <small id="qcat">sarkasme · 01/200</small></div>
+
+  <!-- system -->
+  <h2>system</h2>
+  <table>
+    <thead><tr><th style="width:90px">metric</th><th style="width:60px">value</th><th style="width:160px">usage</th><th>detail</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="dimc">cpu</td>
+        <td class="num">20%</td>
+        <td><span class="bar ok"><span style="width:20%"></span></span></td>
+        <td class="dimc">apple m2 max · 16 cores · 3.68 ghz · load <span class="num">5.42 · 4.69 · 9.82</span></td>
+      </tr>
+      <tr>
+        <td class="dimc">ram</td>
+        <td class="num">42%</td>
+        <td><span class="bar warn"><span style="width:42%"></span></span></td>
+        <td class="dimc"><span class="num">26.6 / 64.0</span> gb · swap <span class="num">0 b</span> · pressure <span class="ok">low</span></td>
+      </tr>
+      <tr>
+        <td class="dimc">net</td>
+        <td class="num ok">up</td>
+        <td><span class="bar ok"><span style="width:14%"></span></span></td>
+        <td class="dimc">utun10 · ↓<span class="num">10.7</span> ↑<span class="num">7.4</span> kb/s · <span class="num">185.111.109.18</span> <span class="ok">sikker</span></td>
+      </tr>
+      <tr>
+        <td class="dimc">power</td>
+        <td class="num">ac</td>
+        <td><span class="bar"><span style="width:100%"></span></span></td>
+        <td class="dimc">charger <span class="ok">connected</span> · batt <span class="num">100%</span> · temp <span class="num">41°c</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- disk -->
+  <h2>disk</h2>
+  <table>
+    <thead><tr><th style="width:220px">volume</th><th style="width:110px">used / total</th><th style="width:160px">fill</th><th>fs</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>APPLE SSD AP0512Z</td>
+        <td class="num"><span class="hi">300.9</span> / 465.9 gb</td>
+        <td><span class="bar warn"><span style="width:69%"></span></span> <span class="dimc num">69%</span></td>
+        <td class="dimc">apfs · internal · ssd</td>
+      </tr>
+      <tr>
+        <td>SanDisk G-RAID PROJECT 2</td>
+        <td class="num"><span class="hi">8.7</span> / 21.8 tb</td>
+        <td><span class="bar ok"><span style="width:40%"></span></span> <span class="dimc num">40%</span></td>
+        <td class="dimc">exfat · external · raid</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- claude code -->
+  <h2>claude code</h2>
+  <table>
+    <thead><tr><th style="width:120px">session</th><th style="width:80px">msg</th><th style="width:110px">input tok</th><th style="width:110px">output tok</th><th>total</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>today · 2026-04-23</td>
+        <td class="num hi">588</td>
+        <td class="num">39.2 m</td>
+        <td class="num">320.2 m</td>
+        <td class="num"><span class="hi">538.4 m</span> <span class="dimc">· opus 4.7</span></td>
+      </tr>
+      <tr>
+        <td class="dimc">7d avg</td>
+        <td class="num dimc">412</td>
+        <td class="num dimc">28.4 m</td>
+        <td class="num dimc">241.1 m</td>
+        <td class="num dimc">404.9 m</td>
+      </tr>
+      <tr>
+        <td class="dimc">burn rate</td>
+        <td class="dimc" colspan="4"><span class="num">~37</span> msg/t · peak <span class="num">14:00–15:00</span> · cost today ca. <span class="num">$42</span> <span class="ok">· within budget</span> <svg class="spark" width="120" height="14" viewBox="0 0 120 14"><polyline points="0,10 10,8 20,9 30,6 40,7 50,5 60,4 70,6 80,3 90,2 100,4 110,1 120,2"/></svg></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- processes -->
+  <h2>top processes</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <thead><tr><th>cpu</th><th style="width:60px">%</th><th style="width:80px"></th></tr></thead>
+        <tbody>
+          <tr><td>WindowServer</td><td class="num">49.0</td><td><span class="bar bad"><span style="width:49%"></span></span></td></tr>
+          <tr><td>Claude Helper (Plugin)</td><td class="num">40.0</td><td><span class="bar warn"><span style="width:40%"></span></span></td></tr>
+          <tr><td>Microsoft Edge</td><td class="num">35.0</td><td><span class="bar warn"><span style="width:35%"></span></span></td></tr>
+          <tr><td class="dimc">kernel_task</td><td class="num dimc">12.3</td><td><span class="bar"><span style="width:12%"></span></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>ram</th><th style="width:60px">%</th><th style="width:80px"></th></tr></thead>
+        <tbody>
+          <tr><td>MS Edge Renderer</td><td class="num">2.2</td><td><span class="bar"><span style="width:22%"></span></span></td></tr>
+          <tr><td>Microsoft Teams</td><td class="num">2.1</td><td><span class="bar"><span style="width:21%"></span></span></td></tr>
+          <tr><td>Microsoft Edge</td><td class="num">2.0</td><td><span class="bar"><span style="width:20%"></span></span></td></tr>
+          <tr><td class="dimc">Spotify</td><td class="num dimc">1.4</td><td><span class="bar"><span style="width:14%"></span></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- quotes feed -->
+  <h2>quotes feed <span class="dimc" style="font-weight:400">· 200 total · rotating every 7s</span></h2>
+  <table>
+    <thead><tr><th style="width:70px">tier</th><th style="width:90px">category</th><th>line</th><th style="width:50px" class="dimc">idx</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag">fresh</span></td><td class="dimc">morgen</td><td>stå op. kaffen venter ikke.</td><td class="dimc num">001</td></tr>
+      <tr><td><span class="tag">streak</span></td><td class="dimc">sarkasme</td><td>endnu en dag, endnu et bundle-error.</td><td class="dimc num">002</td></tr>
+      <tr><td><span class="tag">hot</span></td><td class="dimc">diagnostic</td><td>cpu'en har det bedre end dig lige nu.</td><td class="dimc num">003</td></tr>
+      <tr><td><span class="tag">returning</span></td><td class="dimc">pep-talk</td><td>du er ikke bag ud. tiden er bare bagud.</td><td class="dimc num">004</td></tr>
+      <tr><td><span class="tag">fresh</span></td><td class="dimc">hilsen</td><td>velkommen tilbage. alt er stadig i stykker.</td><td class="dimc num">005</td></tr>
+      <tr><td class="dimc"><span class="tag">…</span></td><td class="dimc">…</td><td class="dimc">+ 195 mere</td><td class="dimc num">…</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+  <p class="tick"><b>live</b> <span class="dot">·</span> counter resets 00:00 <span class="dot">·</span> ntfy topic <span class="hi">skynet-parthee</span> <span class="dot">·</span> last push <span class="num">2m 14s</span> siden <span class="dot">·</span> <a href="#">← prev</a> <a href="#">next →</a></p>
+
+  <footer>
+    <span>skynet · mac mini server · dashboard · mobile pwa · ntfy</span>
+    <span>v0.4.0 · <a href="g-hud-classic.html">g</a> · <a href="h-mission-briefing.html">h</a> · <a href="i-cockpit-grid.html">i</a></span>
+  </footer>
+</div>
+
+<script>
+  const pad = n => String(n).padStart(2,'0');
+  const dage = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lørdag'];
+  const mdr = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+  function tick(){
+    const d=new Date();
+    document.getElementById('clock').textContent = pad(d.getHours())+':'+pad(d.getMinutes());
+    document.getElementById('date').textContent = dage[d.getDay()]+' · '+d.getDate()+' '+mdr[d.getMonth()]+' '+d.getFullYear();
+    const h=d.getHours();
+    let g='god aften';
+    if(h<5)g='god nat'; else if(h<10)g='god morgen'; else if(h<12)g='god formiddag'; else if(h<18)g='god eftermiddag';
+    document.getElementById('hello').textContent = g+', parthee';
+  }
+  tick(); setInterval(tick,30000);
+
+  const quotes = [
+    ['sarkasme','verden kører på koffein og dårlige beslutninger. god morgen.'],
+    ['morgen','stå op. kaffen venter ikke.'],
+    ['diagnostic','cpu har det bedre end dig. lige nu.'],
+    ['pep-talk','du er ikke bag ud. tiden er bare bagud.'],
+    ['hilsen','velkommen tilbage. alt er stadig i stykker.'],
+    ['sarkasme','endnu en dag, endnu et bundle-error.'],
+    ['morgen','dagen starter når du siger den gør.'],
+    ['warning','ram er 42%. gå en tur.'],
+    ['diagnostic','disk 69% fuld. ryd op, ikke senere.'],
+    ['pep-talk','shipping beats perfect. altid.'],
+    ['sarkasme','fejlen sidder altid mellem tastatur og stol. ups.'],
+    ['hilsen','systemer online. du må gerne starte.'],
+    ['morgen','første linje kode skriver sig selv. næsten.'],
+    ['diagnostic','uptime: 11d. søvn: ukendt.'],
+    ['warning','claude code: 538m tokens i dag. åndedrag?'],
+    ['pep-talk','små commits, stor virkning.'],
+    ['sarkasme','det virker på min maskine.™'],
+    ['morgen','én kop kaffe. derefter aggression.'],
+    ['hilsen','hej. systemet husker dig. desværre.'],
+    ['diagnostic','tunnel oppe. alt andet diskutabelt.']
+  ];
+  let qi=0;
+  function rot(){
+    qi = (qi+1)%quotes.length;
+    const [cat,line]=quotes[qi];
+    const qEl=document.getElementById('quote');
+    qEl.firstChild.nodeValue = line+' ';
+    document.getElementById('qcat').textContent = cat+' · '+pad(qi+1)+'/200';
+  }
+  setInterval(rot,7000);
+</script>
+</body>
+</html>
