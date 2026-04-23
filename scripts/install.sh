@@ -153,6 +153,17 @@ USER_HOME="$HOME"
 TARGET_DIR="$HOME/Library/LaunchAgents"
 mkdir -p "$TARGET_DIR" "$HOME/Library/Logs"
 
+# Migration: gammel com.jarvis.dashboard (projektet hed tidligere "jarvis").
+# Stop og fjern den hvis den eksisterer — brugeren kører snart på skynet-navnet.
+OLD_PLIST="$TARGET_DIR/com.jarvis.dashboard.plist"
+if [[ -f "$OLD_PLIST" ]]; then
+  step "Migration: fjerner gammel com.jarvis.dashboard plist"
+  launchctl bootout "gui/$(id -u)/com.jarvis.dashboard" 2>/dev/null || true
+  rm -f "$OLD_PLIST"
+  rm -f "$HOME/Library/Logs/jarvis.out.log" "$HOME/Library/Logs/jarvis.err.log" 2>/dev/null || true
+  ok "Gammel jarvis-plist fjernet"
+fi
+
 # Portal LaunchAgent
 PORTAL_TEMPLATE="$SKYNET_HOME/packages/portal/scripts/com.skynet.portal.template.plist"
 PORTAL_PLIST="$TARGET_DIR/com.skynet.portal.plist"
