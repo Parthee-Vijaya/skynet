@@ -1,202 +1,372 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Detection {
   key: string;
   name: string;
-  status: "ok" | "missing" | "partial" | "unknown";
+  status: "ok" | "missing" | "partial";
   details?: string;
   hint?: string;
   feature: string;
-  configured?: boolean;
 }
 
-interface DiscoverResp {
+interface Profile {
+  name: string;
+  location: { lat: number; lng: number; label: string };
+}
+
+interface SetupResp {
   detections: Detection[];
   summary: { ok: number; partial: number; missing: number; total: number };
+  profile: Profile;
   at: string;
 }
 
-const STATUS_STYLE: Record<Detection["status"], { dot: string; label: string; labelColor: string }> = {
-  ok: {
-    dot: "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]",
-    label: "Klar",
-    labelColor: "text-emerald-400",
-  },
-  partial: {
-    dot: "bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.5)]",
-    label: "Delvis",
-    labelColor: "text-amber-400",
-  },
-  missing: {
-    dot: "bg-rose-400",
-    label: "Mangler",
-    labelColor: "text-rose-400",
-  },
-  unknown: {
-    dot: "bg-neutral-600",
-    label: "?",
-    labelColor: "text-neutral-500",
-  },
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+
+const S = {
+  ok:      { dot: "#7dd67d", label: "ok",     row: "rgba(125,214,125,0.04)", border: "rgba(125,214,125,0.15)" },
+  partial: { dot: "#e6b450", label: "delvis",  row: "rgba(230,180,80,0.04)",  border: "rgba(230,180,80,0.15)" },
+  missing: { dot: "#d87373", label: "mangler", row: "rgba(216,115,115,0.04)", border: "rgba(216,115,115,0.15)" },
+} satisfies Record<Detection["status"], { dot: string; label: string; row: string; border: string }>;
+
+const INPUT: React.CSSProperties = {
+  width: "100%",
+  background: "#111",
+  border: "1px dashed #333",
+  padding: "8px 12px",
+  color: "#e5e5e5",
+  fontFamily: MONO,
+  fontSize: 13,
+  outline: "none",
+  borderRadius: 0,
 };
 
-export default function SetupPage() {
-  const [resp, setResp] = useState<DiscoverResp | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// ── Component ─────────────────────────────────────────────────────────────────
 
-  const run = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+export default function SetupPage() {
+  const [resp, setResp] = useState<SetupResp | null>(null);
+  const [scanning, setScanning] = useState(true);
+  const [scanErr, setScanErr] = useState<string | null>(null);
+
+  // Profile form
+  const [name, setName] = useState("");
+  const [city, setCity] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const profileLoaded = useRef(false);
+
+  const scan = useCallback(async () => {
+    setScanning(true);
+    setScanErr(null);
     try {
-      const r = await fetch("/api/control/discover", { cache: "no-store" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setResp(await r.json());
+      const r = await fetch("/api/setup", { cache: "no-store" });
+      const data: SetupResp = await r.json();
+      setResp(data);
+      // Pre-fill profile fields on first load
+      if (!profileLoaded.current) {
+        profileLoaded.current = true;
+        if (data.profile.name) setName(data.profile.name);
+        if (data.profile.location?.label) setCity(data.profile.location.label);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "fejl");
+      setScanErr(e instanceof Error ? e.message : "fejl");
     } finally {
-      setLoading(false);
+      setScanning(false);
     }
   }, []);
 
-  useEffect(() => {
-    run();
-  }, [run]);
+  useEffect(() => { scan(); }, [scan]);
+
+  const saveProfile = async () => {
+    if (!name.trim() && !city.trim()) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const r = await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() || undefined, city: city.trim() || undefined }),
+      });
+      const data = await r.json() as { ok: boolean; error?: string; saved?: Record<string, unknown> };
+      if (data.ok) {
+        setSaveMsg({ ok: true, text: "Gemt ✓" });
+        // Re-scan to pick up new location in status
+        scan();
+      } else {
+        setSaveMsg({ ok: false, text: data.error ?? "Fejl ved gem" });
+      }
+    } catch (e) {
+      setSaveMsg({ ok: false, text: e instanceof Error ? e.message : "fejl" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const summary = resp?.summary;
+  const detections = resp?.detections ?? [];
 
   return (
-    <div className="min-h-screen bg-[#0a0f12] text-neutral-100 px-4 sm:px-8 py-8">
-      <div className="max-w-4xl mx-auto">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0a0a0a",
+        color: "#e5e5e5",
+        fontFamily: MONO,
+        fontSize: 13,
+        lineHeight: 1.6,
+        WebkitFontSmoothing: "antialiased",
+      }}
+    >
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 24px 80px" }}>
+
         {/* Header */}
-        <div className="mb-8">
-          <div className="text-[10px] uppercase tracking-[0.35em] text-cyan-400/70 font-mono">
-            ▌ S.K.Y.N.E.T. · Setup
+        <div style={{ marginBottom: 36 }}>
+          <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.3em", textTransform: "uppercase", marginBottom: 12 }}>
+            S.K.Y.N.E.T. · Opsætning
           </div>
-          <h1 className="text-3xl sm:text-4xl font-thin text-cyan-100 mt-3 tracking-tight">
+          <h1 style={{ fontSize: 32, fontWeight: 200, color: "#f5f5f5", margin: 0, letterSpacing: "-0.01em" }}>
             Velkommen.
           </h1>
-          <p className="text-sm text-neutral-400 mt-2 max-w-2xl leading-relaxed">
-            SKYNET har scannet din maskine for datakilder og integrationer.
-            Det meste virker out-of-box — nedenfor kan du se hvad der er klar,
-            og hvad der kræver en API-nøgle eller en app-installation.
+          <p style={{ color: "#6b6b6b", marginTop: 8, maxWidth: 520, lineHeight: 1.7 }}>
+            Skynet er installeret og kører. Fortæl mig hvad jeg skal kalde dig og din by —
+            så er vi klar til at gå.
           </p>
         </div>
 
-        {/* Summary */}
-        {summary && (
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/5 px-4 py-3">
-              <div className="text-3xl font-thin text-emerald-300 tabular-nums">{summary.ok}</div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-400/70 font-mono mt-1">
-                Klar
-              </div>
-            </div>
-            <div className="rounded-lg border border-amber-400/30 bg-amber-500/5 px-4 py-3">
-              <div className="text-3xl font-thin text-amber-300 tabular-nums">{summary.partial}</div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-amber-400/70 font-mono mt-1">
-                Delvis
-              </div>
-            </div>
-            <div className="rounded-lg border border-rose-400/30 bg-rose-500/5 px-4 py-3">
-              <div className="text-3xl font-thin text-rose-300 tabular-nums">{summary.missing}</div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-rose-400/70 font-mono mt-1">
-                Mangler
-              </div>
-            </div>
+        {/* ── Profile form ─────────────────────────────────────────────────── */}
+        <div
+          style={{
+            border: "1px dashed #262626",
+            padding: "20px 24px 24px",
+            marginBottom: 32,
+          }}
+        >
+          <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.25em", textTransform: "uppercase", marginBottom: 20 }}>
+            # profil
           </div>
-        )}
 
-        {/* Actions bar */}
-        <div className="flex items-center justify-between mb-4 gap-3">
-          <div className="text-[10px] font-mono text-neutral-500">
-            {resp?.at ? `scannet ${new Date(resp.at).toLocaleTimeString("da-DK")}` : ""}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            {/* Name */}
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "#6b6b6b", marginBottom: 6 }}>
+                Hvad skal jeg kalde dig?
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="dit navn"
+                style={INPUT}
+                onKeyDown={(e) => e.key === "Enter" && saveProfile()}
+              />
+            </div>
+
+            {/* City */}
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "#6b6b6b", marginBottom: 6 }}>
+                Din by (vejr · el-pris · fly)
+              </label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="fx København, London, New York"
+                style={INPUT}
+                onKeyDown={(e) => e.key === "Enter" && saveProfile()}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button
-              onClick={run}
-              disabled={loading}
-              className="px-3 py-1.5 rounded border border-cyan-400/30 text-cyan-300 text-xs font-mono hover:bg-cyan-500/10 disabled:opacity-40"
+              onClick={saveProfile}
+              disabled={saving || (!name.trim() && !city.trim())}
+              style={{
+                background: "none",
+                border: "1px dashed #444",
+                padding: "6px 16px",
+                color: saving || (!name.trim() && !city.trim()) ? "#444" : "#e5e5e5",
+                fontFamily: MONO,
+                fontSize: 12,
+                cursor: saving ? "wait" : "pointer",
+              }}
             >
-              {loading ? "scanner…" : "↻ rescan"}
+              {saving ? "gemmer…" : "→ gem"}
             </button>
-            <Link
-              href="/settings"
-              className="px-3 py-1.5 rounded border border-neutral-700 text-neutral-300 text-xs font-mono hover:border-cyan-400/40"
-            >
-              Settings
-            </Link>
-            <Link
-              href="/"
-              className="px-3 py-1.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-100 text-xs font-mono hover:bg-cyan-500/30"
-            >
-              → Dashboard
-            </Link>
+            {saveMsg && (
+              <span style={{ fontSize: 12, color: saveMsg.ok ? "#7dd67d" : "#d87373" }}>
+                {saveMsg.text}
+              </span>
+            )}
+            {resp?.profile.location && (
+              <span style={{ fontSize: 11, color: "#3a3a3a", marginLeft: "auto" }}>
+                gemt lokation: {resp.profile.location.label} ({resp.profile.location.lat.toFixed(2)}, {resp.profile.location.lng.toFixed(2)})
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 px-3 py-2 rounded border border-rose-500/30 bg-rose-950/30 text-sm text-rose-300">
-            {error}
-          </div>
-        )}
-
-        {/* Detections */}
-        <div className="space-y-2">
-          {resp?.detections.map((d) => {
-            const style = STATUS_STYLE[d.status];
-            return (
-              <div
-                key={d.key}
-                className={`rounded-lg border px-4 py-3 transition-colors ${
-                  d.status === "ok"
-                    ? "border-emerald-400/20 bg-emerald-500/[0.03]"
-                    : d.status === "partial"
-                    ? "border-amber-400/20 bg-amber-500/[0.03]"
-                    : d.status === "missing"
-                    ? "border-rose-400/20 bg-rose-500/[0.03]"
-                    : "border-neutral-800 bg-neutral-900/40"
-                }`}
+        {/* ── System status ─────────────────────────────────────────────────── */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.25em", textTransform: "uppercase" }}>
+              # systemstatus
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {resp?.at && (
+                <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                  scannet {new Date(resp.at).toLocaleTimeString("da-DK")}
+                </span>
+              )}
+              <button
+                onClick={scan}
+                disabled={scanning}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: scanning ? "#444" : "#6b6b6b",
+                  fontFamily: MONO,
+                  fontSize: 11,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
               >
-                <div className="flex items-start gap-3">
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${style.dot}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-3 flex-wrap">
-                      <span className="text-sm font-medium text-neutral-100">{d.name}</span>
-                      <span className={`text-[10px] font-mono uppercase tracking-wider ${style.labelColor}`}>
-                        {style.label}
-                      </span>
-                      <span className="text-[10px] font-mono text-neutral-600">
-                        → {d.feature}
-                      </span>
-                    </div>
-                    {d.details && (
-                      <div className="text-xs text-neutral-400 mt-1">{d.details}</div>
-                    )}
-                    {d.hint && (
-                      <div className="text-xs text-neutral-500 mt-1.5 italic">{d.hint}</div>
-                    )}
+                {scanning ? "scanner…" : "↻ rescan"}
+              </button>
+            </div>
+          </div>
+
+          {/* Summary bar */}
+          {summary && (
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+              {(["ok", "partial", "missing"] as const).map((s) => (
+                <div
+                  key={s}
+                  style={{
+                    border: `1px dashed ${S[s].border}`,
+                    background: S[s].row,
+                    padding: "8px 20px",
+                    minWidth: 80,
+                  }}
+                >
+                  <div style={{ fontSize: 24, fontWeight: 200, color: S[s].dot, tabularNums: true } as React.CSSProperties}>
+                    {summary[s]}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.2em", textTransform: "uppercase", marginTop: 2 }}>
+                    {S[s].label}
                   </div>
                 </div>
+              ))}
+              <div style={{ border: "1px dashed #1c1c1c", padding: "8px 20px", minWidth: 80 }}>
+                <div style={{ fontSize: 24, fontWeight: 200, color: "#525252" }}>{summary.total}</div>
+                <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.2em", textTransform: "uppercase", marginTop: 2 }}>total</div>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {scanErr && (
+            <div style={{ border: "1px dashed #d87373", background: "rgba(216,115,115,0.05)", padding: "8px 12px", color: "#d87373", fontSize: 12, marginBottom: 12 }}>
+              Scan fejlede: {scanErr}
+            </div>
+          )}
+
+          {/* Detection table */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px dashed #262626", color: "#525252" }}>
+                <th style={{ textAlign: "left", padding: "0 12px 8px 0", fontWeight: 400, width: 20 }}></th>
+                <th style={{ textAlign: "left", padding: "0 12px 8px 0", fontWeight: 400, width: 180 }}>service</th>
+                <th style={{ textAlign: "left", padding: "0 12px 8px 0", fontWeight: 400 }}>detalje</th>
+                <th style={{ textAlign: "left", padding: "0 0 8px 0", fontWeight: 400, width: 200 }}>widget / feature</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detections.length === 0 && scanning && (
+                <tr>
+                  <td colSpan={4} style={{ padding: "20px 0", color: "#3a3a3a" }}>scanner…</td>
+                </tr>
+              )}
+              {detections.map((d) => {
+                const st = S[d.status];
+                return (
+                  <tr key={d.key} style={{ borderBottom: "1px dashed #1c1c1c" }}>
+                    <td style={{ padding: "7px 12px 7px 0" }}>
+                      <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: st.dot }} />
+                    </td>
+                    <td style={{ padding: "7px 12px 7px 0", color: d.status === "ok" ? "#e5e5e5" : d.status === "partial" ? "#e6b450" : "#d87373" }}>
+                      {d.name}
+                    </td>
+                    <td style={{ padding: "7px 12px 7px 0" }}>
+                      {d.details && <span style={{ color: "#9b9b9b" }}>{d.details}</span>}
+                      {d.hint && (
+                        <span style={{ display: "block", color: "#525252", fontSize: 10, marginTop: 2 }}>
+                          → {d.hint}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: "7px 0 7px 0", color: "#525252", fontSize: 11 }}>
+                      {d.feature}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        {/* Footer guidance */}
-        <div className="mt-8 text-xs text-neutral-500 leading-relaxed border-t border-neutral-900 pt-6">
-          <p className="mb-2">
-            <span className="text-neutral-400 font-medium">Dashboardet virker allerede.</span>{" "}
-            Widgets der ikke kræver lokale integrationer (vejr, fly, jordskælv, markeder, nyheder, APOD)
-            henter data direkte fra offentlige API&apos;er.
+        {/* ── CTA ──────────────────────────────────────────────────────────── */}
+        <div
+          style={{
+            borderTop: "1px dashed #1c1c1c",
+            paddingTop: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <p style={{ color: "#525252", fontSize: 11, margin: 0, maxWidth: 480 }}>
+            Widgets der ikke kræver opsætning (vejr, fly, jordskælv, markeder, GitHub trending)
+            virker allerede. Konfigurér LM Studio for chat og automationer.
           </p>
-          <p>
-            Vil du have chat, Plex-widget eller NZB-download-tracking at virke? Følg hint&apos;ene
-            ovenfor og kør scanning igen.
-          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <a
+              href="/settings"
+              style={{
+                display: "inline-block",
+                border: "1px dashed #333",
+                padding: "7px 18px",
+                color: "#9b9b9b",
+                fontFamily: MONO,
+                fontSize: 12,
+                textDecoration: "none",
+              }}
+            >
+              settings
+            </a>
+            <a
+              href="/minimal"
+              style={{
+                display: "inline-block",
+                border: "1px dashed #444",
+                padding: "7px 18px",
+                color: "#e5e5e5",
+                fontFamily: MONO,
+                fontSize: 12,
+                textDecoration: "none",
+              }}
+            >
+              → åbn dashboard
+            </a>
+          </div>
         </div>
+
       </div>
     </div>
   );

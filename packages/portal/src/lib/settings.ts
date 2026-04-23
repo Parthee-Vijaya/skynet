@@ -45,6 +45,16 @@ export function getLocation(): LocationSetting {
   return getSettingJSON("location", DEFAULT_LOCATION);
 }
 
+// --- User profile ---
+
+export function getUserName(): string {
+  return getSetting("user_name") ?? "";
+}
+
+export function setUserName(name: string): void {
+  setSetting("user_name", name.trim().slice(0, 64));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {
