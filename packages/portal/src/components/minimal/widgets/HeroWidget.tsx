@@ -1,7 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { QUOTES } from "@/lib/quotes";
-import { Section, Sep } from "../primitives";
+import { Sep } from "../primitives";
+
+// Dynamic import — Three.js kan ikke SSR
+const SkynetGlobe = dynamic(
+  () => import("./SkynetGlobe").then((m) => ({ default: m.SkynetGlobe })),
+  { ssr: false, loading: () => <div style={{ width: 220, height: 220, flexShrink: 0 }} /> }
+);
 
 function useClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -57,30 +64,35 @@ export function HeroWidget() {
   const total = QUOTES.length;
 
   return (
-    <Section
-      title="hero"
-      right={<span>s · k · y · n · e · t · personal intelligence</span>}
+    <section
       className="col-span-12 lg:col-span-8"
+      style={{ display: "flex", gap: 32, alignItems: "center" }}
     >
-      <div
-        className="font-mono text-neutral-50 leading-none font-extralight tracking-tight tabular-nums"
-        style={{ fontSize: "clamp(56px, 9vw, 120px)" }}
-      >
-        {time}
+      {/* Globe */}
+      <SkynetGlobe size={220} />
+
+      {/* Text content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          className="font-mono text-neutral-50 leading-none font-extralight tracking-tight tabular-nums"
+          style={{ fontSize: "clamp(48px, 7vw, 104px)" }}
+        >
+          {time}
+        </div>
+        <div className="font-mono text-[12px] text-neutral-500 mt-2.5">{date}</div>
+        <div className="font-mono text-[13px] text-neutral-200 mt-1">
+          {hello}, <b className="text-neutral-50 font-medium">parthee</b>.
+        </div>
+        <p className="font-mono text-[13px] text-neutral-200 mt-5 max-w-[540px] leading-relaxed min-h-[1.6em]">
+          <span className="text-neutral-500 mr-1">—</span>
+          {quote}
+          <small className="text-neutral-500 ml-3 text-[11px]">
+            quote {String(idx + 1).padStart(3, "0")}
+            <Sep />
+            {total} total
+          </small>
+        </p>
       </div>
-      <div className="font-mono text-[12px] text-neutral-500 mt-2.5">{date}</div>
-      <div className="font-mono text-[13px] text-neutral-200 mt-1">
-        {hello}, <b className="text-neutral-50 font-medium">parthee</b>.
-      </div>
-      <p className="font-mono text-[13px] text-neutral-200 mt-5 max-w-[620px] leading-relaxed min-h-[1.6em]">
-        <span className="text-neutral-500 mr-1">—</span>
-        {quote}
-        <small className="text-neutral-500 ml-3 text-[11px]">
-          quote {String(idx + 1).padStart(3, "0")}
-          <Sep />
-          {total} total
-        </small>
-      </p>
-    </Section>
+    </section>
   );
 }
