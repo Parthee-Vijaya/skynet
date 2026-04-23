@@ -125,7 +125,10 @@ step "Dependencies"
 cd "$SKYNET_HOME"
 if [[ ! -d node_modules ]] || [[ package.json -nt node_modules ]]; then
   info "Kører npm install (workspaces — kan tage et par minutter)…"
-  npm install
+  # --legacy-peer-deps: løser zod v3/v4 peer-konflikt (daemon bruger zod ^3,
+  # @anthropic-ai/claude-agent-sdk kræver peer zod ^4). .npmrc sætter dette
+  # automatisk, men --legacy-peer-deps her sikrer det også ved direkte kørsel.
+  npm install --legacy-peer-deps
 fi
 ok "node_modules OK"
 
