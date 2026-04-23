@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · E — Spatial Canvas</title>
+<style>
+  :root {
+    --ink:#1a1a1f;
+    --paper:#f5f2ea;
+    --paper2:#ece6d6;
+    --line: rgba(26,26,31,.1);
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.07), 0 24px 48px rgba(0,0,0,.04);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,.12), 0 24px 60px rgba(0,0,0,.12);
+    --rose:#f43f5e; --peach:#fb923c; --sun:#fbbf24; --mint:#10b981; --sea:#0ea5e9; --iris:#8b5cf6; --pink:#ec4899;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background: var(--paper); color:var(--ink); font-family: "SF Pro Rounded", "Nunito", -apple-system, system-ui, sans-serif; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  body::before {
+    content:""; position:fixed; inset:0;
+    background:
+      radial-gradient(800px 500px at 10% 10%, rgba(236,72,153,.12), transparent 60%),
+      radial-gradient(700px 500px at 90% 30%, rgba(251,146,60,.12), transparent 55%),
+      radial-gradient(900px 600px at 50% 100%, rgba(14,165,233,.1), transparent 55%),
+      linear-gradient(180deg, var(--paper) 0%, var(--paper2) 100%);
+    pointer-events:none; z-index:-1;
+  }
+
+  .topnav { position:sticky; top:0; backdrop-filter:blur(14px); background:rgba(245,242,234,.75); border-bottom:1px solid var(--line); padding:12px 20px; display:flex; gap:10px; z-index:40; }
+  .topnav a { color:#57534e; text-decoration:none; font-size:12px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.4); }
+  .topnav a.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  .wrap { padding: 30px 24px 140px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-size:36px; font-weight:800; letter-spacing:-0.02em; margin: 10px 0 2px; }
+  .sub { color:#6b7280; font-size:14px; margin-bottom:24px; }
+  h1 em { font-style:normal; background: linear-gradient(120deg, var(--rose), var(--peach) 40%, var(--sun)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  .canvas { position:relative; min-height: 720px; }
+
+  /* Scattered widget cards - "spatial" feel */
+  .w { position:absolute; background:#fff; border-radius:22px; padding:18px; box-shadow: var(--shadow); border:1px solid rgba(255,255,255,.6); transition: transform .25s ease, box-shadow .25s ease; }
+  .w:hover { transform: translateY(-2px) rotate(0deg) !important; box-shadow: var(--shadow-hover); z-index:5; }
+  .w h3 { margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:#9ca3af; font-weight:600; }
+  .w .k { font-size:28px; font-weight:800; letter-spacing:-0.02em; line-height:1.05; }
+  .w .s { color:#6b7280; font-size:12px; margin-top:2px; }
+
+  /* Layout — tilted cards, different sizes */
+  .w-hero    { left: 0; top: 0; width: 420px; transform: rotate(-1deg); background: linear-gradient(135deg, #ffe4e6, #fff); }
+  .w-weather { left: 440px; top: 30px; width: 260px; transform: rotate(1.5deg); background: linear-gradient(135deg, #dbeafe, #fff); }
+  .w-ntfy    { right: 0; top: 0; width: 360px; transform: rotate(-0.8deg); }
+  .w-agents  { left: 0; top: 270px; width: 240px; transform: rotate(1.2deg); background: linear-gradient(135deg, #ede9fe, #fff); }
+  .w-cpu     { left: 260px; top: 300px; width: 180px; transform: rotate(-1.8deg); background: linear-gradient(135deg, #d1fae5, #fff); }
+  .w-disk    { left: 460px; top: 310px; width: 180px; transform: rotate(1.5deg); background: linear-gradient(135deg, #fef3c7, #fff); }
+  .w-cal     { left: 660px; top: 270px; width: 320px; transform: rotate(-1deg); background: linear-gradient(135deg, #fce7f3, #fff); }
+  .w-auto    { right: 0; top: 330px; width: 380px; transform: rotate(0.5deg); background: linear-gradient(135deg, #fff7ed, #fff); }
+  .w-chat    { left: 0; top: 520px; width: 660px; transform: rotate(0.4deg); background: linear-gradient(135deg, #fff, #f0f9ff); }
+  .w-devices { right: 0; top: 580px; width: 380px; transform: rotate(-0.6deg); }
+
+  .hero-big { font-size:28px; font-weight:800; letter-spacing:-0.02em; line-height:1.15; margin-top:8px; }
+  .hero-big span { background: linear-gradient(120deg, var(--rose), var(--iris)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .hero-btns { display:flex; gap:8px; margin-top:14px; }
+  .btn { border:0; padding:9px 16px; border-radius:999px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn.primary { background:var(--ink); color:var(--paper); }
+  .btn.pink { background:var(--rose); color:#fff; }
+  .btn.mint { background:var(--mint); color:#fff; }
+  .btn.amber { background:var(--sun); color:#422006; }
+  .btn.ghost { background:rgba(0,0,0,.05); color:var(--ink); }
+
+  .pill-emoji { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background:rgba(0,0,0,.05); border-radius:999px; font-size:11px; color:#374151; }
+
+  .ntfy .row { display:grid; grid-template-columns: 32px 1fr auto; gap:10px; padding:8px 0; border-top:1px dashed var(--line); align-items:center; }
+  .ntfy .row:first-child { border-top:0; padding-top:2px; }
+  .ntfy .ic { width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .ntfy .ic.ok   { background:#d1fae5; }
+  .ntfy .ic.warn { background:#fef3c7; }
+  .ntfy .ic.err  { background:#fee2e2; }
+  .ntfy .ic.info { background:#dbeafe; }
+  .ntfy .ic.iris { background:#ede9fe; }
+  .ntfy .label { font-size:13px; font-weight:500; }
+  .ntfy .t { font-size:11px; color:#9ca3af; }
+
+  .ring { width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; position:relative; margin:8px auto 0; }
+  .ring svg { position:absolute; inset:0; width:100%; height:100%; transform: rotate(-90deg); }
+  .ring b { font-size:20px; font-weight:800; }
+
+  .cal .evt { display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px dashed var(--line); font-size:13px; }
+  .cal .evt:first-child { border-top:0; }
+  .cal .time { font-weight:700; font-size:12px; color:var(--rose); width:50px; }
+  .cal .dot { width:8px; height:8px; border-radius:50%; background:var(--rose); }
+  .cal .dot.m { background:var(--mint); }
+  .cal .dot.s { background:var(--sea); }
+  .cal .dot.p { background:var(--pink); }
+
+  .auto-card { display:flex; align-items:center; gap:10px; padding:10px; border-radius:12px; background:rgba(255,255,255,.5); border:1px solid var(--line); margin-top:8px; font-size:12px; }
+  .auto-card .ic { width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:14px; background:rgba(0,0,0,.05); }
+  .auto-card .arr { color:#9ca3af; margin:0 4px; }
+  .auto-card .on { margin-left:auto; width:22px; height:14px; background:var(--mint); border-radius:999px; position:relative; }
+  .auto-card .on::after { content:""; position:absolute; right:2px; top:2px; width:10px; height:10px; background:#fff; border-radius:50%; }
+  .auto-card .on.off { background:#e5e7eb; }
+  .auto-card .on.off::after { right:auto; left:2px; }
+
+  .chat-bubble { margin-top:10px; padding:14px; border-radius:18px; background:rgba(0,0,0,.03); font-size:13px; line-height:1.6; }
+  .chat-bubble .you { color:var(--iris); font-weight:600; }
+  .chat-bubble .bot { color:var(--mint); font-weight:600; }
+  .chat-input { margin-top:10px; display:flex; gap:8px; }
+  .chat-input input { flex:1; background:rgba(0,0,0,.04); border:0; padding:11px 16px; border-radius:999px; font-family:inherit; font-size:13px; outline:none; }
+  .chat-input .mic { width:40px; height:40px; border-radius:50%; background:var(--ink); color:var(--paper); border:0; font-size:16px; cursor:pointer; }
+
+  .dev { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px dashed var(--line); font-size:13px; }
+  .dev:first-child { border-top:0; }
+  .dev .av { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:15px; background:rgba(0,0,0,.05); }
+  .dev .status { margin-left:auto; font-size:11px; color:var(--mint); }
+  .dev .status.off { color:#9ca3af; }
+
+  /* dock */
+  .dock { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:rgba(255,255,255,.7); backdrop-filter:blur(20px); border:1px solid var(--line); padding:8px; border-radius:22px; display:flex; gap:8px; box-shadow: var(--shadow); z-index:50; }
+  .dock button { width:44px; height:44px; border-radius:14px; border:0; background:transparent; font-size:20px; cursor:pointer; }
+  .dock button:hover { background:rgba(0,0,0,.05); }
+  .dock .active { background:linear-gradient(135deg, var(--rose), var(--peach)); color:#fff; }
+
+  /* phone */
+  .phone { width: 310px; margin: 60px auto 0; padding: 20px 14px 90px; border: 10px solid #1a1a1f; border-radius: 42px; background: linear-gradient(180deg, #ffe4e6, #dbeafe 50%, #ede9fe); box-shadow: 0 40px 80px rgba(0,0,0,.25); position:relative; }
+  .phone h1 { font-size:22px; margin:4px 0 10px; }
+  .phone .g { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  .phone .w { position:static; width:auto !important; transform:none !important; padding:12px; border-radius:16px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .phone .w.big { grid-column: span 2; }
+  .phone .dock { position:absolute; bottom:14px; padding:6px; gap:4px; }
+  .phone .dock button { width:34px; height:34px; font-size:16px; }
+
+  .footer-row { position:fixed; top:50%; right:18px; transform:translateY(-50%) rotate(90deg); transform-origin: right center; font-size:11px; color:#9ca3af; letter-spacing:.3em; }
+
+  @media (max-width: 1100px) {
+    .canvas { display: none; }
+    .fallback { display:block; }
+  }
+  .fallback { display:none; background:rgba(255,255,255,.5); border-radius:18px; padding:18px; margin-top: 20px; border:1px dashed var(--line); color:#6b7280; }
+</style>
+</head>
+<body>
+  <div class="topnav">
+    <a href="index.html">← alle mockups</a>
+    <a href="a-command-deck.html">A</a>
+    <a href="b-glass-hub.html">B</a>
+    <a href="c-event-feed.html">C</a>
+    <a href="d-linear-os.html">D</a>
+    <a class="on">E · Spatial</a>
+    <a href="f-voice-companion.html">F</a>
+  </div>
+
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px">
+      <div>
+        <span class="pill-emoji">🌅 onsdag 23. april · 06:42</span>
+        <h1>God morgen, <em>Parthee</em></h1>
+        <div class="sub">spatial canvas · alting er klik/træk · tailscale-tunnel · 3 enheder online</div>
+      </div>
+      <div class="pill-emoji" style="background:#dcfce7;color:#166534">● 2 agents kører · alt ser godt ud</div>
+    </div>
+
+    <div class="canvas">
+      <div class="w w-hero">
+        <h3>🔥 Dagens ting</h3>
+        <div class="hero-big">Deploy af <span>v0.3.1</span> venter på dig.</div>
+        <div class="s" style="margin-top:6px">Tests grønne · 1 PR merged · udløber om 11 min</div>
+        <div class="hero-btns">
+          <button class="btn mint">✓ Godkend</button>
+          <button class="btn ghost">Se diff</button>
+          <button class="btn ghost">Udskyd</button>
+        </div>
+      </div>
+
+      <div class="w w-weather">
+        <h3>☁️ København</h3>
+        <div class="k">12°</div>
+        <div class="s">Let overskyet · regn 20% · vind 4 m/s</div>
+        <div style="margin-top:10px;display:flex;gap:8px;font-size:11px;color:#6b7280">
+          <span>09 · 11°</span><span>12 · 13°</span><span>15 · 14°</span><span>18 · 12°</span>
+        </div>
+      </div>
+
+      <div class="w w-ntfy ntfy">
+        <h3>🔔 Ntfy · to-vejs</h3>
+        <div class="row"><div class="ic ok">✅</div><div class="label">PR #42 merged<br/><span class="s">auth refactor · by @parthee</span></div><div class="t">2m</div></div>
+        <div class="row"><div class="ic iris">📅</div><div class="label">Dentist kl 09:00<br/><span class="s">mind mig 30 min før</span></div><div class="t">5t</div></div>
+        <div class="row"><div class="ic warn">⚠️</div><div class="label">Disk 90%<br/><span class="s">/dev/disk1s2</span></div><div class="t">1t</div></div>
+        <div class="row"><div class="ic info">↩️</div><div class="label">Cmd fra iPhone<br/><span class="s">/agent run morning-brief</span></div><div class="t">47m</div></div>
+      </div>
+
+      <div class="w w-agents">
+        <h3>🤖 Agents</h3>
+        <div class="k">2</div>
+        <div class="s">kører lige nu</div>
+        <div style="margin-top:10px;font-size:12px">
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:7px;height:7px;background:var(--mint);border-radius:50%;box-shadow:0 0 6px var(--mint)"></span> email-triage <span style="color:#9ca3af;margin-left:auto">4m</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:7px;height:7px;background:var(--mint);border-radius:50%;box-shadow:0 0 6px var(--mint)"></span> pr-watcher <span style="color:#9ca3af;margin-left:auto">22m</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;opacity:.5"><span style="width:7px;height:7px;background:#d1d5db;border-radius:50%"></span> morning-brief</div>
+        </div>
+      </div>
+
+      <div class="w w-cpu">
+        <h3>⚡ CPU</h3>
+        <div class="ring">
+          <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="#d1fae5" stroke-width="10"/><circle cx="50" cy="50" r="42" fill="none" stroke="#10b981" stroke-width="10" stroke-dasharray="264" stroke-dashoffset="232" stroke-linecap="round"/></svg>
+          <b>12%</b>
+        </div>
+        <div class="s" style="text-align:center;margin-top:6px">4 kerner</div>
+      </div>
+
+      <div class="w w-disk">
+        <h3>💾 Disk</h3>
+        <div class="ring">
+          <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="#fef3c7" stroke-width="10"/><circle cx="50" cy="50" r="42" fill="none" stroke="#f59e0b" stroke-width="10" stroke-dasharray="264" stroke-dashoffset="103" stroke-linecap="round"/></svg>
+          <b style="color:#b45309">61%</b>
+        </div>
+        <div class="s" style="text-align:center;margin-top:6px">712 GB fri</div>
+      </div>
+
+      <div class="w w-cal cal">
+        <h3>📅 I dag</h3>
+        <div class="evt"><span class="time">09:00</span><span class="dot"></span>Dentist · Strøget</div>
+        <div class="evt"><span class="time">10:30</span><span class="dot m"></span>Standup · Claude team</div>
+        <div class="evt"><span class="time">12:15</span><span class="dot s"></span>Frokost m. Sofie</div>
+        <div class="evt"><span class="time">14:00</span><span class="dot p"></span>Kundekald · Autobot</div>
+      </div>
+
+      <div class="w w-auto">
+        <h3>⚡ Automations</h3>
+        <div class="auto-card"><div class="ic">📧</div><span>mail.important</span><span class="arr">→</span><span>ntfy</span><div class="on"></div></div>
+        <div class="auto-card"><div class="ic">⏰</div><span>07:00</span><span class="arr">→</span><span>morning-brief</span><div class="on"></div></div>
+        <div class="auto-card"><div class="ic">🔔</div><span>disk&gt;85%</span><span class="arr">→</span><span>ntfy warn</span><div class="on"></div></div>
+        <div class="auto-card"><div class="ic">🏠</div><span>home.arrive</span><span class="arr">→</span><span>unlock</span><div class="on"></div></div>
+        <div class="auto-card"><div class="ic">💬</div><span>pr.open</span><span class="arr">→</span><span>slack</span><div class="on off"></div></div>
+      </div>
+
+      <div class="w w-chat">
+        <h3>💬 Spørg Skynet · eller tal</h3>
+        <div class="chat-bubble">
+          <span class="you">Du:</span> Hvor mange åbne PRs har jeg og hvad venter?<br/>
+          <span class="bot">Skynet:</span> 3 åbne PRs — #42 (merged nu), #48 (venter review fra @sofie siden 2d), #51 (draft). Du har også deploy-godkendelse udestående. Vil du have mig til at bumpe #48 og godkende deploy?
+        </div>
+        <div class="chat-input">
+          <input placeholder="Skriv en besked eller sig 'hey Skynet…'" />
+          <button class="mic">🎤</button>
+        </div>
+      </div>
+
+      <div class="w w-devices">
+        <h3>🖥️ Enheder</h3>
+        <div class="dev"><div class="av">🖥️</div><div><div>mac-studio</div><div class="s">100.64.0.12 · tailscale</div></div><div class="status">● online</div></div>
+        <div class="dev"><div class="av">📱</div><div><div>iphone-parthee</div><div class="s">100.64.0.18 · PWA installed</div></div><div class="status">● online</div></div>
+        <div class="dev"><div class="av">💻</div><div><div>mbp-work</div><div class="s">100.64.0.22</div></div><div class="status off">idle 2t</div></div>
+        <div class="dev"><div class="av">📟</div><div><div>ipad-air</div><div class="s">100.64.0.33</div></div><div class="status off">offline</div></div>
+      </div>
+    </div>
+
+    <div class="fallback">
+      <b>Spatial canvas vises bedst på bred skærm</b> — på mobil kollapser widgets til en enkelt kolonne med swipe-stacks.
+    </div>
+
+    <!-- mobile -->
+    <div class="phone">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;color:#6b7280">🌅 06:42</div>
+          <h1>Skynet</h1>
+        </div>
+        <div class="pill-emoji" style="font-size:10px">● up</div>
+      </div>
+      <div class="g">
+        <div class="w big" style="background:linear-gradient(135deg,#ffe4e6,#fff)">
+          <h3>🔥 Deploy?</h3>
+          <div style="font-size:15px;font-weight:700;margin-top:4px">v0.3.1 venter</div>
+          <div style="display:flex;gap:4px;margin-top:8px">
+            <button class="btn mint" style="padding:6px 10px;font-size:11px">✓ Godkend</button>
+            <button class="btn ghost" style="padding:6px 10px;font-size:11px">Diff</button>
+          </div>
+        </div>
+        <div class="w" style="background:linear-gradient(135deg,#dbeafe,#fff)">
+          <h3>☁️ Vejr</h3>
+          <div class="k">12°</div>
+        </div>
+        <div class="w" style="background:linear-gradient(135deg,#ede9fe,#fff)">
+          <h3>🤖 Agents</h3>
+          <div class="k">2</div>
+        </div>
+        <div class="w" style="background:linear-gradient(135deg,#d1fae5,#fff)">
+          <h3>⚡ CPU</h3>
+          <div class="k" style="color:#047857">12%</div>
+        </div>
+        <div class="w" style="background:linear-gradient(135deg,#fef3c7,#fff)">
+          <h3>💾 Disk</h3>
+          <div class="k" style="color:#b45309">61%</div>
+        </div>
+        <div class="w big ntfy">
+          <h3>🔔 Ntfy</h3>
+          <div class="row" style="padding:5px 0"><div class="ic ok" style="width:24px;height:24px;font-size:11px">✅</div><div class="label" style="font-size:11px">PR #42 merged</div><div class="t">2m</div></div>
+          <div class="row" style="padding:5px 0"><div class="ic warn" style="width:24px;height:24px;font-size:11px">⚠️</div><div class="label" style="font-size:11px">Disk 90%</div><div class="t">1t</div></div>
+          <div class="row" style="padding:5px 0"><div class="ic iris" style="width:24px;height:24px;font-size:11px">📅</div><div class="label" style="font-size:11px">Dentist 09:00</div><div class="t">5t</div></div>
+        </div>
+      </div>
+      <div class="dock">
+        <button class="active">🏠</button>
+        <button>🤖</button>
+        <button>💬</button>
+        <button>⚡</button>
+        <button>⚙️</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <button class="active">🏠</button>
+    <button>🤖</button>
+    <button>💬</button>
+    <button>⚡</button>
+    <button>📅</button>
+    <button>🎤</button>
+    <button>⚙️</button>
+  </div>
+
+  <div class="footer-row">SKYNET · SPATIAL · 2026</div>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · Mockup A — Command Deck</title>
+<style>
+  :root {
+    --bg:#0a0a0a; --panel:#111113; --line:#1f1f22; --mute:#52525b;
+    --fg:#e4e4e7; --dim:#a1a1aa; --ok:#22c55e; --warn:#eab308; --err:#ef4444; --acc:#60a5fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:#000; color:var(--fg); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55; }
+  a { color:inherit; }
+  .nav { position:sticky; top:0; background:#000; border-bottom:1px solid var(--line); padding:10px 16px; display:flex; gap:12px; font-size:11px; color:var(--mute); z-index:10; }
+  .nav a { color:var(--dim); text-decoration:none; padding:3px 8px; border:1px solid var(--line); border-radius:4px; }
+  .nav a.on { color:var(--ok); border-color:#14532d; background:#052e16; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 96px; }
+  h1 { font-size: 14px; letter-spacing: 2px; color:var(--ok); margin:0 0 4px; }
+  .sub { color:var(--mute); font-size:11px; margin-bottom:20px; }
+
+  .grid { display:grid; grid-template-columns: 1fr 360px; gap: 16px; align-items:start; }
+  @media (max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+  .panel h2 { font-size:10px; letter-spacing:2px; color:var(--mute); font-weight:normal; margin:0 0 10px; }
+  .row { display:flex; justify-content:space-between; padding:3px 0; }
+  .row + .row { border-top:1px dashed var(--line); }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); } .mute { color:var(--mute); } .acc { color:var(--acc); }
+
+  .bar { height:6px; background:#18181b; border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar > span { display:block; height:100%; background:var(--ok); }
+
+  .agent { display:grid; grid-template-columns: 14px 1fr auto; gap:10px; padding:8px 0; border-top:1px dashed var(--line); }
+  .agent:first-child { border-top:0; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--mute); margin-top:6px; }
+  .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+
+  .feed { padding-top:4px; }
+  .evt { display:grid; grid-template-columns: 60px 1fr auto; gap:10px; padding:6px 0; border-top:1px dashed var(--line); font-size:12px; }
+  .evt:first-child { border-top:0; }
+  .evt .t { color:var(--mute); }
+
+  .prompt { margin-top: 14px; background:#0f0f11; border:1px solid var(--line); border-radius:6px; padding:10px 12px; font-size:13px; }
+  .prompt .cur::after { content:"▊"; color:var(--ok); animation:blink 1s steps(1) infinite; margin-left:2px; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  .kv { display:grid; grid-template-columns: 100px 1fr; gap:6px 10px; font-size:12px; }
+  .kv b { color:var(--mute); font-weight:normal; }
+
+  .phone { width: 320px; height: 640px; border: 8px solid #18181b; border-radius: 36px; background:#000; padding: 20px 16px; overflow:hidden; box-shadow: 0 20px 60px rgba(0,0,0,.6); margin: 24px auto 0; }
+  .phone h2 { text-align:center; margin-top:0; }
+  .phone .panel { padding:10px 12px; }
+  .phone .feed .evt { grid-template-columns: 42px 1fr; font-size:11px; }
+
+  .arch { margin-top:32px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; font-size:12px; }
+  .arch h3 { margin:0 0 10px; font-size:11px; letter-spacing:2px; color:var(--ok); }
+  .arch pre { margin:0; color:var(--dim); white-space:pre-wrap; }
+
+  .tag { display:inline-block; padding:1px 6px; border:1px solid var(--line); border-radius:3px; font-size:10px; color:var(--mute); margin-right:4px; }
+  .tag.keep { color:#86efac; border-color:#14532d; }
+  .tag.cut { color:#fca5a5; border-color:#7f1d1d; text-decoration: line-through; }
+
+  .footer { color:var(--mute); margin-top: 40px; font-size:11px; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← Mockups</a>
+    <a class="on">A · Command Deck</a>
+    <a href="b-glass-hub.html">B · Glass Hub</a>
+    <a href="c-event-feed.html">C · Event Feed</a>
+  </div>
+
+  <div class="wrap">
+    <h1>S·K·Y·N·E·T</h1>
+    <div class="sub">Mockup A — Minimal Command Deck · portal + daemon · Cloudflare Tunnel + ntfy · https://skynet.parthee.dev</div>
+
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <h2>[ SYSTEM ]</h2>
+          <div class="kv">
+            <b>host</b><span>parthee@mac-studio · darwin 25.4</span>
+            <b>daemon</b><span class="ok">● up</span>
+            <b>portal</b><span class="ok">● up · :3100</span>
+            <b>tunnel</b><span class="ok">● up · skynet.parthee.dev</span>
+            <b>cpu</b><span>12% <div class="bar"><span style="width:12%"></span></div></span>
+            <b>mem</b><span>48% <div class="bar"><span style="width:48%;background:var(--warn)"></span></div></span>
+            <b>disk</b><span class="warn">61% <div class="bar"><span style="width:61%;background:var(--warn)"></span></div></span>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2>[ AGENTS · 2/8 kører ]</h2>
+          <div class="agent">
+            <div class="dot on"></div>
+            <div>
+              <div>email-triage <span class="mute">#a7f2</span></div>
+              <div class="mute" style="font-size:11px">klassificerer indbakke · claude sonnet 4.5</div>
+            </div>
+            <div class="ok">run 4m12s</div>
+          </div>
+          <div class="agent">
+            <div class="dot on"></div>
+            <div>
+              <div>pr-watcher <span class="mute">#c3b1</span></div>
+              <div class="mute" style="font-size:11px">overvåger github notifications</div>
+            </div>
+            <div class="ok">run 22m</div>
+          </div>
+          <div class="agent">
+            <div class="dot"></div>
+            <div>
+              <div>morning-brief <span class="mute">#11ee</span></div>
+              <div class="mute" style="font-size:11px">næste kørsel 07:00</div>
+            </div>
+            <div class="mute">idle</div>
+          </div>
+          <div class="agent">
+            <div class="dot"></div>
+            <div>
+              <div>deploy-prod <span class="mute">#2f9d</span></div>
+              <div class="mute" style="font-size:11px">kræver manuel godkendelse</div>
+            </div>
+            <div class="warn">paused</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2>[ NTFY ▸ parthee-skynet · to-vejs ]</h2>
+          <div class="feed">
+            <div class="evt"><div class="t">03:41</div><div><span class="ok">✓</span> build ok · main@a3f2b1</div><div class="mute">push</div></div>
+            <div class="evt"><div class="t">03:28</div><div><span class="ok">✓</span> pr #42 merged: "auth refactor"</div><div class="mute">push</div></div>
+            <div class="evt"><div class="t">02:15</div><div><span class="acc">◆</span> calendar: 09:00 dentist</div><div class="mute">push</div></div>
+            <div class="evt"><div class="t">01:02</div><div><span class="err">⚠</span> disk usage 90% på /dev/disk1s2</div><div class="mute">push</div></div>
+            <div class="evt"><div class="t">00:47</div><div><span class="acc">↩</span> cmd fra iPhone: <code>/agent run morning-brief</code></div><div class="mute">sub</div></div>
+          </div>
+        </div>
+
+        <div class="prompt">
+          <span class="mute">parthee@skynet</span> <span class="ok">$</span> agent run "deploy prod" --approve<span class="cur"></span>
+        </div>
+      </div>
+
+      <aside>
+        <div class="panel">
+          <h2>[ HURTIGE HANDLINGER ]</h2>
+          <div class="kv">
+            <b>⌘ 1</b><span>ny agent</span>
+            <b>⌘ 2</b><span>åbn chat</span>
+            <b>⌘ 3</b><span>automations</span>
+            <b>⌘ K</b><span>command palette</span>
+            <b>⌘ /</b><span>søg</span>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2>[ AUTOMATIONS · 6 aktive ]</h2>
+          <div class="evt"><div>⚡</div><div>mail.important → ntfy</div><div class="ok">on</div></div>
+          <div class="evt"><div>⚡</div><div>cron 0 7 * * → morning-brief</div><div class="ok">on</div></div>
+          <div class="evt"><div>⚡</div><div>disk>85% → ntfy warn</div><div class="ok">on</div></div>
+          <div class="evt"><div>⚡</div><div>pr.open → slack</div><div class="mute">off</div></div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h2>[ SE PÅ MOBIL ]</h2>
+          <div class="mute" style="font-size:11px">samme UI, auto-responsiv. Installér som PWA via Safari "Føj til hjemmeskærm". Push via ntfy-topic.</div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Mobile preview -->
+    <div class="phone">
+      <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:10px;font-size:11px">
+        <span class="ok">● SKYNET</span><span class="mute">mobile · 03:45</span>
+      </div>
+      <div class="panel">
+        <h2>[ STATUS ]</h2>
+        <div class="kv" style="font-size:11px">
+          <b>cpu</b><span class="ok">12%</span>
+          <b>mem</b><span class="ok">48%</span>
+          <b>disk</b><span class="warn">61%</span>
+          <b>tunnel</b><span class="ok">up</span>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:8px">
+        <h2>[ AGENTS · 2 ]</h2>
+        <div style="font-size:11px">
+          ▸ email-triage <span class="ok">run</span><br/>
+          ▸ pr-watcher <span class="ok">run</span><br/>
+          ▸ morning-brief <span class="mute">idle</span>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:8px">
+        <h2>[ NTFY ]</h2>
+        <div class="feed">
+          <div class="evt"><div class="t">03:41</div><div><span class="ok">✓</span> build ok</div></div>
+          <div class="evt"><div class="t">03:28</div><div><span class="ok">✓</span> pr #42 merged</div></div>
+          <div class="evt"><div class="t">02:15</div><div><span class="acc">◆</span> cal 09:00</div></div>
+          <div class="evt"><div class="t">01:02</div><div><span class="err">⚠</span> disk warn</div></div>
+        </div>
+      </div>
+      <div class="prompt" style="font-size:12px">$<span class="cur"></span></div>
+    </div>
+
+    <div class="arch">
+      <h3>[ ARKITEKTUR ]</h3>
+<pre>Mac (altid tændt)
+  ├─ daemon          :6767  — agents, scheduler, automations, ntfy-worker
+  ├─ portal (Next.js):3100  — dashboard (serves både desktop & mobil PWA)
+  └─ cloudflared     — tunnel til https://skynet.parthee.dev  (auth: token i header)
+
+iPhone/iPad
+  └─ Safari PWA "Føj til hjemmeskærm" → https://skynet.parthee.dev
+     ntfy-app subscribes topic "parthee-skynet" (push notifications)
+
+ntfy (to-vejs)
+  daemon → ntfy.sh/parthee-skynet         (alerts, build-status, reminders)
+  iPhone → POST ntfy.sh/parthee-skynet    (kommandoer parses af daemon-worker)
+</pre>
+      <h3 style="margin-top:14px">[ PAKKER ]</h3>
+      <div>
+        <span class="tag keep">portal</span>
+        <span class="tag keep">daemon (trimmet)</span>
+        <span class="tag keep">cli</span>
+        <span class="tag keep">relay</span>
+        <span class="tag cut">highlight</span>
+        <span class="tag cut">hud (Swift)</span>
+      </div>
+      <h3 style="margin-top:14px">[ WIDGETS · 7 af 29 ]</h3>
+      <div>
+        <span class="tag keep">Status</span><span class="tag keep">Agents</span><span class="tag keep">Automations</span><span class="tag keep">Calendar</span><span class="tag keep">Weather</span><span class="tag keep">Chat</span><span class="tag keep">Ntfy</span>
+        <span class="tag cut">Apod</span><span class="tag cut">Earthquakes</span><span class="tag cut">Flights</span><span class="tag cut">Lightning</span><span class="tag cut">Markets</span><span class="tag cut">Moon</span><span class="tag cut">News</span><span class="tag cut">Nzb</span><span class="tag cut">Plex</span><span class="tag cut">SpaceWeather</span><span class="tag cut">Traffic</span><span class="tag cut">+11 mere</span>
+      </div>
+    </div>
+
+    <div class="footer">Mockup A · Skynet 2026 · tryk på de andre tabs for B og C</div>
+  </div>
+</body>
+</html>

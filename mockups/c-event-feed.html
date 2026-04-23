@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Skynet · Mockup C — Event Feed (ntfy-first)</title>
+<style>
+  :root {
+    --bg:#fafafa; --card:#fff; --ink:#0a0a0a; --dim:#737373; --line:#e5e5e5;
+    --ok:#22c55e; --warn:#eab308; --err:#ef4444; --acc:#3b82f6; --violet:#8b5cf6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; font-size:14px; line-height:1.5; }
+  .nav { position:sticky; top:0; background:rgba(255,255,255,.85); backdrop-filter: blur(12px); border-bottom:1px solid var(--line); padding:10px 16px; display:flex; gap:10px; z-index:30; }
+  .nav a { color:var(--dim); text-decoration:none; font-size:12px; padding:5px 10px; border-radius:8px; border:1px solid transparent; }
+  .nav a.on { color:var(--ink); background:var(--ink); color:#fff; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 120px; display:grid; grid-template-columns: 1fr 320px; gap:20px; }
+  @media (max-width: 900px){ .wrap { grid-template-columns: 1fr; } }
+
+  header.hero { grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:flex-end; }
+  header.hero h1 { margin:0; font-size:28px; font-weight:700; letter-spacing:-0.02em; }
+  header.hero .sub { color:var(--dim); font-size:12px; margin-top:2px; }
+  .pill { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; padding:4px 10px; border-radius:999px; font-size:12px; display:inline-flex; gap:6px; align-items:center; }
+  .dot { width:8px; height:8px; background:var(--ok); border-radius:50%; }
+
+  .filters { display:flex; gap:8px; margin-top:16px; margin-bottom:14px; flex-wrap:wrap; }
+  .chip { padding:5px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:12px; cursor:pointer; }
+  .chip.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+
+  .feed { display:flex; flex-direction:column; gap:10px; }
+  .evt { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; border-left:4px solid var(--dim); transition: transform .15s ease, box-shadow .15s ease; }
+  .evt:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+  .evt.email { border-left-color: var(--acc); }
+  .evt.auto { border-left-color: var(--warn); }
+  .evt.status { border-left-color: var(--dim); }
+  .evt.calendar { border-left-color: var(--violet); }
+  .evt.alert { border-left-color: var(--err); }
+  .evt.ok { border-left-color: var(--ok); }
+
+  .meta { display:flex; justify-content:space-between; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  .title { font-weight:600; margin-top:4px; }
+  .body { color:#3f3f46; font-size:13px; margin-top:4px; }
+  .actions { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .btn { padding:6px 12px; border-radius:8px; border:0; font-size:12px; font-weight:500; cursor:pointer; }
+  .btn.primary { background:var(--ink); color:#fff; }
+  .btn.ghost { background:#f4f4f5; color:var(--ink); }
+  .btn.ok { background:var(--ok); color:#fff; }
+  .btn.err { background:var(--err); color:#fff; }
+  .btn.acc { background:var(--acc); color:#fff; }
+
+  aside .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  aside h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); font-weight:600; }
+  .k { display:grid; grid-template-columns: 1fr auto; gap:4px 10px; font-size:13px; }
+  .k b { font-weight:500; color:var(--dim); }
+  .auto-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-top:1px dashed var(--line); font-size:13px; }
+  .auto-row:first-child { border-top:0; }
+  .switch { width:30px; height:18px; background:var(--ok); border-radius:999px; position:relative; }
+  .switch::after { content:""; position:absolute; right:2px; top:2px; width:14px; height:14px; border-radius:50%; background:#fff; }
+  .switch.off { background:#d4d4d8; }
+  .switch.off::after { right:auto; left:2px; }
+
+  .composer { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:var(--ink); color:#fff; border-radius:999px; padding:10px 18px; display:flex; align-items:center; gap:10px; box-shadow:0 8px 30px rgba(0,0,0,.2); z-index:40; max-width:90%; }
+  .composer input { background:transparent; border:0; color:#fff; outline:none; font-size:14px; width:360px; max-width:60vw; }
+  .composer input::placeholder { color:rgba(255,255,255,.5); }
+  .composer .send { background:var(--ok); border:0; color:#052e16; border-radius:999px; padding:6px 10px; font-weight:700; cursor:pointer; }
+
+  .phone { width: 320px; border: 8px solid #18181b; border-radius: 40px; background: var(--bg); padding: 20px 14px 70px; margin: 32px auto 0; box-shadow: 0 30px 80px rgba(0,0,0,.25); position:relative; }
+  .phone h1 { margin:0; font-size:18px; }
+  .phone .feed { gap:8px; }
+  .phone .evt { padding:10px 12px; border-radius:12px; }
+  .phone .composer { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); padding:8px 14px; }
+  .phone .composer input { width:130px; font-size:12px; }
+
+  .arch { grid-column:1/-1; margin-top: 20px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .arch h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+  .arch pre { margin:0; font-family: ui-monospace, Menlo, monospace; font-size:12px; background:#f4f4f5; padding:14px; border-radius:10px; overflow:auto; color:#27272a; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; margin:3px 4px 0 0; border:1px solid var(--line); }
+  .tag.keep { background:#ecfdf5; color:#047857; border-color:#a7f3d0; }
+  .tag.cut { background:#fef2f2; color:#b91c1c; border-color:#fecaca; text-decoration: line-through; }
+  .tag.maybe { background:#fefce8; color:#854d0e; border-color:#fde68a; }
+</style>
+</head>
+<body>
+  <div class="nav">
+    <a href="index.html">← Mockups</a>
+    <a href="a-command-deck.html">A · Command Deck</a>
+    <a href="b-glass-hub.html">B · Glass Hub</a>
+    <a class="on">C · Event Feed</a>
+  </div>
+
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <h1>Skynet Feed</h1>
+        <div class="sub">ntfy to-vejs · skynet.parthee.dev · 23 events i dag</div>
+      </div>
+      <div class="pill"><span class="dot"></span> live · subscribed til parthee-skynet</div>
+    </header>
+
+    <div>
+      <div class="filters">
+        <div class="chip on">Alle</div>
+        <div class="chip">⚡ Automations</div>
+        <div class="chip">🤖 Agents</div>
+        <div class="chip">📧 Email</div>
+        <div class="chip">📅 Kalender</div>
+        <div class="chip">⚠️ Alerts</div>
+        <div class="chip">✅ Svarede</div>
+      </div>
+
+      <div class="feed">
+        <div class="evt email">
+          <div class="meta"><span>📧 email-agent · inbox</span><span>nu</span></div>
+          <div class="title">5 nye mails klassificeret · 2 markeret vigtige</div>
+          <div class="body">Fra: Sofie (projektopdatering), Stripe (invoice), 3 nyhedsbreve.</div>
+          <div class="actions">
+            <button class="btn primary">Vis i feed</button>
+            <button class="btn ghost">Arkivér ikke-vigtige</button>
+            <button class="btn ghost">Svar senere</button>
+          </div>
+        </div>
+
+        <div class="evt auto">
+          <div class="meta"><span>⚡ automation · deploy-prod</span><span>4 min siden</span></div>
+          <div class="title">Deploy af skynet@v0.3.1 venter på godkendelse</div>
+          <div class="body">Tests grønne · 1 PR merged · ingen breaking changes. Godkendelse udløber om 11 min.</div>
+          <div class="actions">
+            <button class="btn ok">✓ Godkend</button>
+            <button class="btn err">✕ Afvis</button>
+            <button class="btn ghost">Se diff</button>
+          </div>
+        </div>
+
+        <div class="evt ok">
+          <div class="meta"><span>✅ github · pr #42</span><span>12 min siden</span></div>
+          <div class="title">Merged: "auth refactor" af @parthee</div>
+          <div class="body">Main bygger nu · deploy-prod automation trigget.</div>
+          <div class="actions">
+            <button class="btn ghost">Vis PR</button>
+          </div>
+        </div>
+
+        <div class="evt calendar">
+          <div class="meta"><span>📅 calendar · i morgen</span><span>15t</span></div>
+          <div class="title">Dentist kl 09:00 · Tandlægen Strøget</div>
+          <div class="body">Mind mig 30 min før · rejse-tid 12 min.</div>
+          <div class="actions">
+            <button class="btn acc">Ruteplan</button>
+            <button class="btn ghost">Snooze 1t</button>
+          </div>
+        </div>
+
+        <div class="evt alert">
+          <div class="meta"><span>⚠️ alert · disk</span><span>1t</span></div>
+          <div class="title">Disk 90% på /dev/disk1s2</div>
+          <div class="body">Største forbrugere: ~/Library/Caches (42GB), node_modules (18GB).</div>
+          <div class="actions">
+            <button class="btn primary">Kør cleanup-agent</button>
+            <button class="btn ghost">Se breakdown</button>
+            <button class="btn ghost">Mute 24t</button>
+          </div>
+        </div>
+
+        <div class="evt status">
+          <div class="meta"><span>📊 status · daemon</span><span>15 min siden</span></div>
+          <div class="title">Daemon up · 2 agents kører · CPU 12%</div>
+          <div class="body">email-triage (4m12s) · pr-watcher (22m)</div>
+        </div>
+
+        <div class="evt auto">
+          <div class="meta"><span>⚡ automation · morning-brief</span><span>07:00 i morgen</span></div>
+          <div class="title">Planlagt: morgen-briefing</div>
+          <div class="body">Vejr + kalender + mails + top 3 nyheder → ntfy priority=3</div>
+          <div class="actions">
+            <button class="btn ghost">Redigér</button>
+            <button class="btn ghost">Skip i morgen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="card">
+        <h3>Systemstatus</h3>
+        <div class="k">
+          <b>daemon</b><span style="color:var(--ok)">● up</span>
+          <b>portal</b><span style="color:var(--ok)">● up</span>
+          <b>tunnel</b><span style="color:var(--ok)">● cloudflare</span>
+          <b>ntfy</b><span style="color:var(--ok)">● subscribed</span>
+          <b>agents</b><span>2 kører · 6 idle</span>
+          <b>cpu</b><span>12%</span>
+          <b>disk</b><span style="color:var(--warn)">61%</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Automations · 6</h3>
+        <div class="auto-row"><span>📧 mail.important → ntfy</span><div class="switch"></div></div>
+        <div class="auto-row"><span>⏰ 07:00 → morning-brief</span><div class="switch"></div></div>
+        <div class="auto-row"><span>🔔 disk>85% → ntfy warn</span><div class="switch"></div></div>
+        <div class="auto-row"><span>📥 pr.open → slack</span><div class="switch off"></div></div>
+        <div class="auto-row"><span>🎯 cal → siri reminder</span><div class="switch"></div></div>
+        <div class="auto-row"><span>🏠 home.arrive → unlock</span><div class="switch"></div></div>
+      </div>
+
+      <div class="card">
+        <h3>Ntfy · to-vejs</h3>
+        <div style="font-size:12px;color:var(--dim);line-height:1.6">
+          <b style="color:var(--ink)">Out:</b> daemon publisher til <code>ntfy.sh/parthee-skynet</code> ved alerts, builds, reminders.<br/>
+          <b style="color:var(--ink)">In:</b> subscribe-worker læser egne beskeder — send <code>/agent run morning-brief</code> fra iPhone og daemon eksekverer.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Hurtige kommandoer</h3>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn ghost" style="text-align:left">/agent run …</button>
+          <button class="btn ghost" style="text-align:left">/automation pause …</button>
+          <button class="btn ghost" style="text-align:left">/deploy approve</button>
+          <button class="btn ghost" style="text-align:left">/brief nu</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile preview -->
+    <div class="phone" style="grid-column:1/-1">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h1>Feed</h1>
+        <div class="pill" style="font-size:10px"><span class="dot"></span> live</div>
+      </div>
+      <div class="filters" style="margin-top:10px">
+        <div class="chip on" style="font-size:10px;padding:3px 8px">Alle</div>
+        <div class="chip" style="font-size:10px;padding:3px 8px">⚡</div>
+        <div class="chip" style="font-size:10px;padding:3px 8px">🤖</div>
+        <div class="chip" style="font-size:10px;padding:3px 8px">⚠️</div>
+      </div>
+      <div class="feed">
+        <div class="evt email">
+          <div class="meta"><span>📧 EMAIL · nu</span></div>
+          <div class="title" style="font-size:13px">5 mails klassificeret</div>
+          <div class="actions"><button class="btn primary" style="padding:4px 10px;font-size:11px">Vis</button><button class="btn ghost" style="padding:4px 10px;font-size:11px">Arkivér</button></div>
+        </div>
+        <div class="evt auto">
+          <div class="meta"><span>⚡ DEPLOY · 4m</span></div>
+          <div class="title" style="font-size:13px">Deploy prod?</div>
+          <div class="actions"><button class="btn ok" style="padding:4px 10px;font-size:11px">Godkend</button><button class="btn err" style="padding:4px 10px;font-size:11px">Afvis</button></div>
+        </div>
+        <div class="evt calendar">
+          <div class="meta"><span>📅 CAL · 15t</span></div>
+          <div class="title" style="font-size:13px">Dentist 09:00</div>
+        </div>
+        <div class="evt alert">
+          <div class="meta"><span>⚠️ DISK · 1t</span></div>
+          <div class="title" style="font-size:13px">Disk 90%</div>
+          <div class="actions"><button class="btn primary" style="padding:4px 10px;font-size:11px">Cleanup</button></div>
+        </div>
+      </div>
+      <div class="composer"><span>+</span><input placeholder="/kommando …" /><button class="send">↑</button></div>
+    </div>
+
+    <div class="arch">
+      <h3>Arkitektur · ntfy-first</h3>
+<pre>Mac
+  ├─ daemon          :6767
+  │   ├─ ntfy-publisher    → ntfy.sh/parthee-skynet   (out)
+  │   └─ ntfy-subscriber   ← ntfy.sh/parthee-skynet   (in, parser /kommandoer)
+  ├─ portal (Next.js):3100 — feed-UI (desktop + PWA)
+  └─ cloudflared     — skynet.parthee.dev
+
+iPhone
+  ├─ ntfy-app subscribe "parthee-skynet" (push + action-buttons in-notification)
+  └─ Safari PWA for fuld feed
+
+ntfy flow
+  Mac  → push "Deploy?" priority=4 actions=[Godkend,Afvis]
+  Phone → tryk "Godkend" → POST ntfy publish command
+  Mac  → subscriber ser command → daemon executes → push confirmation
+</pre>
+      <h3 style="margin-top:14px">Pakker</h3>
+      <div>
+        <span class="tag keep">portal (feed-centric refactor)</span>
+        <span class="tag keep">daemon (+ ntfy workers)</span>
+        <span class="tag keep">cli</span>
+        <span class="tag cut">relay</span>
+        <span class="tag cut">highlight</span>
+        <span class="tag cut">hud (Swift)</span>
+      </div>
+      <h3 style="margin-top:14px">Fokus · automations > widgets</h3>
+      <div>
+        <span class="tag keep">Feed</span><span class="tag keep">Automations</span><span class="tag keep">Agents</span><span class="tag keep">Chat</span><span class="tag keep">Ntfy in/out</span><span class="tag keep">Calendar</span><span class="tag keep">Status</span>
+        <span class="tag cut">Weather</span><span class="tag cut">Apod</span><span class="tag cut">Earthquakes</span><span class="tag cut">Flights</span><span class="tag cut">Markets</span><span class="tag cut">Moon</span><span class="tag cut">Nzb</span><span class="tag cut">Plex</span><span class="tag cut">SpaceWeather</span><span class="tag cut">Traffic</span><span class="tag cut">Lightning</span><span class="tag cut">News</span><span class="tag cut">+ resten</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <span>+</span>
+    <input placeholder="/automation pause deploy-prod — eller spørg Claude…" />
+    <button class="send">↑</button>
+  </div>
+</body>
+</html>
