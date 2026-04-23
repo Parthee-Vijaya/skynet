@@ -71,7 +71,11 @@ export function MinimalDashboard() {
         }}
       >
         {widgets.map((w) => (
-          <div key={w.id} className={SPAN[w.colSpan] ?? "col-span-12"}>
+          <div
+            key={w.id}
+            className={SPAN[w.colSpan] ?? "col-span-12"}
+            style={w.rowSpan && w.rowSpan > 1 ? { gridRow: `span ${w.rowSpan}` } : undefined}
+          >
             <w.Component />
           </div>
         ))}
