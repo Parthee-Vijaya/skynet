@@ -12,3 +12,6 @@ build/
 DerivedData/
 *.xcworkspace
 xcuserdata/
+
+# Claude-personlige memory-pointers (lever i vidensbase/, ikke i repo)
+CLAUDE.md
