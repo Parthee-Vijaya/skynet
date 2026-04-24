@@ -218,6 +218,71 @@ LLM'en har adgang til alle Skynet tools (vejr, energi, kalender, nyheder, web-s�
 
 ---
 
+## Pocket Agents — coding agents i lommen
+
+Inspiration: [Simon BS' "Put your coding agents in your pocket"](https://simonbs.dev/posts/put-your-coding-agents-in-your-pocket/). Kør Claude Code, Codex eller anden AI-coding-agent på din Mac i tmux-sessioner · check ind fra iPhone hvor som helst · få push når agenten beder om input.
+
+### Opsætning
+
+```bash
+cd ~/skynet
+./scripts/bootstrap-pocket-agents.sh
+```
+
+Scriptet er idempotent og installerer/konfigurerer:
+
+1. **tmux** (via Homebrew) — baggrunds-sessioner til agenter
+2. **brrr CLI** (Simon's idle-detector) — detecterer når agent er idle/færdig
+3. **~/.zshrc patch** — SSH login attacher automatisk til `agents` tmux-session
+4. **brrr webhook** — POSTer agent-events til Skynet's `/api/agent-events` → push via ntfy
+
+Bootstrap laver backup af din eksisterende `.zshrc` før ændring.
+
+### Brug
+
+**Fra din Mac (lokal udvikling):**
+
+```bash
+tmux new -s agents          # eller: tmux attach -t agents
+cd ~/projekt-hvor-du-koder
+claude                      # kør Claude Code
+# ⌃B c → nyt vindue · ⌃B n → næste vindue · ⌃B d → detach
+```
+
+**Fra iPhone (Termius via Tailscale):**
+
+1. Installer [Termius](https://apps.apple.com/app/termius/id549039908) (gratis tier er nok)
+2. Tilføj host: adresse = din Mac's Tailscale-IP eller `<hostname>.local`, bruger = dit Mac-brugernavn
+3. Connect → tmux attacher automatisk til `agents`-sessionen (fordi `.zshrc` er patched)
+4. Du ser den LIVE kørende agent — skriv prompts direkte, fuld terminal-interaktion
+
+**Fra iPhone (Skynet PWA terminal — ingen SSH-klient nødvendig):**
+
+1. Åbn `http://<mac-tailscale-ip>:3100/terminal` i Safari (eller Skynet PWA-genvej)
+2. xterm.js attacher til tmux via WebSocket på port 3101
+3. Skriv prompts direkte i browseren — synkroniserer live med en evt samtidig Termius-session
+
+### Overblik i cockpittet
+
+På `/minimal` dashboard er der en **"pocket agents"-widget** der viser:
+
+- Alle aktive tmux-sessioner (navn + attached/detached status + window-count + sidste aktivitet)
+- Hvilken kommando der kører i hvert vindue (🤖 fremhæves hvis det er en agent som `claude`/`codex`/`aider`)
+- Direkte "→ terminal"-link pr session
+- "📋 SSH-kommando" button kopierer ssh + attach-kommando til clipboard
+
+### Push når agent beder om input
+
+brrr detecterer automatisk når en agent har været idle (default 20 sek) og POSTer til Skynet's webhook. Skynet logger det i agent-log-panelet under `/automations` **og** sender ntfy-push til din iPhone med et link tilbage til terminal-siden. Klik pushen → åbner terminalen direkte på den relevante session.
+
+### Sikkerhed
+
+- WS-terminal på :3101 kræver `control_token` (roterbar via `POST /api/control/token`)
+- Session-navne valideres mod `[a-zA-Z0-9_-]{1,64}` for at forhindre shell-injection
+- Tailscale-netværket er privat — ingen public SSH-eksponering
+
+---
+
 ## Krav
 
 - macOS 13+ (Ventura eller nyere)
