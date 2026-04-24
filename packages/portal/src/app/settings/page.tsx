@@ -9,6 +9,7 @@ interface SettingsResp {
   defaults: LLMConfig;
   userName: string;
   location: LocationSetting;
+  githubUser?: string;
 }
 
 interface ModelsResp {
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   // Profile
   const [userName, setUserName] = useState("");
   const [city, setCity] = useState("");
+  const [githubUser, setGithubUser] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -53,6 +55,7 @@ export default function SettingsPage() {
         setLlm(data.llm);
         setDefaults(data.defaults);
         setUserName(data.userName ?? "");
+        setGithubUser(data.githubUser ?? "");
         setLocationLabel(data.location?.label ?? "");
       })
       .catch(() => {});
@@ -64,6 +67,8 @@ export default function SettingsPage() {
       const body: Record<string, string> = {};
       if (userName.trim()) body.userName = userName.trim();
       if (city.trim()) body.city = city.trim();
+      // Altid send githubUser (kan være tom → fjernes)
+      body.githubUser = githubUser.trim();
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,6 +150,19 @@ export default function SettingsPage() {
                   style={{ ...inputStyle }}
                 />
                 <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>Bruges til vejr- og energidata. Geocodes automatisk.</div>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>GitHub-brugernavn</div>
+                <input
+                  type="text"
+                  value={githubUser}
+                  placeholder="fx octocat"
+                  onChange={(e) => setGithubUser(e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+                <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>
+                  Aktiverer GitHub-widget på cockpittet (stars, commits, 30-dages heatmap, seneste aktivitet). Tom = skjult.
+                </div>
               </div>
             </div>
 

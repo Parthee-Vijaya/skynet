@@ -13,6 +13,7 @@ import { TopReposWidget } from "./TopReposWidget";
 import { WeatherWidgetMinimal } from "./WeatherWidgetMinimal";
 import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
 import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
+import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { TmuxAgentsWidget } from "./TmuxAgentsWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
@@ -30,7 +31,8 @@ registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: Sabn
 // ── Row: disk (left) + services (right) ────────────────────────────────────
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
 registerWidget({ id: "services", group: "services", colSpan: 6,  Component: ServicesWidget });
-// ── Row: top-repos (fuld bredde) ───────────────────────────────────────────
-registerWidget({ id: "top-repos", group: "ambient", colSpan: 12, Component: TopReposWidget });
+// ── Row: github personal (left) + top-repos trending (right) ───────────────
+registerWidget({ id: "github",   group: "ambient",  colSpan: 6,  Component: GithubWidgetMinimal });
+registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
 
 export { getWidgets } from "../widget-registry";
