@@ -28,11 +28,11 @@ registerWidget({ id: "plex",     group: "ambient",  colSpan: 6,  Component: Plex
 // ── Row: tmux (left) + sabnzbd (right — under plex) ────────────────────────
 registerWidget({ id: "tmux",      group: "ambient", colSpan: 6,  Component: TmuxAgentsWidget });
 registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: SabnzbdWidgetMinimal });
-// ── Row: disk (left) + services (right) ────────────────────────────────────
+// ── Row: disk (left) + github personal (right) ─────────────────────────────
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
-registerWidget({ id: "services", group: "services", colSpan: 6,  Component: ServicesWidget });
-// ── Row: github personal (left) + top-repos trending (right) ───────────────
 registerWidget({ id: "github",   group: "ambient",  colSpan: 6,  Component: GithubWidgetMinimal });
+// ── Row: services (left) + top-repos (right) — samme bredde, side om side ──
+registerWidget({ id: "services", group: "services", colSpan: 6,  Component: ServicesWidget });
 registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
 
 export { getWidgets } from "../widget-registry";
