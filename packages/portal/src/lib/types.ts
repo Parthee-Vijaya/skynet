@@ -74,6 +74,40 @@ export interface PlexData {
   library: { movies: number; shows: number; sizeBytes: number };
 }
 
+export interface SabnzbdSlot {
+  id: string;
+  name: string;
+  category: string | null;
+  status: string;
+  percent: number;
+  sizeMb: number;
+  sizeLeftMb: number;
+  timeLeft: string;
+}
+
+export interface SabnzbdData {
+  online: boolean;
+  configured: boolean;
+  reason?: string;
+  slots: SabnzbdSlot[];
+  queueCount?: number;
+  stats: {
+    totalMb?: number;
+    leftMb?: number;
+    freeMb: number;
+    kbpersec: number;
+    paused: boolean;
+    etaSeconds: number;
+    timeLeftRaw?: string;
+  };
+  history: {
+    totalGb: number;
+    monthGb: number;
+    weekGb: number;
+    dayGb: number;
+  };
+}
+
 export interface VpnData {
   connected: boolean;
   interface?: string;

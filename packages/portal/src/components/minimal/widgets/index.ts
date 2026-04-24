@@ -12,6 +12,7 @@ import { ServicesWidget } from "./ServicesWidget";
 import { TopReposWidget } from "./TopReposWidget";
 import { WeatherWidgetMinimal } from "./WeatherWidgetMinimal";
 import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
+import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { TmuxAgentsWidget } from "./TmuxAgentsWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
@@ -23,12 +24,13 @@ registerWidget({ id: "net",      group: "system",   colSpan: 4,  Component: NetW
 // ── Row: weather (left) + plex (right) ─────────────────────────────────────
 registerWidget({ id: "weather",  group: "ambient",  colSpan: 6,  Component: WeatherWidgetMinimal });
 registerWidget({ id: "plex",     group: "ambient",  colSpan: 6,  Component: PlexWidgetMinimal });
-// ── Row: disk (left) + services (right, spans this row AND the repos row below) ──
-registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
-registerWidget({ id: "services", group: "services", colSpan: 6,  rowSpan: 2, Component: ServicesWidget });
-// ── Row: top-repos fills left 6 cols; services continues on right ──────────
-registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
-// ── Row: pocket agents (tmux-sessioner med coding agents) ──────────────────
+// ── Row: tmux (left) + sabnzbd (right — under plex) ────────────────────────
 registerWidget({ id: "tmux",      group: "ambient", colSpan: 6,  Component: TmuxAgentsWidget });
+registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: SabnzbdWidgetMinimal });
+// ── Row: disk (left) + services (right) ────────────────────────────────────
+registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
+registerWidget({ id: "services", group: "services", colSpan: 6,  Component: ServicesWidget });
+// ── Row: top-repos (fuld bredde) ───────────────────────────────────────────
+registerWidget({ id: "top-repos", group: "ambient", colSpan: 12, Component: TopReposWidget });
 
 export { getWidgets } from "../widget-registry";
