@@ -38,11 +38,11 @@ export function PlexWidgetMinimal() {
           {data.sessions.slice(0, 2).map((s, i) => (
             <div key={i} className="border border-dashed border-neutral-800 p-2">
               <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-neutral-100 text-[13px] truncate flex-1">{s.title}</span>
+                <span className="text-neutral-100 text-[13px] truncate flex-1" data-sensitive>{s.title}</span>
                 <span className="text-neutral-600 text-[10px] shrink-0">{s.quality}</span>
               </div>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-[10px] text-neutral-500 truncate flex-1">{s.player}</span>
+                <span className="text-[10px] text-neutral-500 truncate flex-1" data-sensitive>{s.player}</span>
                 <span className="text-[10px] text-neutral-600 shrink-0 tabular-nums">
                   {s.remainingMinutes} min tilbage
                 </span>

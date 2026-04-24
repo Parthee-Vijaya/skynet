@@ -1,10 +1,13 @@
 import type { GithubData, GithubEventItem, GithubContribDay } from "@/lib/types";
+import { getSetting } from "@/lib/settings";
 
 // GitHub REST API — ingen key krævet for public data (60 req/t ufiltreret).
 // Vi rammer kun ~3 endpoints pr. 10-min refresh, så vi er langt under limit.
 
-// Set GITHUB_USER env-var (in .env.local or LaunchAgent plist) to your GitHub username.
-const USER = process.env.GITHUB_USER || "";
+/** Prioritet: settings-key 'github_user' → env GITHUB_USER → tom (widget viser empty-state) */
+function resolveUser(): string {
+  return getSetting("github_user") || process.env.GITHUB_USER || "";
+}
 
 interface GhUser {
   login: string;
@@ -136,6 +139,21 @@ function bucketDays(events: GhEvent[], days: number): GithubContribDay[] {
 }
 
 export async function collect(): Promise<GithubData> {
+  const USER = resolveUser();
+  if (!USER) {
+    return {
+      user: null,
+      eventsLast7d: 0,
+      commitsLast7d: 0,
+      prsOpen: 0,
+      starsTotal: 0,
+      topRepos: [],
+      events: [],
+      contrib: [],
+      fetchedAt: new Date().toISOString(),
+      error: "github_user ikke sat",
+    };
+  }
   try {
     const [user, repos, events] = await Promise.all([
       ghFetch<GhUser>(`https://api.github.com/users/${USER}`).catch(() => null),

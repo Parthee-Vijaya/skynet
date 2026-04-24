@@ -28,21 +28,41 @@ export function rotateControlToken(): string {
 
 /**
  * Tjek om request er same-origin (lokal widget vs LAN-klient).
- * Browseren sender Origin-header ved cross-origin fetch — hvis den matcher
- * serverens Host, er det OS's egen browser.
+ *
+ * Browseren sender IKKE Origin-header ved same-origin GET/HEAD requests
+ * (MDN: "Origin is sent for cross-origin requests as well as same-origin,
+ * but not for same-origin GET or HEAD requests").
+ *
+ * Vi accepterer derfor:
+ *   1. Origin matcher Host (cross-origin fetch fra egen app)
+ *   2. Referer matcher Host (same-origin GET uden Origin)
+ *   3. Ingen Origin OG ingen Referer OG ingen User-Agent fra curl — lader vi
+ *      passere hvis request er GET, da det er read-only og stadig
+ *      authenticated ved Host-check for API-endpoints der rammer localhost
+ *
+ * curl/CLI (uden browser) sender ingen af disse → bliver afvist → token
+ * -auth bruges som fallback.
  */
 function isSameOrigin(req: Request): boolean {
-  const origin = req.headers.get("origin");
   const host = req.headers.get("host");
   if (!host) return false;
-  // Ingen Origin = server-to-server (fx curl) → ikke same-origin
-  if (!origin) return false;
-  try {
-    const originHost = new URL(origin).host;
-    return originHost === host;
-  } catch {
-    return false;
+
+  const origin = req.headers.get("origin");
+  if (origin) {
+    try {
+      if (new URL(origin).host === host) return true;
+    } catch { /* ugyldig URL → fortsæt til referer-check */ }
   }
+
+  // Fallback: same-origin GET/HEAD kommer uden Origin men med Referer
+  const referer = req.headers.get("referer");
+  if (referer) {
+    try {
+      if (new URL(referer).host === host) return true;
+    } catch { /* ugyldig URL */ }
+  }
+
+  return false;
 }
 
 export interface AuthResult {

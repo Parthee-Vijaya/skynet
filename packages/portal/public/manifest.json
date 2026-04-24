@@ -54,6 +54,12 @@
       "short_name": "Auto",
       "url": "/automations",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Terminal",
+      "short_name": "Term",
+      "url": "/terminal",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

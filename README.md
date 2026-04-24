@@ -218,6 +218,97 @@ LLM'en har adgang til alle Skynet tools (vejr, energi, kalender, nyheder, web-s�
 
 ---
 
+## Pocket Agents — coding agents i lommen
+
+Inspiration: [Simon BS' "Put your coding agents in your pocket"](https://simonbs.dev/posts/put-your-coding-agents-in-your-pocket/). Kør Claude Code, Codex eller anden AI-coding-agent på din Mac i tmux-sessioner · check ind fra iPhone hvor som helst · få push når agenten beder om input.
+
+### Opsætning
+
+```bash
+cd ~/skynet
+./scripts/bootstrap-pocket-agents.sh
+```
+
+Scriptet er idempotent og installerer/konfigurerer:
+
+1. **tmux** (via Homebrew) — baggrunds-sessioner til agenter
+2. **brrr CLI** (Simon's idle-detector) — installeres, men webhook skal konfigureres manuelt (se under "Push når agent beder om input" nedenfor)
+3. **~/.zshrc patch** — SSH login attacher automatisk til `agents` tmux-session
+
+Bootstrap laver backup af din eksisterende `.zshrc` før ændring.
+
+### Brug
+
+**Fra din Mac (lokal udvikling):**
+
+```bash
+tmux new -s agents          # eller: tmux attach -t agents
+cd ~/projekt-hvor-du-koder
+claude                      # kør Claude Code
+# ⌃B c → nyt vindue · ⌃B n → næste vindue · ⌃B d → detach
+```
+
+**Fra iPhone (Termius via Tailscale):**
+
+1. Installer [Termius](https://apps.apple.com/app/termius/id549039908) (gratis tier er nok)
+2. Tilføj host: adresse = din Mac's Tailscale-IP eller `<hostname>.local`, bruger = dit Mac-brugernavn
+3. Connect → tmux attacher automatisk til `agents`-sessionen (fordi `.zshrc` er patched)
+4. Du ser den LIVE kørende agent — skriv prompts direkte, fuld terminal-interaktion
+
+**Fra iPhone (Skynet PWA terminal — ingen SSH-klient nødvendig):**
+
+1. Åbn `http://<mac-tailscale-ip>:3100/terminal` i Safari (eller Skynet PWA-genvej)
+2. xterm.js attacher til tmux via WebSocket på port 3101
+3. Skriv prompts direkte i browseren — synkroniserer live med en evt samtidig Termius-session
+
+### Overblik i cockpittet
+
+På `/minimal` dashboard er der en **"pocket agents"-widget** der viser:
+
+- Alle aktive tmux-sessioner (navn + attached/detached status + window-count + sidste aktivitet)
+- Hvilken kommando der kører i hvert vindue (🤖 fremhæves hvis det er en agent som `claude`/`codex`/`aider`)
+- Direkte "→ terminal"-link pr session
+- "📋 SSH-kommando" button kopierer ssh + attach-kommando til clipboard
+
+### Push når agent beder om input
+
+Skynet har et webhook-endpoint `POST /api/agent-events` der modtager events og sender push via eksisterende `notify()`-pipeline (macOS Notification Center + ntfy → iPhone). Body-format:
+
+```json
+{ "agent": "claude", "session": "agents", "event": "idle", "idle_seconds": 22, "message": "Waiting for input" }
+```
+
+Events pipes til Skynet agent-log-panelet under `/automations` og sender ntfy-push til iPhone med URL tilbage til `/terminal?session=<name>`. Klik pushen → åbner terminalen direkte i PWA'en.
+
+**To måder at trigger events på:**
+
+**A) brrr.now** (Simon's original-setup) — kræver konto på [brrr.now](https://brrr.now):
+```bash
+# hent webhook fra brrr.now-dashboardet, derefter:
+brrr agent install all --webhook https://api.brrr.now/v1/br_XXXXXXXX --idle-seconds 20
+```
+Push kommer til brrr iOS-appen (ikke Skynet).
+
+**B) Direkte til Skynet** (anbefalet) — ingen tredjepartstjeneste:
+Kald `/api/agent-events` fra en Claude Code `Stop`-hook eller en lille cron-wrapper der tjekker tmux-pane for idle. Token-auth krævet (Bearer `control_token` — generer via `GET /api/control/token` i browseren).
+
+```bash
+# Eksempel: manual trigger via curl
+TOKEN=$(curl -s -H "Origin: http://localhost:3100" http://localhost:3100/api/control/token | jq -r .token)
+curl -X POST http://localhost:3100/api/agent-events \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"agent":"claude","session":"agents","event":"waiting","message":"Kræver godkendelse"}'
+```
+
+### Sikkerhed
+
+- WS-terminal på :3101 kræver `control_token` (roterbar via `POST /api/control/token`)
+- Session-navne valideres mod `[a-zA-Z0-9_-]{1,64}` for at forhindre shell-injection
+- Tailscale-netværket er privat — ingen public SSH-eksponering
+
+---
+
 ## Krav
 
 - macOS 13+ (Ventura eller nyere)

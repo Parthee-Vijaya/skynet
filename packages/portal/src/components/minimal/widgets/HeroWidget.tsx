@@ -97,7 +97,13 @@ export function HeroWidget() {
         </div>
         <div className="font-mono text-[12px] text-neutral-500 mt-2.5">{date}</div>
         <div className="font-mono text-[13px] text-neutral-200 mt-1">
-          {hello}, <b className="text-neutral-50 font-medium">{userName ?? "parthee"}</b>.
+          {hello}
+          {userName && (
+            <>
+              , <b className="text-neutral-50 font-medium">{userName}</b>
+            </>
+          )}
+          .
           {city && (
             <span className="text-neutral-500 ml-3 text-[11px]">📍 {city}</span>
           )}
