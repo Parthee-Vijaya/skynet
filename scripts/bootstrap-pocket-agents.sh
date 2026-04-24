@@ -108,21 +108,29 @@ ZSHPATCH
   ok "patchet (aktiveres ved næste SSH-login)"
 fi
 
-# ── 5. brrr webhook → Skynet ───────────────────────────────────────────────
-step "brrr webhook → Skynet /api/agent-events"
+# ── 5. brrr idle-notifikationer (optional) ─────────────────────────────────
+# brrr CLI er installeret men kræver en konto på https://brrr.now for at få
+# en webhook-URL (formatet 'https://api.brrr.now/v1/br_*'). Skynet's eget
+# /api/agent-events endpoint kan bruges som alternativ — kaldes manuelt fra
+# Claude Code hooks, cron, eller andre idle-detectors.
+step "brrr idle-notifikationer (optional)"
+dim "brrr kræver konto på https://brrr.now — de accepterer kun deres egne"
+dim "webhook-URLs ('https://api.brrr.now/v1/br_*'), ikke custom endpoints."
+dim ""
+dim "To måder at aktivere push når Claude er idle:"
+dim "  A) Opret konto på https://brrr.now, hent webhook, kør:"
+dim "       brrr agent install all --webhook <brrr.now-URL> --idle-seconds 20"
+dim "       (push kommer til brrr iOS-appen)"
+dim ""
+dim "  B) Brug Skynet's eget endpoint direkte — fx fra en Claude Code"
+dim "     hook eller en simpel idle-detector. Endpoint:"
 if [[ -n "$TAILSCALE_IP" ]]; then
-  WEBHOOK="http://${TAILSCALE_IP}:3100/api/agent-events"
+  dim "       POST http://${TAILSCALE_IP}:3100/api/agent-events"
 else
-  WEBHOOK="http://localhost:3100/api/agent-events"
-  warn "Ingen Tailscale IP fundet — bruger localhost. Webhook vil kun virke når iPhone er på samme LAN."
+  dim "       POST http://localhost:3100/api/agent-events"
 fi
-
-dim "webhook = $WEBHOOK"
-if brrr agent install all --webhook "$WEBHOOK" --idle-seconds 20 >/dev/null 2>&1; then
-  ok "brrr konfigureret (idle-threshold: 20 sek)"
-else
-  warn "brrr agent install fejlede — kør manuelt: brrr agent install all --webhook '$WEBHOOK' --idle-seconds 20"
-fi
+dim "     Body: { agent, session, event, idle_seconds?, message? }"
+dim "     Push kommer via Skynet's notify() → macOS + ntfy + pushover"
 
 # ── 6. Sammenfatning ────────────────────────────────────────────────────────
 echo ""

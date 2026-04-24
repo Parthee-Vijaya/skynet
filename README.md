@@ -232,9 +232,8 @@ cd ~/skynet
 Scriptet er idempotent og installerer/konfigurerer:
 
 1. **tmux** (via Homebrew) — baggrunds-sessioner til agenter
-2. **brrr CLI** (Simon's idle-detector) — detecterer når agent er idle/færdig
+2. **brrr CLI** (Simon's idle-detector) — installeres, men webhook skal konfigureres manuelt (se under "Push når agent beder om input" nedenfor)
 3. **~/.zshrc patch** — SSH login attacher automatisk til `agents` tmux-session
-4. **brrr webhook** — POSTer agent-events til Skynet's `/api/agent-events` → push via ntfy
 
 Bootstrap laver backup af din eksisterende `.zshrc` før ændring.
 
@@ -273,7 +272,34 @@ På `/minimal` dashboard er der en **"pocket agents"-widget** der viser:
 
 ### Push når agent beder om input
 
-brrr detecterer automatisk når en agent har været idle (default 20 sek) og POSTer til Skynet's webhook. Skynet logger det i agent-log-panelet under `/automations` **og** sender ntfy-push til din iPhone med et link tilbage til terminal-siden. Klik pushen → åbner terminalen direkte på den relevante session.
+Skynet har et webhook-endpoint `POST /api/agent-events` der modtager events og sender push via eksisterende `notify()`-pipeline (macOS Notification Center + ntfy → iPhone). Body-format:
+
+```json
+{ "agent": "claude", "session": "agents", "event": "idle", "idle_seconds": 22, "message": "Waiting for input" }
+```
+
+Events pipes til Skynet agent-log-panelet under `/automations` og sender ntfy-push til iPhone med URL tilbage til `/terminal?session=<name>`. Klik pushen → åbner terminalen direkte i PWA'en.
+
+**To måder at trigger events på:**
+
+**A) brrr.now** (Simon's original-setup) — kræver konto på [brrr.now](https://brrr.now):
+```bash
+# hent webhook fra brrr.now-dashboardet, derefter:
+brrr agent install all --webhook https://api.brrr.now/v1/br_XXXXXXXX --idle-seconds 20
+```
+Push kommer til brrr iOS-appen (ikke Skynet).
+
+**B) Direkte til Skynet** (anbefalet) — ingen tredjepartstjeneste:
+Kald `/api/agent-events` fra en Claude Code `Stop`-hook eller en lille cron-wrapper der tjekker tmux-pane for idle. Token-auth krævet (Bearer `control_token` — generer via `GET /api/control/token` i browseren).
+
+```bash
+# Eksempel: manual trigger via curl
+TOKEN=$(curl -s -H "Origin: http://localhost:3100" http://localhost:3100/api/control/token | jq -r .token)
+curl -X POST http://localhost:3100/api/agent-events \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"agent":"claude","session":"agents","event":"waiting","message":"Kræver godkendelse"}'
+```
 
 ### Sikkerhed
 
