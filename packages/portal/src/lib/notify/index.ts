@@ -75,8 +75,10 @@ async function sendNtfy(msg: NotifyMessage, cfg: NotifyConfig): Promise<NotifyRe
   try {
     const base = cfg.ntfyServer.replace(/\/+$/, "");
     const url = `${base}/${encodeURIComponent(cfg.ntfyTopic)}`;
+    // HTTP-headers er byte-strings (ISO-8859-1) — ntfy accepterer RFC 2047
+    // `=?utf-8?B?...?=` encoding for non-ASCII titler (emoji fx)
     const headers: Record<string, string> = {
-      Title: msg.title,
+      Title: encodeHeaderValue(msg.title),
       Priority: mapPriorityNtfy(msg.priority),
     };
     if (msg.tag) headers.Tags = msg.tag;
@@ -159,6 +161,19 @@ function mapPriorityPushover(p: NotifyMessage["priority"]): number {
     default:
       return 0;
   }
+}
+
+/**
+ * Encode header value så ntfy (og andre HTTP-servere) accepterer emoji / æøå.
+ * Hvis strengen er ren ASCII: returnér som-er. Ellers: RFC 2047 B-encoding
+ * ('=?utf-8?B?<base64>?=') som ntfy dekoder korrekt ved levering.
+ */
+function encodeHeaderValue(s: string): string {
+  // ASCII-kun (byte-string safe)
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(s)) return s;
+  const b64 = Buffer.from(s, "utf8").toString("base64");
+  return `=?utf-8?B?${b64}?=`;
 }
 
 function escapeAS(s: string): string {
