@@ -12,6 +12,7 @@ import { ServicesWidget } from "./ServicesWidget";
 import { TopReposWidget } from "./TopReposWidget";
 import { WeatherWidgetMinimal } from "./WeatherWidgetMinimal";
 import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
+import { TmuxAgentsWidget } from "./TmuxAgentsWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -27,5 +28,7 @@ registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: Disk
 registerWidget({ id: "services", group: "services", colSpan: 6,  rowSpan: 2, Component: ServicesWidget });
 // ── Row: top-repos fills left 6 cols; services continues on right ──────────
 registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
+// ── Row: pocket agents (tmux-sessioner med coding agents) ──────────────────
+registerWidget({ id: "tmux",      group: "ambient", colSpan: 6,  Component: TmuxAgentsWidget });
 
 export { getWidgets } from "../widget-registry";
