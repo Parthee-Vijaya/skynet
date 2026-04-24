@@ -147,6 +147,69 @@ async function dNasaApod(): Promise<Detection> {
   };
 }
 
+async function dTmux(): Promise<Detection> {
+  if (await hasCommand("tmux")) {
+    return { key: "tmux", name: "tmux", status: "ok", details: "Installeret", feature: "Pocket Agents" };
+  }
+  return {
+    key: "tmux",
+    name: "tmux",
+    status: "missing",
+    hint: "Kør ./scripts/bootstrap-pocket-agents.sh eller 'brew install tmux'",
+    feature: "Pocket Agents",
+  };
+}
+
+async function dBrrr(): Promise<Detection> {
+  if (await hasCommand("brrr")) {
+    return { key: "brrr", name: "brrr CLI", status: "ok", details: "Installeret", feature: "Pocket Agents · idle-notify" };
+  }
+  return {
+    key: "brrr",
+    name: "brrr CLI",
+    status: "missing",
+    hint: "Kør bootstrap-scriptet (scripts/bootstrap-pocket-agents.sh)",
+    feature: "Pocket Agents · idle-notify",
+  };
+}
+
+async function dZshrcAutoAttach(): Promise<Detection> {
+  const zshrc = join(homedir(), ".zshrc");
+  if (!(await hasFile(zshrc))) {
+    return {
+      key: "zshrc-tmux",
+      name: ".zshrc auto-attach",
+      status: "missing",
+      details: "~/.zshrc eksisterer ikke",
+      hint: "Kør scripts/bootstrap-pocket-agents.sh",
+      feature: "Pocket Agents · SSH auto-tmux",
+    };
+  }
+  try {
+    const content = await fs.readFile(zshrc, "utf8");
+    const patched = content.includes("skynet: auto-attach to tmux on SSH");
+    if (patched) {
+      return {
+        key: "zshrc-tmux",
+        name: ".zshrc auto-attach",
+        status: "ok",
+        details: "SSH → tmux 'agents'-session",
+        feature: "Pocket Agents · SSH auto-tmux",
+      };
+    }
+    return {
+      key: "zshrc-tmux",
+      name: ".zshrc auto-attach",
+      status: "partial",
+      details: "~/.zshrc er ikke patched",
+      hint: "Kør scripts/bootstrap-pocket-agents.sh",
+      feature: "Pocket Agents · SSH auto-tmux",
+    };
+  } catch {
+    return { key: "zshrc-tmux", name: ".zshrc auto-attach", status: "missing", feature: "Pocket Agents · SSH auto-tmux" };
+  }
+}
+
 async function dWeather(): Promise<Detection> {
   const loc = getLocation();
   const ok = await ping(
@@ -186,16 +249,19 @@ export async function GET() {
     internet, node, autostart, daemon,
     lmStudio, github, weather, nasaApod,
     plex, tailscale, ntfy,
+    tmux, brrr, zshrcTmux,
   ] = await Promise.all([
     dInternet(), dNode(), dLaunchAgents(), dDaemon(),
     dLmStudio(), dGitHub(), dWeather(), dNasaApod(),
     dPlex(), dTailscale(), dNtfy(),
+    dTmux(), dBrrr(), dZshrcAutoAttach(),
   ]);
 
   const detections: Detection[] = [
     internet, node, autostart, daemon,
     lmStudio, github, weather, nasaApod,
     plex, tailscale, ntfy,
+    tmux, brrr, zshrcTmux,
   ];
 
   const summary = {
