@@ -110,16 +110,16 @@ export function DiskWidgetMinimal() {
         </tbody>
       </table>
 
-      {/* G · I/O sparkline per device */}
-      {devices.length > 0 && (
+      {/* G · I/O sparkline per externt device */}
+      {devices.filter((d) => !d.isInternal).length > 0 && (
         <div className="mt-3 pt-3 border-t border-dashed border-neutral-900 font-mono text-[11px]">
-          <div className="text-[10px] text-neutral-600 uppercase tracking-wider mb-1.5">i/o · ~5 min</div>
-          {devices.map((d) => {
+          <div className="text-[10px] text-neutral-600 uppercase tracking-wider mb-1.5">i/o · eksterne drev · ~5 min</div>
+          {devices.filter((d) => !d.isInternal).map((d) => {
             const hist = ioHist[d.id] ?? [];
             const peak = hist.length > 0 ? Math.max(...hist) : 0;
             return (
               <div key={d.id} className="flex items-baseline gap-2 text-neutral-500 leading-tight">
-                <span className="text-neutral-400 truncate" style={{ width: 110 }}>{d.isInternal ? "internal" : "external"}</span>
+                <span className="text-neutral-400 truncate" style={{ width: 130 }}>{d.name}</span>
                 <span className="text-cyan-400/70 tabular-nums" style={{ minWidth: 90 }}>{sparkline(hist)}</span>
                 <span className="tabular-nums text-neutral-300">{(d.rateMBs ?? 0).toFixed(1)}</span>
                 <span className="text-neutral-600">mb/s</span>
@@ -138,16 +138,14 @@ export function DiskWidgetMinimal() {
             <tbody>
               {storage.items.map((it) => {
                 const sz = fmtSize(it.bytes);
-                const isZero = it.bytes === 0;
-                const tccHint = isZero && (it.label === "Downloads" || it.label === "Photos Library") ? "TCC?" : "";
                 return (
                   <tr key={it.label} className="text-neutral-500 leading-tight">
-                    <td className="py-0.5 text-neutral-400" style={{ width: 110 }}>{it.label}</td>
+                    <td className="py-0.5 text-neutral-400" style={{ width: 130 }}>{it.label}</td>
                     <td className="py-0.5 text-right tabular-nums text-neutral-200" style={{ width: 80 }}>
                       {sz.num} <span className="text-neutral-600">{sz.unit}</span>
                     </td>
-                    <td className="py-0.5 pl-3 text-neutral-700 text-[10px] truncate" title={tccHint ? "Macs Privatliv & Sikkerhed blokerer adgang — giv Node Full Disk Access" : undefined}>
-                      {it.detail ?? tccHint}
+                    <td className="py-0.5 pl-3 text-neutral-700 text-[10px] truncate" title={it.detail === "TCC?" ? "Macs Privatliv & Sikkerhed blokerer adgang — giv node Full Disk Access i Systemindstillinger" : undefined}>
+                      {it.detail ?? ""}
                     </td>
                   </tr>
                 );
