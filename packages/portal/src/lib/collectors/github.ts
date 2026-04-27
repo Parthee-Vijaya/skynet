@@ -165,8 +165,11 @@ export async function collect(): Promise<GithubData> {
       ghFetch<GhRepo[]>(
         `https://api.github.com/users/${USER}/repos?per_page=100&sort=pushed`
       ).catch(() => [] as GhRepo[]),
+      // /events (uden /public) returnerer private events når PAT er sat
+      // — kræver "repo" scope. Falder gracefully tilbage til public-only
+      // hvis token mangler eller har for lille scope.
       ghFetch<GhEvent[]>(
-        `https://api.github.com/users/${USER}/events/public?per_page=100`
+        `https://api.github.com/users/${USER}/events?per_page=100`
       ).catch(() => [] as GhEvent[]),
     ]);
 

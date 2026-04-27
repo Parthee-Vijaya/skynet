@@ -187,9 +187,10 @@ export default function SettingsPage() {
                   autoComplete="off"
                 />
                 <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>
-                  Hæver rate-limit: 60→5000/t for personal-data, 10→30/min for trending.
-                  {" "}<a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ color: "#525252" }}>github.com/settings/tokens</a>
-                  {" "}· kun "public_repo" scope nødvendigt.
+                  Hæver rate-limit (60→5000/t for personal, 10→30/min for trending) og viser
+                  events fra private repos. {" "}
+                  <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ color: "#525252" }}>github.com/settings/tokens</a>
+                  {" "}· scope: "repo" hvis du vil se private commits, ellers "public_repo".
                 </div>
               </div>
             </div>
