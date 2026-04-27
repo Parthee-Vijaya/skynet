@@ -49,6 +49,7 @@ export function ServicesWidget() {
       }
       className="col-span-12 lg:col-span-6"
     >
+      <div className="max-h-[500px] overflow-y-auto pr-1">
       <table className="w-full font-mono text-[11px]">
         <thead>
           <tr className="text-neutral-500 border-b border-dashed border-neutral-800">
@@ -108,8 +109,9 @@ export function ServicesWidget() {
           })}
         </tbody>
       </table>
+      </div>
       <div className="mt-2 text-[10px] text-neutral-600 font-mono">
-        scanned via lsof · klik en række for at åbne service · tilføj flere porte i{" "}
+        scanned via lsof · klik en række for at åbne service · {total > 8 && <span className="text-neutral-500">scroll for flere · </span>}tilføj flere i{" "}
         <code className="text-neutral-400">lib/collectors/services.ts</code>
       </div>
     </Section>
