@@ -5,7 +5,7 @@ import { Section } from "../primitives";
 
 /**
  * GitHub personal activity widget — stats, 30-dages heatmap, seneste events.
- * Kræver GITHUB_USER env-var for at vise data (ellers empty-state).
+ * Konfigureres i /settings → "GitHub-brugernavn" (eller via GITHUB_USER env-var).
  */
 
 function ContribHeatmap({ days }: { days: GithubContribDay[] }) {
@@ -84,8 +84,7 @@ export function GithubWidgetMinimal() {
         <div className="font-mono text-[11px] text-neutral-600 space-y-1">
           <div>ingen GitHub-bruger konfigureret.</div>
           <div className="text-neutral-700">
-            sæt <code className="text-neutral-500">GITHUB_USER</code> env-var i din LaunchAgent-plist
-            eller <code className="text-neutral-500">~/.zshrc</code> og genstart portal.
+            sæt brugernavn under <a href="/settings" className="text-sky-400/70 hover:text-sky-300">/settings</a> → GitHub-brugernavn.
           </div>
         </div>
       ) : (
