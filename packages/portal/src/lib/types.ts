@@ -5,6 +5,21 @@ export interface ProcessInfo {
   pid: number;
 }
 
+export interface DisplayInfo {
+  name: string;
+  resolution: string;       // logisk fx "3008×1692"
+  native: string;           // native pixels fx "6016×3384"
+  refreshRate: number;      // Hz
+  isMain: boolean;
+}
+
+export interface MachineInfo {
+  model: string;            // fx "Mac16,9"
+  chip: string;             // fx "Apple M4 Max"
+  ram: string;              // fx "64 GB"
+  osVersion: string;        // fx "macOS 26.4.1"
+}
+
 export interface SystemData {
   cpu: { load: number; cores: number; brand: string };
   memory: { used: number; total: number; percent: number };
@@ -16,6 +31,8 @@ export interface SystemData {
   power: { source: "ac" | "battery" | "unknown"; thermalWarning: boolean; watts: number | null };
   processes: { topCpu: ProcessInfo[]; topMem: ProcessInfo[]; total: number };
   loadAvg: [number, number, number];
+  machine?: MachineInfo | null;
+  displays?: DisplayInfo[];
 }
 
 export interface WeatherData {

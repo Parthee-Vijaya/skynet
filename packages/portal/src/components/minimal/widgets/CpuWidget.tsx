@@ -36,7 +36,41 @@ export function CpuWidgetMinimal() {
           </div>
         </div>
       </div>
-      <div className="mt-4 text-[11px] font-mono">
+      {/* device · display — info om Mac'en + tilsluttede skærme */}
+      {(data?.machine || (data?.displays && data.displays.length > 0)) && (
+        <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-900 text-[11px] font-mono leading-tight space-y-0.5">
+          {data?.machine && (
+            <div className="text-neutral-500">
+              <span className="text-neutral-700">device · </span>
+              <span className="text-neutral-300">{data.machine.model}</span>
+              <span className="text-neutral-700"> · </span>
+              <span className="text-neutral-300">{data.machine.ram}</span>
+              <span className="text-neutral-700"> · </span>
+              <span className="text-neutral-400">{data.machine.osVersion}</span>
+            </div>
+          )}
+          {data?.displays && data.displays.map((disp, i) => (
+            <div key={i} className="text-neutral-500 truncate">
+              <span className="text-neutral-700">display · </span>
+              <span className="text-neutral-300">{disp.name}</span>
+              {disp.resolution && (
+                <>
+                  <span className="text-neutral-700"> · </span>
+                  <span className="text-neutral-400 tabular-nums">{disp.resolution}</span>
+                  {disp.refreshRate > 0 && (
+                    <span className="text-neutral-600 tabular-nums"> @{disp.refreshRate}Hz</span>
+                  )}
+                </>
+              )}
+              {disp.isMain && data.displays && data.displays.length > 1 && (
+                <span className="text-[#7dd67d] ml-1.5 text-[9px]">main</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-900 text-[11px] font-mono">
         <div className="text-neutral-500 mb-1">top processer</div>
         {procs.length === 0 && <div className="text-neutral-700">—</div>}
         {procs.map((p) => (

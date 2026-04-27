@@ -2,9 +2,74 @@ import si from "systeminformation";
 import { exec } from "child_process";
 import { promisify } from "util";
 import nodeOs from "node:os";
-import type { SystemData, ProcessInfo } from "@/lib/types";
+import type { SystemData, ProcessInfo, MachineInfo, DisplayInfo } from "@/lib/types";
 
 const execAsync = promisify(exec);
+
+// Cache hardware-info i 5 min — system_profiler er langsom og spec'en ændrer sig sjældent
+const HARDWARE_TTL_MS = 5 * 60_000;
+let machineCache: { data: MachineInfo | null; ts: number } | null = null;
+let displaysCache: { data: DisplayInfo[]; ts: number } | null = null;
+
+async function readMachine(): Promise<MachineInfo | null> {
+  if (machineCache && Date.now() - machineCache.ts < HARDWARE_TTL_MS) return machineCache.data;
+  try {
+    const [{ stdout }, osInfo] = await Promise.all([
+      execAsync("system_profiler SPHardwareDataType -json", { timeout: 5000 }),
+      si.osInfo(),
+    ]);
+    const data = JSON.parse(stdout).SPHardwareDataType?.[0] ?? {};
+    const info: MachineInfo = {
+      model: data.machine_model ?? data.machine_name ?? "?",
+      chip: data.chip_type ?? "?",
+      ram: data.physical_memory ?? "?",
+      osVersion: `${osInfo.distro} ${osInfo.release}`.trim(),
+    };
+    machineCache = { data: info, ts: Date.now() };
+    return info;
+  } catch {
+    machineCache = { data: null, ts: Date.now() };
+    return null;
+  }
+}
+
+interface SpDisplay {
+  _name?: string;
+  _spdisplays_resolution?: string;
+  spdisplays_resolution?: string;
+  _spdisplays_pixels?: string;
+  spdisplays_pixels?: string;
+  spdisplays_main?: string;
+}
+interface SpGpu { spdisplays_ndrvs?: SpDisplay[] }
+
+async function readDisplays(): Promise<DisplayInfo[]> {
+  if (displaysCache && Date.now() - displaysCache.ts < HARDWARE_TTL_MS) return displaysCache.data;
+  try {
+    const { stdout } = await execAsync("system_profiler SPDisplaysDataType -json", { timeout: 5000 });
+    const data = JSON.parse(stdout) as { SPDisplaysDataType?: SpGpu[] };
+    const result: DisplayInfo[] = [];
+    for (const gpu of data.SPDisplaysDataType ?? []) {
+      for (const d of gpu.spdisplays_ndrvs ?? []) {
+        const resStr = d._spdisplays_resolution ?? d.spdisplays_resolution ?? "";
+        const m = resStr.match(/(\d+)\s*x\s*(\d+)\s*@\s*([\d.]+)\s*Hz/);
+        const nativeStr = d._spdisplays_pixels ?? d.spdisplays_pixels ?? "";
+        result.push({
+          name: d._name ?? "Display",
+          resolution: m ? `${m[1]}×${m[2]}` : resStr,
+          native: nativeStr.replace(/\s*x\s*/, "×"),
+          refreshRate: m ? Math.round(Number(m[3])) : 0,
+          isMain: d.spdisplays_main === "spdisplays_yes",
+        });
+      }
+    }
+    displaysCache = { data: result, ts: Date.now() };
+    return result;
+  } catch {
+    displaysCache = { data: [], ts: Date.now() };
+    return [];
+  }
+}
 
 async function readBatteryWatts(): Promise<number | null> {
   try {
@@ -55,7 +120,7 @@ function topBy(list: si.Systeminformation.ProcessesProcessData[], key: "cpu" | "
 }
 
 export async function collect(): Promise<SystemData> {
-  const [load, mem, fsSizes, cpuInfo, temp, net, battery, osInfo, procs, power] = await Promise.all([
+  const [load, mem, fsSizes, cpuInfo, temp, net, battery, osInfo, procs, power, machine, displays] = await Promise.all([
     si.currentLoad(),
     si.mem(),
     si.fsSize(),
@@ -76,6 +141,8 @@ export async function collect(): Promise<SystemData> {
         }) as unknown as si.Systeminformation.ProcessesData
     ),
     readPower(),
+    readMachine(),
+    readDisplays(),
   ]);
 
   const mainFs = fsSizes.sort((a, b) => b.size - a.size)[0] ?? { size: 1, used: 0, use: 0 };
@@ -119,5 +186,7 @@ export async function collect(): Promise<SystemData> {
       total: procs.all,
     },
     loadAvg: nodeOs.loadavg() as [number, number, number],
+    machine,
+    displays,
   };
 }
