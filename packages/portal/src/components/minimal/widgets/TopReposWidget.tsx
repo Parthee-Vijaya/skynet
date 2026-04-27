@@ -169,7 +169,7 @@ export function TopReposWidget() {
           </tr>
         </thead>
         <tbody>
-          {repos.length === 0 && !error && (
+          {!data && !error && (
             <tr>
               <td colSpan={6} style={{ paddingTop: 16, color: "#3a3a3a" }}>
                 henter repos…
@@ -178,8 +178,12 @@ export function TopReposWidget() {
           )}
           {error && repos.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ paddingTop: 16, color: "#d87373", fontSize: 11 }}>
-                GitHub API utilgængelig
+              <td colSpan={6} style={{ paddingTop: 16, color: "#d87373", fontSize: 11, lineHeight: 1.5 }}>
+                <div>GitHub Search utilgængelig</div>
+                <div style={{ color: "#6b6b6b", fontSize: 10, marginTop: 3 }}>
+                  Anonymous tier er 10 req/min — sæt en GitHub PAT under{" "}
+                  <a href="/settings" style={{ color: "#9bd0ff" }}>/settings</a> for 30 req/min.
+                </div>
               </td>
             </tr>
           )}

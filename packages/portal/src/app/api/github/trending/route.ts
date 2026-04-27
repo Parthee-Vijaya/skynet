@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrRefresh } from "@/lib/cache";
-import { getSettingJSON, setSettingJSON } from "@/lib/settings";
+import { getSetting, getSettingJSON, setSettingJSON } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,6 +55,10 @@ async function fetchTrending(): Promise<TrendingResponse> {
     "User-Agent": "SkynetDashboard/1.0",
   };
 
+  // Auth: PAT hæver rate-limit fra 10/min (anonym) → 30/min (auth)
+  const token = getSetting("github_token") ?? process.env.GITHUB_TOKEN ?? "";
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   // Primary: repos created in last 7 days, sorted by stars (= "new gems" à la starquake)
   const q = encodeURIComponent(`created:>${day7}`);
   const url = `https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=25`;
@@ -71,6 +75,13 @@ async function fetchTrending(): Promise<TrendingResponse> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = (await res.json()) as { items: any[] };
+
+  // GitHub returnerer 200 med tom items[] når Search API er rate-limited
+  // (kender det fra anonymous-tier 10/min). Behandl det som en fejl så vi ikke
+  // cacher tomheden i 5 min — næste request kan så lykkes.
+  if (data.items.length === 0) {
+    throw new Error("GitHub Search returnerede 0 — sandsynligvis rate-limit (anonym 10/min)");
+  }
 
   // Load (or create) today's star baseline
   let baseline = getStarBaseline();

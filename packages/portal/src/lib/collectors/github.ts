@@ -47,14 +47,19 @@ interface GhEvent {
 }
 
 async function ghFetch<T>(url: string): Promise<T> {
+  const headers: Record<string, string> = {
+    accept: "application/vnd.github+json",
+    "user-agent": "skynet-dashboard",
+    "x-github-api-version": "2022-11-28",
+  };
+  // Auth: PAT hæver core-limit fra 60/t → 5000/t
+  const token = getSetting("github_token") ?? process.env.GITHUB_TOKEN ?? "";
+  if (token) headers.authorization = `Bearer ${token}`;
+
   const res = await fetch(url, {
     signal: AbortSignal.timeout(9000),
     cache: "no-store",
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "skynet-dashboard",
-      "x-github-api-version": "2022-11-28",
-    },
+    headers,
   });
   if (!res.ok) throw new Error(`GitHub HTTP ${res.status} (${url})`);
   return (await res.json()) as T;

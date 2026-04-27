@@ -11,6 +11,7 @@ interface SettingsResp {
   userName: string;
   location: LocationSetting;
   githubUser?: string;
+  hasGithubToken?: boolean;
 }
 
 interface ModelsResp {
@@ -44,6 +45,8 @@ export default function SettingsPage() {
   const [userName, setUserName] = useState("");
   const [city, setCity] = useState("");
   const [githubUser, setGithubUser] = useState("");
+  const [githubToken, setGithubToken] = useState("");
+  const [hasGithubToken, setHasGithubToken] = useState(false);
   const [locationLabel, setLocationLabel] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -57,6 +60,7 @@ export default function SettingsPage() {
         setDefaults(data.defaults);
         setUserName(data.userName ?? "");
         setGithubUser(data.githubUser ?? "");
+        setHasGithubToken(!!data.hasGithubToken);
         setLocationLabel(data.location?.label ?? "");
       })
       .catch(() => {});
@@ -70,18 +74,22 @@ export default function SettingsPage() {
       if (city.trim()) body.city = city.trim();
       // Altid send githubUser (kan være tom → fjernes)
       body.githubUser = githubUser.trim();
+      // Send token hvis brugeren har indtastet en ny — tom = uændret
+      if (githubToken.trim()) body.githubToken = githubToken.trim();
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await res.json() as { ok: boolean; error?: string; location?: LocationSetting };
+      const json = await res.json() as { ok: boolean; error?: string; location?: LocationSetting; hasGithubToken?: boolean };
       if (!res.ok || !json.ok) {
         setProfileError(json.error ?? "Fejl ved gem");
       } else {
         setSavedProfile(true);
         if (json.location?.label) setLocationLabel(json.location.label);
+        if (typeof json.hasGithubToken === "boolean") setHasGithubToken(json.hasGithubToken);
         setCity("");
+        setGithubToken("");
         setTimeout(() => setSavedProfile(false), 2000);
       }
     } finally { setSavingProfile(false); }
@@ -163,6 +171,25 @@ export default function SettingsPage() {
                 />
                 <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>
                   Aktiverer GitHub-widget på cockpittet (stars, commits, 30-dages heatmap, seneste aktivitet). Tom = skjult.
+                </div>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>
+                  GitHub PAT (valgfri)
+                  {hasGithubToken && <span style={{ color: "#7dd67d", marginLeft: 6 }}>· gemt</span>}
+                </div>
+                <input
+                  type="password"
+                  value={githubToken}
+                  placeholder={hasGithubToken ? "(token gemt — indtast for at ændre)" : "ghp_…"}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  style={{ ...inputStyle }}
+                  autoComplete="off"
+                />
+                <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>
+                  Hæver rate-limit: 60→5000/t for personal-data, 10→30/min for trending.
+                  {" "}<a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ color: "#525252" }}>github.com/settings/tokens</a>
+                  {" "}· kun "public_repo" scope nødvendigt.
                 </div>
               </div>
             </div>

@@ -10,19 +10,21 @@ export async function GET() {
   const userName = getUserName();
   const location = getLocation();
   const githubUser = getSetting("github_user") ?? "";
-  return Response.json({ llm, defaults: DEFAULT_LLM_CONFIG, userName, location, githubUser });
+  const hasGithubToken = !!getSetting("github_token");
+  return Response.json({ llm, defaults: DEFAULT_LLM_CONFIG, userName, location, githubUser, hasGithubToken });
 }
 
 export async function POST(req: NextRequest) {
-  let body: { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string };
+  let body: { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string };
   try {
-    body = (await req.json()) as { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string };
+    body = (await req.json()) as { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string };
   } catch {
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
   if (body.llm) setLLMConfig(body.llm);
   if (typeof body.userName === "string") setUserName(body.userName);
   if (typeof body.githubUser === "string") setSetting("github_user", body.githubUser.trim());
+  if (typeof body.githubToken === "string") setSetting("github_token", body.githubToken.trim());
   if (typeof body.city === "string" && body.city.trim()) {
     const { setSettingJSON } = await import("@/lib/settings");
     const loc = await geocodeCity(body.city.trim());
@@ -35,5 +37,6 @@ export async function POST(req: NextRequest) {
     userName: getUserName(),
     location: getLocation(),
     githubUser: getSetting("github_user") ?? "",
+    hasGithubToken: !!getSetting("github_token"),
   });
 }
