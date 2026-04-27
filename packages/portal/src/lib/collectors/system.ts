@@ -90,6 +90,38 @@ async function readBatteryWatts(): Promise<number | null> {
   }
 }
 
+/** Parse fx "5235M" → bytes */
+function parseTopSize(s: string): number {
+  const m = s.match(/^([\d.]+)([KMGT])?$/i);
+  if (!m) return 0;
+  const num = parseFloat(m[1]);
+  const unit = (m[2] || "").toUpperCase();
+  const mult = unit === "K" ? 1024 : unit === "M" ? 1024 ** 2 : unit === "G" ? 1024 ** 3 : unit === "T" ? 1024 ** 4 : 1;
+  return num * mult;
+}
+
+interface MacMemDetails { wired: number; compressor: number; unused: number; swapIns: number; swapOuts: number }
+
+async function readMacMemDetails(): Promise<MacMemDetails | null> {
+  try {
+    const { stdout } = await execAsync("top -l 1 -s 0", { timeout: 2000 });
+    // PhysMem: 62G used (5235M wired, 21G compressor), 1615M unused.
+    const phys = stdout.match(/PhysMem:.+?\(([\d.]+[KMGT]?)\s+wired,\s+([\d.]+[KMGT]?)\s+compressor\),\s+([\d.]+[KMGT]?)\s+unused/i);
+    // VM: ... 168(0) swapins, 212(0) swapouts.
+    const vm = stdout.match(/VM:.*?(\d+)\(\d+\)\s+swapins,\s+(\d+)\(\d+\)\s+swapouts/);
+    if (!phys) return null;
+    return {
+      wired: parseTopSize(phys[1]),
+      compressor: parseTopSize(phys[2]),
+      unused: parseTopSize(phys[3]),
+      swapIns: vm ? Number(vm[1]) : 0,
+      swapOuts: vm ? Number(vm[2]) : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function readPower(): Promise<{ source: "ac" | "battery" | "unknown"; thermalWarning: boolean; watts: number | null }> {
   try {
     const [ps, therm, watts] = await Promise.all([
@@ -120,7 +152,7 @@ function topBy(list: si.Systeminformation.ProcessesProcessData[], key: "cpu" | "
 }
 
 export async function collect(): Promise<SystemData> {
-  const [load, mem, fsSizes, cpuInfo, temp, net, battery, osInfo, procs, power, machine, displays] = await Promise.all([
+  const [load, mem, fsSizes, cpuInfo, temp, net, battery, osInfo, procs, power, machine, displays, memDetails] = await Promise.all([
     si.currentLoad(),
     si.mem(),
     si.fsSize(),
@@ -143,7 +175,9 @@ export async function collect(): Promise<SystemData> {
     readPower(),
     readMachine(),
     readDisplays(),
+    readMacMemDetails(),
   ]);
+  // bytt order skal matche destructuring
 
   const mainFs = fsSizes.sort((a, b) => b.size - a.size)[0] ?? { size: 1, used: 0, use: 0 };
   const mainNet = net[0] ?? { rx_sec: 0, tx_sec: 0 };
@@ -158,6 +192,11 @@ export async function collect(): Promise<SystemData> {
       used: mem.active,
       total: mem.total,
       percent: Math.round((mem.active / mem.total) * 100),
+      wired: memDetails?.wired,
+      compressor: memDetails?.compressor,
+      unused: memDetails?.unused,
+      swapIns: memDetails?.swapIns,
+      swapOuts: memDetails?.swapOuts,
     },
     disk: {
       used: mainFs.used,

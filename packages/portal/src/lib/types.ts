@@ -22,7 +22,16 @@ export interface MachineInfo {
 
 export interface SystemData {
   cpu: { load: number; cores: number; brand: string };
-  memory: { used: number; total: number; percent: number };
+  memory: {
+    used: number;
+    total: number;
+    percent: number;
+    wired?: number;       // bytes locked i memory (kernel)
+    compressor?: number;  // bytes komprimeret af macOS' VM-compressor
+    unused?: number;      // bytes virkeligt fri
+    swapIns?: number;     // total swap-ins siden boot
+    swapOuts?: number;    // total swap-outs siden boot
+  };
   disk: { used: number; total: number; percent: number };
   temperature: number | null;
   network: { rxSec: number; txSec: number };
