@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { LLMConfig, LocationSetting } from "@/lib/settings";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section } from "@/components/minimal/primitives";
+import { Button } from "@/components/ui/Button";
 
 interface SettingsResp {
   llm: LLMConfig;
@@ -167,13 +168,9 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button
-                onClick={saveProfile}
-                disabled={savingProfile}
-                style={{ background: "none", border: "1px dashed #444", color: savingProfile ? "#6b6b6b" : "#f5f5f5", padding: "5px 14px", fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
-              >
+              <Button size="sm" onClick={saveProfile} disabled={savingProfile}>
                 {savingProfile ? "gemmer…" : "→ gem profil"}
-              </button>
+              </Button>
               {savedProfile && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
               {profileError && <span style={{ color: "#d87373", fontSize: 11 }}>{profileError}</span>}
             </div>
@@ -205,22 +202,14 @@ export default function SettingsPage() {
             </label>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 4 }}>
-              <button
-                onClick={save}
-                disabled={saving}
-                style={{ background: "none", border: "1px dashed #444", color: saving ? "#6b6b6b" : "#f5f5f5", padding: "5px 14px", fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
-              >
+              <Button size="sm" onClick={save} disabled={saving}>
                 {saving ? "gemmer…" : "→ gem"}
-              </button>
+              </Button>
               {saved && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
               <div style={{ flex: 1 }} />
-              <button
-                onClick={runTest}
-                disabled={testing}
-                style={{ background: "none", border: "1px dashed #333", color: "#9bd0ff", padding: "5px 14px", fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
-              >
+              <Button size="sm" tone="accent" onClick={runTest} disabled={testing}>
                 {testing ? "tester…" : "test lm studio"}
-              </button>
+              </Button>
             </div>
 
             {test && (

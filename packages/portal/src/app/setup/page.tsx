@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,21 +217,12 @@ export default function SetupPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
+            <Button
               onClick={saveProfile}
               disabled={saving || (!name.trim() && !city.trim() && !ntfyTopic.trim())}
-              style={{
-                background: "none",
-                border: "1px dashed #444",
-                padding: "6px 16px",
-                color: saving || (!name.trim() && !city.trim()) ? "#444" : "#e5e5e5",
-                fontFamily: MONO,
-                fontSize: 12,
-                cursor: saving ? "wait" : "pointer",
-              }}
             >
               {saving ? "gemmer…" : "→ gem"}
-            </button>
+            </Button>
             {saveMsg && (
               <span style={{ fontSize: 12, color: saveMsg.ok ? "#7dd67d" : "#d87373" }}>
                 {saveMsg.text}

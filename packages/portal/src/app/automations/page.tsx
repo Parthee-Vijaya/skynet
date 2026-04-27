@@ -5,6 +5,7 @@ import type { LogEntry } from "@/lib/agent/log-buffer";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section, Sep } from "@/components/minimal/primitives";
+import { Button, ButtonLink } from "@/components/ui/Button";
 
 interface NotifyCfg {
   macos: boolean;
@@ -178,20 +179,6 @@ const inputStyle = {
   outline: "none",
 } as const;
 
-const btnStyle = {
-  background: "none",
-  border: "1px dashed #333",
-  color: "#9bd0ff",
-  padding: "8px 14px",
-  minHeight: 36,
-  fontFamily: "inherit",
-  fontSize: 12,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-} as const;
-
 export default function AutomationsPage() {
   const [items, setItems] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,9 +277,9 @@ export default function AutomationsPage() {
                 Hent ntfy-appen til iPhone/Android og abonnér på dit topic — push uden opsætning.
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button onClick={sendTest} disabled={testing} style={{ ...btnStyle, opacity: testing ? 0.5 : 1 }}>
+                <Button size="sm" tone="accent" onClick={sendTest} disabled={testing}>
                   {testing ? "sender…" : "→ send test"}
-                </button>
+                </Button>
                 {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
               </div>
             </div>
@@ -329,8 +316,12 @@ export default function AutomationsPage() {
                 <span style={{ color: "#6b6b6b" }}>minutter</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button onClick={testGmail} disabled={gmailTesting} style={{ ...btnStyle, opacity: gmailTesting ? 0.5 : 1 }}>{gmailTesting ? "tester…" : "→ test forbindelse"}</button>
-                <a href="/api/agent/triage-mail?push=1" target="_blank" rel="noreferrer" style={{ ...btnStyle, textDecoration: "none" }}>kør triage nu</a>
+                <Button size="sm" tone="accent" onClick={testGmail} disabled={gmailTesting}>
+                  {gmailTesting ? "tester…" : "→ test forbindelse"}
+                </Button>
+                <ButtonLink size="sm" tone="accent" href="/api/agent/triage-mail?push=1" target="_blank" rel="noreferrer">
+                  kør triage nu
+                </ButtonLink>
                 {gmailMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{gmailMsg}</span>}
               </div>
             </div>
@@ -378,8 +369,8 @@ export default function AutomationsPage() {
                       {a.lastStatus && <span style={{ color: a.lastStatus === "ok" ? "#7dd67d" : "#d87373", marginLeft: 4 }}>{a.lastStatus === "ok" ? "✓" : "✗"}</span>}
                     </td>
                     <td style={{ padding: "7px 0 7px 0", textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button onClick={() => runNow(a)} style={{ ...btnStyle, marginRight: 4 }}>kør</button>
-                      <button onClick={() => setEditing(a)} style={{ ...btnStyle, marginRight: 4 }}>redigér</button>
+                      <Button size="sm" tone="accent" onClick={() => runNow(a)} className="mr-1">kør</Button>
+                      <Button size="sm" tone="accent" onClick={() => setEditing(a)} className="mr-1">redigér</Button>
                       <button onClick={() => remove(a)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", fontSize: 12 }}>✕</button>
                     </td>
                   </tr>
