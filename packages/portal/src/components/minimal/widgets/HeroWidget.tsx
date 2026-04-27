@@ -52,6 +52,40 @@ function fmtDayLength(min: number): string {
   return `${h}t ${String(m).padStart(2, "0")}m`;
 }
 
+// Stjernetegn-tabellen — start-dato (måned, dag) for hvert tegn i kalenderåret
+const ZODIAC: Array<{ m: number; d: number; sym: string; da: string }> = [
+  { m: 1, d: 20, sym: "♒", da: "Vandmanden" },
+  { m: 2, d: 19, sym: "♓", da: "Fiskene" },
+  { m: 3, d: 21, sym: "♈", da: "Vædderen" },
+  { m: 4, d: 20, sym: "♉", da: "Tyren" },
+  { m: 5, d: 21, sym: "♊", da: "Tvillingerne" },
+  { m: 6, d: 21, sym: "♋", da: "Krebsen" },
+  { m: 7, d: 23, sym: "♌", da: "Løven" },
+  { m: 8, d: 23, sym: "♍", da: "Jomfruen" },
+  { m: 9, d: 23, sym: "♎", da: "Vægten" },
+  { m: 10, d: 23, sym: "♏", da: "Skorpionen" },
+  { m: 11, d: 22, sym: "♐", da: "Skytten" },
+  { m: 12, d: 22, sym: "♑", da: "Stenbukken" },
+];
+
+function getZodiac(date: Date) {
+  const m = date.getMonth() + 1;
+  const day = date.getDate();
+  // Start med Stenbukken (Dec 22+) som default (vintersolhverv-perioden krydser nytår)
+  let currentIdx = ZODIAC.length - 1;
+  for (let i = 0; i < ZODIAC.length; i++) {
+    const s = ZODIAC[i];
+    if (m > s.m || (m === s.m && day >= s.d)) currentIdx = i;
+    else break;
+  }
+  const current = ZODIAC[currentIdx];
+  const next = ZODIAC[(currentIdx + 1) % ZODIAC.length];
+  let nextDate = new Date(date.getFullYear(), next.m - 1, next.d);
+  if (+nextDate <= +date) nextDate = new Date(date.getFullYear() + 1, next.m - 1, next.d);
+  const daysUntilNext = Math.ceil((+nextDate - +date) / 86_400_000);
+  return { current, next, daysUntilNext };
+}
+
 // Dynamic import — Three.js kan ikke SSR
 const SkynetGlobe = dynamic(
   () => import("./SkynetGlobe").then((m) => ({ default: m.SkynetGlobe })),
@@ -141,12 +175,48 @@ export function HeroWidget() {
 
       {/* Text content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          className="font-mono text-neutral-50 leading-none font-extralight tracking-tight tabular-nums"
-          style={{ fontSize: "clamp(48px, 7vw, 104px)" }}
-        >
-          {time}
+        <div className="flex items-end gap-8 flex-wrap">
+          <div
+            className="font-mono text-neutral-50 leading-none font-extralight tracking-tight tabular-nums"
+            style={{ fontSize: "clamp(48px, 7vw, 104px)" }}
+          >
+            {time}
+          </div>
+
+          {/* Sol + stjernetegn — fyldt til højre for klokken */}
+          {now && (
+            <div className="font-mono text-[12px] text-neutral-500 leading-relaxed tabular-nums pb-2 min-w-[210px]">
+              <div className="flex items-baseline gap-2">
+                <span className="text-amber-500/70 w-4">☀</span>
+                <span className="text-neutral-300">{sunrise ?? "—"}</span>
+                <span className="text-neutral-700 text-[10px]">op</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-indigo-400/70 w-4">🌙</span>
+                <span className="text-neutral-300">{sunset ?? "—"}</span>
+                <span className="text-neutral-700 text-[10px]">ned</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-neutral-600 w-4">🕐</span>
+                <span className="text-neutral-300">{daylight ?? "—"}</span>
+                <span className="text-neutral-700 text-[10px]">dagslys</span>
+              </div>
+              {(() => {
+                const z = getZodiac(now);
+                return (
+                  <div className="flex items-baseline gap-2 mt-1 pt-1 border-t border-dashed border-neutral-900/80">
+                    <span className="text-neutral-300 w-4">{z.current.sym}</span>
+                    <span className="text-neutral-200">{z.current.da}</span>
+                    <span className="text-neutral-700 text-[10px]">
+                      → {z.next.sym} om {z.daysUntilNext}d
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
+
         <div className="font-mono text-[12px] text-neutral-500 mt-2.5">{date}</div>
         <div className="font-mono text-[13px] text-neutral-200 mt-1">
           {hello}
@@ -170,25 +240,11 @@ export function HeroWidget() {
           </small>
         </p>
 
-        {/* A · sol + dag-info */}
-        <div className="font-mono text-[11px] text-neutral-500 mt-5 tabular-nums">
-          {sunrise && sunset ? (
-            <>
-              <span className="text-amber-500/70">☀ {sunrise}</span>
-              <Sep />
-              <span className="text-indigo-400/70">🌙 {sunset}</span>
-              {daylight && (<><Sep /><span className="text-neutral-400">{daylight} dagslys</span></>)}
-            </>
-          ) : (
-            <span className="text-neutral-700">☀ —</span>
-          )}
-          {dayN != null && (<><Sep /><span>dag {dayN}/{totalDays}</span></>)}
-        </div>
-
         {/* B · mini-stats */}
-        <div className="font-mono text-[11px] text-neutral-500 mt-1.5 tabular-nums">
+        <div className="font-mono text-[11px] text-neutral-500 mt-5 tabular-nums">
           <span className="text-rose-400/70">🔥 {commitsToday}</span>
           <span className="text-neutral-400 ml-1">commits i dag</span>
+          {dayN != null && (<><Sep /><span className="text-neutral-400">dag {dayN}/{totalDays}</span></>)}
           {uptime && (<><Sep /><span className="text-cyan-400/70">⏱ {uptime}</span><span className="text-neutral-400 ml-1">uptime</span></>)}
           {load && (<><Sep /><span className="text-emerald-400/70">⚡ {load}</span><span className="text-neutral-400 ml-1">load</span></>)}
         </div>
