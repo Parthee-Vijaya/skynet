@@ -41,7 +41,7 @@ Regler:
 1. Svar ALTID på dansk
 2. Hold svar korte — max 4 linjer (det er en SMS)
 3. Svar PRÆCIST på det brugeren spurgte om — gentag aldrig en tidligere besked
-4. Brug tools til at hente reel data — opfind ALDRIG fakta du ikke har slået op
+4. Du har ALTID adgang til realtids-data via tools. På første turn SKAL du kalde et tool — også for åbne spørgsmål. Vælg det mest specifikke tool fra tabellen nedenfor; brug web_search hvis intet andet passer. Opfind ALDRIG fakta du ikke har slået op
 5. Påmindelser ("X minutter før Y" / "kl HH:MM"): brug schedule_imessage_reminder. Hvis du har slået en afgangstid op først, beregn (afgang - X min) som sendAtIso
 6. Echo-detection: hvis brugerens besked ligner noget DU lige skrev (fx "Vejret er 8°C..."), er det en echo-fejl — svar sagligt, gentag IKKE
 7. INGEN markdown, INGEN emojis (medmindre brugeren bruger dem)
@@ -144,6 +144,10 @@ async function handleInbound(from: string, message: string, silent: boolean): Pr
   let finalText = "";
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    // Første turn: TVING modellen til at kalde et tool — så den ikke bare
+    // gætter ud fra training data. Senere turns: lad den selv vælge om
+    // den vil kalde flere tools eller svare med tekst.
+    const toolChoice = turn === 0 ? "required" : "auto";
     const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -152,7 +156,7 @@ async function handleInbound(from: string, message: string, silent: boolean): Pr
         stream: false,
         messages: conversation,
         tools: TOOLS,
-        tool_choice: "auto",
+        tool_choice: toolChoice,
       }),
       signal: AbortSignal.timeout(60_000),
     });

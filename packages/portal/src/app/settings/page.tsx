@@ -205,11 +205,15 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        <Section title="llm / lm studio" className="mb-8">
+        <Section title="llm / provider" className="mb-8">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Field label="base url" help="LM Studio's OpenAI-kompatible endpoint (typisk http://localhost:1234/v1)" value={llm.baseUrl} onChange={(v) => setLlm({ ...llm, baseUrl: v })} onReset={() => resetKey("baseUrl")} />
-            <Field label="api-nøgle" help="LM Studio ignorerer indholdet — men noget skal stå der." value={llm.apiKey} onChange={(v) => setLlm({ ...llm, apiKey: v })} onReset={() => resetKey("apiKey")} />
-            <Field label="default model-id" help="Tom = vælger første tilgængelige. Ellers skal ID matche /v1/models." value={llm.defaultModel} onChange={(v) => setLlm({ ...llm, defaultModel: v })} onReset={() => resetKey("defaultModel")} />
+            <ProviderPresets
+              currentBaseUrl={llm.baseUrl}
+              onPick={(preset) => setLlm({ ...llm, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel, apiKey: preset.apiKey ?? llm.apiKey })}
+            />
+            <Field label="base url" help="LM Studio's OpenAI-kompatible endpoint (typisk http://localhost:1234/v1) eller Gemini-OpenAI-mode (https://generativelanguage.googleapis.com/v1beta/openai/)" value={llm.baseUrl} onChange={(v) => setLlm({ ...llm, baseUrl: v })} onReset={() => resetKey("baseUrl")} />
+            <Field label="api-nøgle" help="LM Studio ignorerer indholdet. Gemini: din API-nøgle fra aistudio.google.com/apikey." value={llm.apiKey} onChange={(v) => setLlm({ ...llm, apiKey: v })} onReset={() => resetKey("apiKey")} />
+            <Field label="default model-id" help="Tom = vælger første tilgængelige. Gemini: 'gemini-2.5-flash' (hurtig) eller 'gemini-2.5-pro' (kraftigst)." value={llm.defaultModel} onChange={(v) => setLlm({ ...llm, defaultModel: v })} onReset={() => resetKey("defaultModel")} />
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -270,6 +274,86 @@ export default function SettingsPage() {
         </Section>
       </main>
     </MinimalPageLayout>
+  );
+}
+
+interface ProviderPreset {
+  id: string;
+  label: string;
+  baseUrl: string;
+  defaultModel: string;
+  apiKey?: string;        // Forudfyld kun hvis provider ikke kræver hemmelighed
+  hint: string;
+}
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: "lm-studio",
+    label: "LM Studio (lokal)",
+    baseUrl: "http://localhost:1234/v1",
+    defaultModel: "",
+    apiKey: "lm-studio",
+    hint: "Kører lokalt — ingen netværk, ingen API-nøgle krævet.",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    defaultModel: "gemini-2.5-flash",
+    hint: "Hent gratis nøgle på aistudio.google.com/apikey. Indsæt nøglen i feltet 'api-nøgle' nedenunder.",
+  },
+];
+
+function ProviderPresets({
+  currentBaseUrl,
+  onPick,
+}: {
+  currentBaseUrl: string;
+  onPick: (preset: ProviderPreset) => void;
+}) {
+  const activeId =
+    PROVIDER_PRESETS.find((p) => currentBaseUrl.startsWith(p.baseUrl) || p.baseUrl.startsWith(currentBaseUrl))?.id
+    ?? "custom";
+  const activePreset = PROVIDER_PRESETS.find((p) => p.id === activeId);
+  return (
+    <div>
+      <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>provider</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {PROVIDER_PRESETS.map((p) => {
+          const isActive = activeId === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => onPick(p)}
+              style={{
+                background: isActive ? "#1a2a3a" : "#0d0d0d",
+                border: `1px dashed ${isActive ? "#3a6a9a" : "#262626"}`,
+                color: isActive ? "#9bd0ff" : "#9b9b9b",
+                fontFamily: "inherit",
+                fontSize: 12,
+                padding: "6px 12px",
+                cursor: "pointer",
+              }}
+            >
+              {isActive ? "● " : "○ "}{p.label}
+            </button>
+          );
+        })}
+        <span style={{
+          background: activeId === "custom" ? "#1a2a3a" : "transparent",
+          border: `1px dashed ${activeId === "custom" ? "#3a6a9a" : "#262626"}`,
+          color: activeId === "custom" ? "#9bd0ff" : "#525252",
+          fontSize: 12,
+          padding: "6px 12px",
+          fontStyle: "italic",
+        }}>
+          {activeId === "custom" ? "● custom" : "○ custom"}
+        </span>
+      </div>
+      {activePreset?.hint && (
+        <div style={{ color: "#525252", fontSize: 10, marginTop: 6 }}>{activePreset.hint}</div>
+      )}
+    </div>
   );
 }
 
