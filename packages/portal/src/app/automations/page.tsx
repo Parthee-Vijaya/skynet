@@ -188,12 +188,16 @@ const inputStyle = {
   outline: "none",
 } as const;
 
+type TabId = "rules" | "setup" | "logs";
+
 export default function AutomationsPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("rules");
   const [items, setItems] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifyCfg, setNotifyCfg] = useState<NotifyCfg | null>(null);
   const [gmailCfg, setGmailCfg] = useState<GmailCfg | null>(null);
   const [imessageDefault, setImessageDefault] = useState("");
+  const imessageDefaultLoaded = useRef(false);
   const [imessagePoller, setImessagePoller] = useState<ImessagePollerStatus | null>(null);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
@@ -212,6 +216,38 @@ export default function AutomationsPage() {
   const [nlText, setNlText] = useState("");
   const [nlBusy, setNlBusy] = useState(false);
   const [nlError, setNlError] = useState("");
+
+  // Inbound test
+  const [inboundTestMsg, setInboundTestMsg] = useState("tjek vejret");
+  const [inboundTestBusy, setInboundTestBusy] = useState(false);
+  const [inboundTestResult, setInboundTestResult] = useState<{ ok: boolean; reply?: string; error?: string; toolsUsed?: string[] } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [a, n, g, s, p] = await Promise.all([
+        fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      ]);
+      setItems(a.automations ?? []);
+      setNotifyCfg(n);
+      setGmailCfg(g);
+      // Læs imessageDefault fra server kun ved første load — efterfølgende
+      // lader vi UI'et være single source of truth (gemmes ved onBlur)
+      if (typeof s?.imessageDefault === "string" && !imessageDefaultLoaded.current) {
+        setImessageDefault(s.imessageDefault);
+        imessageDefaultLoaded.current = true;
+      }
+      if (p) setImessagePoller(p);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const parseNL = async () => {
     if (!nlText.trim()) return;
@@ -243,36 +279,14 @@ export default function AutomationsPage() {
     }
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [a, n, g, s, p] = await Promise.all([
-        fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-        fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-      ]);
-      setItems(a.automations ?? []);
-      setNotifyCfg(n);
-      setGmailCfg(g);
-      if (s?.imessageDefault) setImessageDefault(s.imessageDefault);
-      if (p) setImessagePoller(p);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
   const toggle = async (a: Automation) => {
     await fetch(`/api/automations/${a.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !a.enabled }) });
     load();
   };
   const runNow = async (a: Automation) => { await fetch(`/api/automations/${a.id}/run`, { method: "POST" }); load(); };
   const remove = async (a: Automation) => { if (!confirm(`Slet "${a.name}"?`)) return; await fetch(`/api/automations/${a.id}`, { method: "DELETE" }); load(); };
+
   const addTemplate = async (t: (typeof TEMPLATES)[number]) => {
-    // Swap +4500000000-placeholder med brugerens iMessage-default hvis sat
     const actions = imessageDefault.trim()
       ? t.actions.map((a) => {
           if (a.type === "llm_notify" && a.imessageTo === "+4500000000") {
@@ -285,7 +299,7 @@ export default function AutomationsPage() {
     load();
   };
 
-  const sendTest = async () => {
+  const sendNotifyTest = async () => {
     setTesting(true); setTestMsg("");
     try {
       const res = await fetch("/api/automations/notify-config", { method: "POST" });
@@ -303,6 +317,14 @@ export default function AutomationsPage() {
     await fetch("/api/automations/gmail-config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     load();
   };
+  const saveImessageDefault = async (value: string) => {
+    await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imessageDefault: value.trim() }),
+    });
+  };
+
   const toggleImessagePoller = async (enabled: boolean) => {
     const res = await fetch("/api/automations/imessage-poller", {
       method: "PATCH",
@@ -311,6 +333,26 @@ export default function AutomationsPage() {
     });
     const data = (await res.json()) as { enabled?: boolean };
     setImessagePoller((prev) => (prev ? { ...prev, enabled: !!data.enabled } : prev));
+  };
+
+  const runInboundTest = async () => {
+    if (!inboundTestMsg.trim()) return;
+    setInboundTestBusy(true);
+    setInboundTestResult(null);
+    try {
+      const from = imessageDefault.trim() || "+4500000000";
+      const res = await fetch("/api/imessage/inbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, message: inboundTestMsg.trim(), silent: true }),
+      });
+      const data = (await res.json()) as { ok: boolean; reply?: string; error?: string; toolsUsed?: string[] };
+      setInboundTestResult(data);
+    } catch (e) {
+      setInboundTestResult({ ok: false, error: e instanceof Error ? e.message : "fejl" });
+    } finally {
+      setInboundTestBusy(false);
+    }
   };
 
   const testGmail = async () => {
@@ -323,232 +365,282 @@ export default function AutomationsPage() {
     } finally { setGmailTesting(false); }
   };
 
+  const ruleStats = `${items.filter((i) => i.enabled).length}/${items.length}`;
+  const setupStats = `${[notifyCfg?.macos || notifyCfg?.ntfyTopic, gmailCfg?.enabled, imessagePoller?.enabled].filter(Boolean).length}/3`;
+
   return (
     <MinimalPageLayout active="automations">
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px 60px", fontFamily: "inherit" }}>
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: "20px 24px 60px", fontFamily: "inherit" }}>
+        <Tabs
+          active={activeTab}
+          onChange={setActiveTab}
+          tabs={[
+            { id: "rules", label: "regler", badge: items.length > 0 ? ruleStats : undefined },
+            { id: "setup", label: "setup", badge: setupStats },
+            { id: "logs", label: "logs" },
+          ]}
+        />
 
-        {/* NL → automation */}
-        <Section title="lav regel med naturligt sprog" className="mb-8">
-          <div style={{ fontSize: 12 }}>
-            <textarea
-              value={nlText}
-              onChange={(e) => setNlText(e.target.value)}
-              placeholder='fx: "Send mig et push når disken er over 90%" eller "Tjek togtider Næstved → Valby kl 7 hverdag og send til min iPhone"'
-              rows={2}
-              disabled={nlBusy}
-              style={{ ...inputStyle, width: "100%", resize: "vertical", marginBottom: 8 }}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) parseNL(); }}
-            />
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {/* ── REGLER ─────────────────────────────────────────────────────────── */}
+        {activeTab === "rules" && (
+          <>
+            {/* NL parse — kompakt, 1 linje */}
+            <div style={{ marginBottom: 24, display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <input
+                type="text"
+                value={nlText}
+                onChange={(e) => setNlText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); parseNL(); } }}
+                placeholder='beskriv en regel · fx "send push når disken er over 90%"'
+                disabled={nlBusy}
+                style={{ ...inputStyle, flex: 1 }}
+              />
               <Button size="sm" tone="accent" onClick={parseNL} disabled={nlBusy || !nlText.trim()}>
-                {nlBusy ? "tænker…" : "→ generér forslag"}
+                {nlBusy ? "tænker…" : "→ AI-forslag"}
               </Button>
-              <span style={{ color: "#525252", fontSize: 11 }}>
-                LLM foreslår en regel som du kan redigere før den gemmes · ⌘+Enter
-              </span>
-              {nlError && <span style={{ color: "#d87373", fontSize: 11 }}>{nlError}</span>}
+              <Button size="sm" onClick={() => { setEditorPrefill(null); setEditing("new"); }}>
+                + ny regel
+              </Button>
             </div>
-          </div>
-        </Section>
+            {nlError && <div style={{ color: "#d87373", fontSize: 11, marginTop: -16, marginBottom: 16 }}>{nlError}</div>}
 
-        {/* Notify config */}
-        <Section title="notifikations-backends" className="mb-8">
-          {notifyCfg ? (
-            <div style={{ fontSize: 12 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
-                <input type="checkbox" checked={notifyCfg.macos} onChange={(e) => saveNotify({ macos: e.target.checked })} />
-                <span style={{ color: "#e5e5e5" }}>macOS Notification Center</span>
-                <span style={{ color: "#6b6b6b" }}>(lokalt, ingen opsætning)</span>
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ color: "#6b6b6b", width: 90 }}>ntfy topic</span>
-                <input
-                  type="text"
-                  value={notifyCfg.ntfyTopic}
-                  onChange={(e) => setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })}
-                  onBlur={(e) => saveNotify({ ntfyTopic: e.target.value })}
-                  placeholder="fx skynet-dit-navn-xyz"
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <span style={{ color: "#6b6b6b" }}>{notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}</span>
-              </div>
-              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 10 }}>
-                Hent ntfy-appen til iPhone/Android og abonnér på dit topic — push uden opsætning.
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Button size="sm" tone="accent" onClick={sendTest} disabled={testing}>
-                  {testing ? "sender…" : "→ send test"}
-                </Button>
-                {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
-              </div>
-            </div>
-          ) : (
-            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
-          )}
-        </Section>
-
-        {/* Gmail config */}
-        <Section title="gmail triage (imap)" className="mb-8">
-          {gmailCfg ? (
-            <div style={{ fontSize: 12 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
-                <input type="checkbox" checked={gmailCfg.enabled} onChange={(e) => saveGmail({ enabled: e.target.checked })} />
-                <span style={{ color: "#e5e5e5" }}>aktivér mail-triage</span>
-                <span style={{ color: "#6b6b6b" }}>(kun læs — vi sender aldrig noget)</span>
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ color: "#6b6b6b", width: 90 }}>gmail-adresse</span>
-                <input type="email" value={gmailCfg.user} onChange={(e) => setGmailCfg({ ...gmailCfg, user: e.target.value })} onBlur={(e) => saveGmail({ user: e.target.value })} placeholder="dig@gmail.com" style={{ ...inputStyle, flex: 1 }} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <span style={{ color: "#6b6b6b", width: 90 }}>app-password</span>
-                <input type="password" value={gmailPassword} onChange={(e) => setGmailPassword(e.target.value)} placeholder={gmailCfg.hasPassword ? "(gemt — indtast for at ændre)" : "16 tegn fra Google"} style={{ ...inputStyle, flex: 1 }} />
-              </div>
-              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 6 }}>
-                Opret app-password på{" "}
-                <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>myaccount.google.com/apppasswords</a>
-                {" "}(kræver 2FA). Password bruges kun lokalt — aldrig sendt videre.
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <span style={{ color: "#6b6b6b", width: 90 }}>poll hver</span>
-                <input type="number" value={gmailCfg.pollMinutes} onChange={(e) => setGmailCfg({ ...gmailCfg, pollMinutes: parseInt(e.target.value) || 15 })} onBlur={(e) => saveGmail({ pollMinutes: parseInt(e.target.value) || 15 })} min={5} max={120} style={{ ...inputStyle, width: 60 }} />
-                <span style={{ color: "#6b6b6b" }}>minutter</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Button size="sm" tone="accent" onClick={testGmail} disabled={gmailTesting}>
-                  {gmailTesting ? "tester…" : "→ test forbindelse"}
-                </Button>
-                <ButtonLink size="sm" tone="accent" href="/api/agent/triage-mail?push=1" target="_blank" rel="noreferrer">
-                  kør triage nu
-                </ButtonLink>
-                {gmailMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{gmailMsg}</span>}
-              </div>
-            </div>
-          ) : (
-            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
-          )}
-        </Section>
-
-        {/* Inbound iMessage → LLM */}
-        <Section title="indkommende imessage → LLM" className="mb-8">
-          {imessagePoller ? (
-            <div style={{ fontSize: 12 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={imessagePoller.enabled}
-                  onChange={(e) => toggleImessagePoller(e.target.checked)}
-                />
-                <span style={{ color: "#e5e5e5" }}>aktivér iMessage-poller (svar automatisk på indgående beskeder)</span>
-              </label>
-              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
-                Når aktiv lytter Skynet på <code style={{ color: "#9bd0ff" }}>~/Library/Messages/chat.db</code> hvert 30. sek.
-                Indkommende beskeder kører gennem LLM med tools (web-søg, vejr, energi, kalender, RSS,
-                <strong style={{ color: "#9bd0ff" }}> schedule_imessage_reminder</strong>).
-                LLM&apos;s svar sendes som iMessage tilbage. Påmindelser oprettes automatisk som one-off automations.
-                <div style={{ marginTop: 6 }}>
-                  <strong style={{ color: imessagePoller.fdaOk ? "#7dd67d" : "#e6b450" }}>
-                    {imessagePoller.fdaOk ? "✓ Full Disk Access OK" : "⚠ kræver Full Disk Access"}
-                  </strong>
-                  {!imessagePoller.fdaOk && (
-                    <span style={{ marginLeft: 6 }}>
-                      System Settings → Privacy & Security → Full Disk Access → tilføj Terminal/node
-                    </span>
-                  )}
+            {/* Aktive regler */}
+            <Section title={`aktive regler ${items.length > 0 ? `(${ruleStats})` : ""}`} className="mb-8">
+              {loading ? (
+                <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
+              ) : items.length === 0 ? (
+                <div style={{ color: "#6b6b6b", fontSize: 12, borderTop: "1px dashed #1c1c1c", paddingTop: 12 }}>
+                  ingen regler endnu — beskriv én ovenfor eller vælg en skabelon
                 </div>
-                {imessagePoller.lastSeenRowid && (
-                  <div style={{ color: "#444", marginTop: 4 }}>
-                    sidst sete rowid: <code>{imessagePoller.lastSeenRowid}</code>
+              ) : (
+                <RulesTable
+                  items={items}
+                  onToggle={toggle}
+                  onRunNow={runNow}
+                  onRemove={remove}
+                  onEdit={(a) => setEditing(a)}
+                  onShowDetail={(a) => setDetail(a)}
+                />
+              )}
+            </Section>
+
+            {/* Templates */}
+            <Section title="skabeloner">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginTop: 4 }}>
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.name}
+                    onClick={() => addTemplate(t)}
+                    style={{ textAlign: "left", background: "#0d0d0d", border: "1px dashed #262626", padding: "12px 14px", cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    <div style={{ color: "#9bd0ff", fontSize: 12, marginBottom: 4 }}>{t.name}</div>
+                    <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>{t.description}</div>
+                    <div style={{ color: "#444", fontSize: 10 }}>
+                      {summaryTrigger(t.trigger)} → {summaryActions(t.actions)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </Section>
+          </>
+        )}
+
+        {/* ── SETUP ──────────────────────────────────────────────────────────── */}
+        {activeTab === "setup" && (
+          <>
+            <Section title="notifikations-backends" className="mb-8">
+              {notifyCfg ? (
+                <div style={{ fontSize: 12 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={notifyCfg.macos} onChange={(e) => saveNotify({ macos: e.target.checked })} />
+                    <span style={{ color: "#e5e5e5" }}>macOS Notification Center</span>
+                    <span style={{ color: "#6b6b6b" }}>(lokalt, ingen opsætning)</span>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ color: "#6b6b6b", width: 90 }}>ntfy topic</span>
+                    <input
+                      type="text"
+                      value={notifyCfg.ntfyTopic}
+                      onChange={(e) => setNotifyCfg({ ...notifyCfg, ntfyTopic: e.target.value })}
+                      onBlur={(e) => saveNotify({ ntfyTopic: e.target.value })}
+                      placeholder="fx skynet-dit-navn-xyz"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <span style={{ color: "#6b6b6b" }}>{notifyCfg.ntfyTopic ? "aktiv" : "inaktiv"}</span>
+                  </div>
+                  <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 10 }}>
+                    Hent ntfy-appen til iPhone/Android og abonnér på dit topic — push uden opsætning.
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Button size="sm" tone="accent" onClick={sendNotifyTest} disabled={testing}>
+                      {testing ? "sender…" : "→ send test"}
+                    </Button>
+                    {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
+                  </div>
+                </div>
+              ) : (
+                <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
+              )}
+            </Section>
+
+            {/* iMessage — alt samlet ét sted */}
+            <Section title="iMessage" right={imessagePoller?.enabled ? <span style={{ color: "#7dd67d" }}>● poller aktiv</span> : null} className="mb-8">
+              <div style={{ fontSize: 12 }}>
+                {/* Default-modtager */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>default-modtager</span>
+                  <input
+                    type="text"
+                    value={imessageDefault}
+                    onChange={(e) => setImessageDefault(e.target.value)}
+                    onBlur={(e) => saveImessageDefault(e.target.value)}
+                    placeholder="+4512345678 eller dig@icloud.com"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, marginBottom: 16 }}>
+                  Bruges af templates, schedule_imessage_reminder-tool og inbound-LLM. 8-cifret DK-nummer normaliseres.
+                </div>
+
+                {/* FDA-banner — stort hvis ikke OK */}
+                {imessagePoller && !imessagePoller.fdaOk && (
+                  <div style={{ background: "#2a1f0a", border: "1px solid #6b5a1f", borderRadius: 4, padding: "10px 12px", marginBottom: 14 }}>
+                    <div style={{ color: "#e6b450", fontWeight: 500, marginBottom: 4 }}>
+                      ⚠ Full Disk Access mangler
+                    </div>
+                    <div style={{ color: "#bfa76a", fontSize: 11, lineHeight: 1.6 }}>
+                      Polleren kan ikke læse <code style={{ color: "#e6b450" }}>~/Library/Messages/chat.db</code> uden Full Disk Access.
+                      Indkommende iMessages registreres derfor ikke.
+                      <div style={{ marginTop: 6 }}>
+                        <strong>Sådan aktiveres:</strong>
+                        <div>System Settings → Privacy &amp; Security → Full Disk Access → klik &quot;+&quot; og tilføj{" "}
+                          <code style={{ color: "#e6b450" }}>/opt/homebrew/bin/node</code> (eller terminal hvor portalen kører).
+                        </div>
+                        <div style={{ marginTop: 4 }}>
+                          Genstart derefter portalen: <code style={{ color: "#e6b450" }}>launchctl kickstart -k gui/$(id -u)/com.skynet.portal</code>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
-              </div>
-              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, marginTop: 10, lineHeight: 1.5 }}>
-                <strong style={{ color: "#9bd0ff" }}>Eksempel:</strong> Send dig selv iMessage:
-                &quot;tjek togtider Næstved → Valby og send sms 15 min før næste afgang&quot; → LLM søger
-                rejseplanen, finder næste afgang, og opretter en reminder der sender SMS 15 min før.
-              </div>
-            </div>
-          ) : (
-            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
-          )}
-        </Section>
 
-        {/* Active automations */}
-        <Section title={`aktive regler${items.length > 0 ? ` (${items.filter(i => i.enabled).length}/${items.length})` : ""}`} right={
-          <button onClick={() => setEditing("new")} style={{ background: "none", border: "none", color: "#9bd0ff", fontSize: 11, cursor: "pointer", padding: 0 }}>+ ny regel</button>
-        } className="mb-8">
-          {loading ? (
-            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
-          ) : items.length === 0 ? (
-            <div style={{ color: "#6b6b6b", fontSize: 12, borderTop: "1px dashed #1c1c1c", paddingTop: 12 }}>
-              ingen automations endnu — klik &quot;+ ny regel&quot; eller brug en skabelon
-            </div>
-          ) : (
-            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ color: "#6b6b6b", borderBottom: "1px dashed #262626" }}>
-                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: 24 }}></th>
-                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>navn</th>
-                  <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>trigger → action</th>
-                  <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>kørsel</th>
-                  <th style={{ textAlign: "right", padding: "0 0 6px 0", fontWeight: 400 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((a) => (
-                  <tr key={a.id} style={{ borderBottom: "1px dashed #1c1c1c", color: a.enabled ? "#e5e5e5" : "#6b6b6b" }}>
-                    <td style={{ padding: "7px 8px 7px 0" }}>
-                      <button onClick={() => toggle(a)} title={a.enabled ? "aktiv" : "inaktiv"} style={{ background: "none", border: "none", cursor: "pointer", color: a.enabled ? "#7dd67d" : "#6b6b6b", fontSize: 12, padding: 0 }}>●</button>
-                    </td>
-                    <td style={{ padding: "7px 8px 7px 0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <button
-                        onClick={() => setDetail(a)}
-                        style={{ background: "none", border: "none", padding: 0, color: "#9bd0ff", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: 12 }}
-                        title="Se historik + dry-run"
-                      >
-                        {a.name}
-                      </button>
-                      {a.description && <div style={{ color: "#6b6b6b", fontSize: 11 }}>{a.description}</div>}
-                    </td>
-                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {summaryTrigger(a.trigger)}<Sep />{summaryActions(a.actions)}
-                    </td>
-                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11, whiteSpace: "nowrap" }}>
-                      <RunCell automation={a} />
-                    </td>
-                    <td style={{ padding: "7px 0 7px 0", textAlign: "right", whiteSpace: "nowrap" }}>
-                      <Button size="sm" tone="accent" onClick={() => runNow(a)} className="mr-1">kør</Button>
-                      <Button size="sm" tone="accent" onClick={() => setEditing(a)} className="mr-1">redigér</Button>
-                      <button onClick={() => remove(a)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", fontSize: 12 }}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Section>
+                {imessagePoller?.fdaOk && (
+                  <div style={{ color: "#7dd67d", fontSize: 11, marginBottom: 14 }}>
+                    ✓ Full Disk Access OK · sidst sete rowid: <code style={{ color: "#7dd67d" }}>{imessagePoller.lastSeenRowid ?? "—"}</code>
+                  </div>
+                )}
 
-        {/* Templates */}
-        <Section title="skabeloner">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginTop: 4 }}>
-            {TEMPLATES.map((t) => (
-              <button
-                key={t.name}
-                onClick={() => addTemplate(t)}
-                style={{ textAlign: "left", background: "#0d0d0d", border: "1px dashed #262626", padding: "12px 14px", cursor: "pointer", fontFamily: "inherit" }}
-              >
-                <div style={{ color: "#9bd0ff", fontSize: 12, marginBottom: 4 }}>{t.name}</div>
-                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>{t.description}</div>
-                <div style={{ color: "#444", fontSize: 10, fontFamily: "inherit" }}>
-                  {summaryTrigger(t.trigger)} → {summaryActions(t.actions)}
+                {/* Toggle */}
+                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: imessagePoller ? "pointer" : "default" }}>
+                  <input
+                    type="checkbox"
+                    checked={imessagePoller?.enabled ?? false}
+                    disabled={!imessagePoller}
+                    onChange={(e) => toggleImessagePoller(e.target.checked)}
+                  />
+                  <span style={{ color: "#e5e5e5" }}>aktivér inbound iMessage → LLM</span>
+                  <span style={{ color: "#6b6b6b" }}>(poll hvert 30s)</span>
+                </label>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, marginBottom: 16, lineHeight: 1.5 }}>
+                  Indkommende beskeder kører gennem LLM med tools (web-søg, vejr, kalender,{" "}
+                  <code style={{ color: "#9bd0ff" }}>schedule_imessage_reminder</code>). LLM&apos;s svar
+                  sendes som iMessage tilbage. One-off reminders oprettes automatisk.
                 </div>
-              </button>
-            ))}
-          </div>
-        </Section>
 
-        {/* Live log tail */}
-        <AgentLogPanel />
+                {/* Test-inbound */}
+                <div style={{ borderTop: "1px dashed #262626", paddingTop: 12 }}>
+                  <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 6 }}>
+                    test inbound LLM (silent — sender ikke iMessage tilbage)
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                    <input
+                      type="text"
+                      value={inboundTestMsg}
+                      onChange={(e) => setInboundTestMsg(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runInboundTest(); } }}
+                      placeholder='fx "tjek vejret" eller "send mig en sms om 2 min med teksten test"'
+                      disabled={inboundTestBusy}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <Button size="sm" tone="accent" onClick={runInboundTest} disabled={inboundTestBusy || !inboundTestMsg.trim()}>
+                      {inboundTestBusy ? "kører…" : "→ test"}
+                    </Button>
+                  </div>
+                  {inboundTestResult && (
+                    <div
+                      style={{
+                        background: "#0a0a0a",
+                        border: `1px dashed ${inboundTestResult.ok ? "#2c4a2c" : "#5a2c2c"}`,
+                        padding: "8px 10px",
+                        marginTop: 4,
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {inboundTestResult.ok ? (
+                        <>
+                          <div style={{ color: "#7dd67d" }}>✓ LLM-svar:</div>
+                          <div style={{ color: "#e5e5e5", marginTop: 4, whiteSpace: "pre-wrap" }}>{inboundTestResult.reply}</div>
+                          {inboundTestResult.toolsUsed && inboundTestResult.toolsUsed.length > 0 && (
+                            <div style={{ color: "#525252", marginTop: 6 }}>
+                              tools: {inboundTestResult.toolsUsed.join(", ")}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ color: "#d87373" }}>✗ {inboundTestResult.error ?? "fejl"}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Section>
+
+            <Section title="gmail triage (imap)" className="mb-8">
+              {gmailCfg ? (
+                <div style={{ fontSize: 12 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={gmailCfg.enabled} onChange={(e) => saveGmail({ enabled: e.target.checked })} />
+                    <span style={{ color: "#e5e5e5" }}>aktivér mail-triage</span>
+                    <span style={{ color: "#6b6b6b" }}>(kun læs — vi sender aldrig noget)</span>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ color: "#6b6b6b", width: 90 }}>gmail-adresse</span>
+                    <input type="email" value={gmailCfg.user} onChange={(e) => setGmailCfg({ ...gmailCfg, user: e.target.value })} onBlur={(e) => saveGmail({ user: e.target.value })} placeholder="dig@gmail.com" style={{ ...inputStyle, flex: 1 }} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ color: "#6b6b6b", width: 90 }}>app-password</span>
+                    <input type="password" value={gmailPassword} onChange={(e) => setGmailPassword(e.target.value)} placeholder={gmailCfg.hasPassword ? "(gemt — indtast for at ændre)" : "16 tegn fra Google"} style={{ ...inputStyle, flex: 1 }} />
+                  </div>
+                  <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, marginBottom: 6 }}>
+                    Opret app-password på{" "}
+                    <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>myaccount.google.com/apppasswords</a>
+                    {" "}(kræver 2FA). Password bruges kun lokalt — aldrig sendt videre.
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <span style={{ color: "#6b6b6b", width: 90 }}>poll hver</span>
+                    <input type="number" value={gmailCfg.pollMinutes} onChange={(e) => setGmailCfg({ ...gmailCfg, pollMinutes: parseInt(e.target.value) || 15 })} onBlur={(e) => saveGmail({ pollMinutes: parseInt(e.target.value) || 15 })} min={5} max={120} style={{ ...inputStyle, width: 60 }} />
+                    <span style={{ color: "#6b6b6b" }}>minutter</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Button size="sm" tone="accent" onClick={testGmail} disabled={gmailTesting}>
+                      {gmailTesting ? "tester…" : "→ test forbindelse"}
+                    </Button>
+                    <ButtonLink size="sm" tone="accent" href="/api/agent/triage-mail?push=1" target="_blank" rel="noreferrer">
+                      kør triage nu
+                    </ButtonLink>
+                    {gmailMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{gmailMsg}</span>}
+                  </div>
+                </div>
+              ) : (
+                <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
+              )}
+            </Section>
+          </>
+        )}
+
+        {/* ── LOGS ───────────────────────────────────────────────────────────── */}
+        {activeTab === "logs" && <AgentLogPanel />}
       </main>
 
       <AutomationEditor
@@ -562,7 +654,114 @@ export default function AutomationsPage() {
   );
 }
 
-// ── Live agent log panel ─────────────────────────────────────────────────────
+// ── Tabs ────────────────────────────────────────────────────────────────────
+
+function Tabs({
+  active,
+  onChange,
+  tabs,
+}: {
+  active: TabId;
+  onChange: (id: TabId) => void;
+  tabs: Array<{ id: TabId; label: string; badge?: string }>;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 0, borderBottom: "1px dashed #262626", marginBottom: 24 }}>
+      {tabs.map((t) => {
+        const isActive = active === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "10px 18px",
+              fontFamily: "inherit",
+              fontSize: 12,
+              cursor: "pointer",
+              color: isActive ? "#e5e5e5" : "#6b6b6b",
+              borderBottom: isActive ? "1px solid #9bd0ff" : "1px solid transparent",
+              marginBottom: -1,
+              letterSpacing: "0.05em",
+            }}
+          >
+            {t.label}
+            {t.badge && (
+              <span style={{ color: isActive ? "#525252" : "#3a3a3a", marginLeft: 6, fontSize: 11 }}>
+                {t.badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Rules table ─────────────────────────────────────────────────────────────
+
+function RulesTable({
+  items,
+  onToggle,
+  onRunNow,
+  onRemove,
+  onEdit,
+  onShowDetail,
+}: {
+  items: Automation[];
+  onToggle: (a: Automation) => void;
+  onRunNow: (a: Automation) => void;
+  onRemove: (a: Automation) => void;
+  onEdit: (a: Automation) => void;
+  onShowDetail: (a: Automation) => void;
+}) {
+  return (
+    <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+      <thead>
+        <tr style={{ color: "#6b6b6b", borderBottom: "1px dashed #262626" }}>
+          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: 24 }}></th>
+          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>navn</th>
+          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>trigger → action</th>
+          <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>kørsel</th>
+          <th style={{ textAlign: "right", padding: "0 0 6px 0", fontWeight: 400 }}></th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((a) => (
+          <tr key={a.id} style={{ borderBottom: "1px dashed #1c1c1c", color: a.enabled ? "#e5e5e5" : "#6b6b6b" }}>
+            <td style={{ padding: "7px 8px 7px 0" }}>
+              <button onClick={() => onToggle(a)} title={a.enabled ? "aktiv" : "inaktiv"} style={{ background: "none", border: "none", cursor: "pointer", color: a.enabled ? "#7dd67d" : "#6b6b6b", fontSize: 12, padding: 0 }}>●</button>
+            </td>
+            <td style={{ padding: "7px 8px 7px 0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <button
+                onClick={() => onShowDetail(a)}
+                style={{ background: "none", border: "none", padding: 0, color: "#9bd0ff", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: 12 }}
+                title="Se historik + dry-run"
+              >
+                {a.name}
+              </button>
+              {a.description && <div style={{ color: "#6b6b6b", fontSize: 11 }}>{a.description}</div>}
+            </td>
+            <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {summaryTrigger(a.trigger)}<Sep />{summaryActions(a.actions)}
+            </td>
+            <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11, whiteSpace: "nowrap" }}>
+              <RunCell automation={a} />
+            </td>
+            <td style={{ padding: "7px 0 7px 0", textAlign: "right", whiteSpace: "nowrap" }}>
+              <Button size="sm" tone="accent" onClick={() => onRunNow(a)} className="mr-1">kør</Button>
+              <Button size="sm" tone="accent" onClick={() => onEdit(a)} className="mr-1">redigér</Button>
+              <button onClick={() => onRemove(a)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer", fontSize: 12 }}>✕</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ── Live agent log panel ────────────────────────────────────────────────────
 
 const LOG_COLORS: Record<string, string> = {
   info:  "#6b6b6b",
@@ -594,7 +793,6 @@ function AgentLogPanel() {
     return () => es.close();
   }, []);
 
-  // Auto-scroll to bottom on new entries
   useEffect(() => {
     if (!paused) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs, paused]);
@@ -602,10 +800,11 @@ function AgentLogPanel() {
   const fmt = (ts: number) => new Date(ts).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   return (
-    <div style={{ fontFamily: "inherit", marginTop: 40 }}>
+    <div style={{ fontFamily: "inherit" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#525252", letterSpacing: "0.25em", textTransform: "uppercase" }}>
-          # agent logs <span style={{ color: "#3a3a3a", marginLeft: 8 }}>live · {logs.length} linjer</span>
+        <div style={{ fontSize: 11, color: "#6b6b6b" }}>
+          <span style={{ marginRight: 6 }}>#</span>agent logs
+          <span style={{ color: "#3a3a3a", marginLeft: 8 }}>live · {logs.length} linjer</span>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={() => setPaused(!paused)} style={{ background: "none", border: "none", color: paused ? "#e6b450" : "#6b6b6b", fontFamily: "inherit", fontSize: 11, cursor: "pointer", padding: 0 }}>
@@ -621,7 +820,7 @@ function AgentLogPanel() {
           background: "#080808",
           border: "1px dashed #1c1c1c",
           padding: "10px 14px",
-          height: 240,
+          height: 480,
           overflowY: "auto",
           fontFamily: "inherit",
           fontSize: 11,
@@ -649,7 +848,9 @@ function AgentLogPanel() {
 function RunCell({ automation }: { automation: Automation }) {
   const next = automation.enabled && automation.trigger.type === "cron"
     ? nextRuns(automation.trigger.expression, 1, automation.trigger.tz)[0]
-    : undefined;
+    : automation.enabled && automation.trigger.type === "once"
+      ? automation.trigger.runAt
+      : undefined;
   const lastTxt = automation.lastRunAt
     ? new Date(automation.lastRunAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : "aldrig kørt";

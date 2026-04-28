@@ -12,7 +12,6 @@ interface SettingsResp {
   location: LocationSetting;
   githubUser?: string;
   hasGithubToken?: boolean;
-  imessageDefault?: string;
 }
 
 interface ModelsResp {
@@ -48,7 +47,6 @@ export default function SettingsPage() {
   const [githubUser, setGithubUser] = useState("");
   const [githubToken, setGithubToken] = useState("");
   const [hasGithubToken, setHasGithubToken] = useState(false);
-  const [imessageDefault, setImessageDefault] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
@@ -63,7 +61,6 @@ export default function SettingsPage() {
         setUserName(data.userName ?? "");
         setGithubUser(data.githubUser ?? "");
         setHasGithubToken(!!data.hasGithubToken);
-        setImessageDefault(data.imessageDefault ?? "");
         setLocationLabel(data.location?.label ?? "");
       })
       .catch(() => {});
@@ -79,7 +76,6 @@ export default function SettingsPage() {
       body.githubUser = githubUser.trim();
       // Send token hvis brugeren har indtastet en ny — tom = uændret
       if (githubToken.trim()) body.githubToken = githubToken.trim();
-      body.imessageDefault = imessageDefault.trim();
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,20 +191,6 @@ export default function SettingsPage() {
                   events fra private repos. {" "}
                   <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ color: "#525252" }}>github.com/settings/tokens</a>
                   {" "}· scope: "repo" hvis du vil se private commits, ellers "public_repo".
-                </div>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>iMessage-default</div>
-                <input
-                  type="text"
-                  value={imessageDefault}
-                  placeholder="+4512345678 eller navn@icloud.com"
-                  onChange={(e) => setImessageDefault(e.target.value)}
-                  style={{ ...inputStyle }}
-                />
-                <div style={{ color: "#444", fontSize: 10, marginTop: 3 }}>
-                  Default-modtager til automation-templates og inbound-LLM (reminders, briefings).
-                  8-cifret DK-nummer normaliseres til +45-format. Tom = ingen iMessage forudfyldt.
                 </div>
               </div>
             </div>
