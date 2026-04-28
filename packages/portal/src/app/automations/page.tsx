@@ -3,9 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Automation, Trigger, Action, LLMNotifyAction } from "@/lib/agent/types";
 import type { LogEntry } from "@/lib/agent/log-buffer";
 import { AutomationEditor } from "@/components/automations/AutomationEditor";
+import { AutomationDetailDrawer } from "@/components/automations/AutomationDetailDrawer";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section, Sep } from "@/components/minimal/primitives";
 import { Button, ButtonLink } from "@/components/ui/Button";
+import { nextRuns, relativeFromNow } from "@/lib/cron-utils";
 
 interface NotifyCfg {
   macos: boolean;
@@ -20,6 +22,13 @@ interface GmailCfg {
   hasPassword: boolean;
   pollMinutes: number;
   notifyOnTriage: boolean;
+}
+
+interface ImessagePollerStatus {
+  enabled: boolean;
+  chatDbExists: boolean;
+  lastSeenRowid?: number;
+  fdaOk: boolean;
 }
 
 const TEMPLATES: Array<{
@@ -184,24 +193,71 @@ export default function AutomationsPage() {
   const [loading, setLoading] = useState(true);
   const [notifyCfg, setNotifyCfg] = useState<NotifyCfg | null>(null);
   const [gmailCfg, setGmailCfg] = useState<GmailCfg | null>(null);
+  const [imessageDefault, setImessageDefault] = useState("");
+  const [imessagePoller, setImessagePoller] = useState<ImessagePollerStatus | null>(null);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string>("");
   const [editing, setEditing] = useState<Automation | "new" | null>(null);
+  const [editorPrefill, setEditorPrefill] = useState<{
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    trigger: Trigger;
+    actions: Action[];
+  } | null>(null);
+  const [detail, setDetail] = useState<Automation | null>(null);
+  const [nlText, setNlText] = useState("");
+  const [nlBusy, setNlBusy] = useState(false);
+  const [nlError, setNlError] = useState("");
+
+  const parseNL = async () => {
+    if (!nlText.trim()) return;
+    setNlBusy(true);
+    setNlError("");
+    try {
+      const res = await fetch("/api/automations/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: nlText.trim() }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        suggestion?: { name: string; description?: string; enabled?: boolean; trigger: Trigger; actions: Action[] };
+        error?: string;
+        raw?: string;
+      };
+      if (!data.ok || !data.suggestion) {
+        setNlError(data.error ?? "kunne ikke generere forslag");
+        return;
+      }
+      setEditorPrefill(data.suggestion);
+      setEditing("new");
+      setNlText("");
+    } catch (e) {
+      setNlError(e instanceof Error ? e.message : "fejl");
+    } finally {
+      setNlBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, n, g] = await Promise.all([
+      const [a, n, g, s, p] = await Promise.all([
         fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       setItems(a.automations ?? []);
       setNotifyCfg(n);
       setGmailCfg(g);
+      if (s?.imessageDefault) setImessageDefault(s.imessageDefault);
+      if (p) setImessagePoller(p);
     } finally {
       setLoading(false);
     }
@@ -216,7 +272,16 @@ export default function AutomationsPage() {
   const runNow = async (a: Automation) => { await fetch(`/api/automations/${a.id}/run`, { method: "POST" }); load(); };
   const remove = async (a: Automation) => { if (!confirm(`Slet "${a.name}"?`)) return; await fetch(`/api/automations/${a.id}`, { method: "DELETE" }); load(); };
   const addTemplate = async (t: (typeof TEMPLATES)[number]) => {
-    await fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: t.name, description: t.description, trigger: t.trigger, actions: t.actions, enabled: false }) });
+    // Swap +4500000000-placeholder med brugerens iMessage-default hvis sat
+    const actions = imessageDefault.trim()
+      ? t.actions.map((a) => {
+          if (a.type === "llm_notify" && a.imessageTo === "+4500000000") {
+            return { ...a, imessageTo: imessageDefault.trim() };
+          }
+          return a;
+        })
+      : t.actions;
+    await fetch("/api/automations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: t.name, description: t.description, trigger: t.trigger, actions, enabled: false }) });
     load();
   };
 
@@ -238,6 +303,16 @@ export default function AutomationsPage() {
     await fetch("/api/automations/gmail-config", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     load();
   };
+  const toggleImessagePoller = async (enabled: boolean) => {
+    const res = await fetch("/api/automations/imessage-poller", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = (await res.json()) as { enabled?: boolean };
+    setImessagePoller((prev) => (prev ? { ...prev, enabled: !!data.enabled } : prev));
+  };
+
   const testGmail = async () => {
     setGmailTesting(true); setGmailMsg("");
     try {
@@ -251,6 +326,30 @@ export default function AutomationsPage() {
   return (
     <MinimalPageLayout active="automations">
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px 60px", fontFamily: "inherit" }}>
+
+        {/* NL → automation */}
+        <Section title="lav regel med naturligt sprog" className="mb-8">
+          <div style={{ fontSize: 12 }}>
+            <textarea
+              value={nlText}
+              onChange={(e) => setNlText(e.target.value)}
+              placeholder='fx: "Send mig et push når disken er over 90%" eller "Tjek togtider Næstved → Valby kl 7 hverdag og send til min iPhone"'
+              rows={2}
+              disabled={nlBusy}
+              style={{ ...inputStyle, width: "100%", resize: "vertical", marginBottom: 8 }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) parseNL(); }}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Button size="sm" tone="accent" onClick={parseNL} disabled={nlBusy || !nlText.trim()}>
+                {nlBusy ? "tænker…" : "→ generér forslag"}
+              </Button>
+              <span style={{ color: "#525252", fontSize: 11 }}>
+                LLM foreslår en regel som du kan redigere før den gemmes · ⌘+Enter
+              </span>
+              {nlError && <span style={{ color: "#d87373", fontSize: 11 }}>{nlError}</span>}
+            </div>
+          </div>
+        </Section>
 
         {/* Notify config */}
         <Section title="notifikations-backends" className="mb-8">
@@ -330,6 +429,50 @@ export default function AutomationsPage() {
           )}
         </Section>
 
+        {/* Inbound iMessage → LLM */}
+        <Section title="indkommende imessage → LLM" className="mb-8">
+          {imessagePoller ? (
+            <div style={{ fontSize: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={imessagePoller.enabled}
+                  onChange={(e) => toggleImessagePoller(e.target.checked)}
+                />
+                <span style={{ color: "#e5e5e5" }}>aktivér iMessage-poller (svar automatisk på indgående beskeder)</span>
+              </label>
+              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
+                Når aktiv lytter Skynet på <code style={{ color: "#9bd0ff" }}>~/Library/Messages/chat.db</code> hvert 30. sek.
+                Indkommende beskeder kører gennem LLM med tools (web-søg, vejr, energi, kalender, RSS,
+                <strong style={{ color: "#9bd0ff" }}> schedule_imessage_reminder</strong>).
+                LLM&apos;s svar sendes som iMessage tilbage. Påmindelser oprettes automatisk som one-off automations.
+                <div style={{ marginTop: 6 }}>
+                  <strong style={{ color: imessagePoller.fdaOk ? "#7dd67d" : "#e6b450" }}>
+                    {imessagePoller.fdaOk ? "✓ Full Disk Access OK" : "⚠ kræver Full Disk Access"}
+                  </strong>
+                  {!imessagePoller.fdaOk && (
+                    <span style={{ marginLeft: 6 }}>
+                      System Settings → Privacy & Security → Full Disk Access → tilføj Terminal/node
+                    </span>
+                  )}
+                </div>
+                {imessagePoller.lastSeenRowid && (
+                  <div style={{ color: "#444", marginTop: 4 }}>
+                    sidst sete rowid: <code>{imessagePoller.lastSeenRowid}</code>
+                  </div>
+                )}
+              </div>
+              <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, marginTop: 10, lineHeight: 1.5 }}>
+                <strong style={{ color: "#9bd0ff" }}>Eksempel:</strong> Send dig selv iMessage:
+                &quot;tjek togtider Næstved → Valby og send sms 15 min før næste afgang&quot; → LLM søger
+                rejseplanen, finder næste afgang, og opretter en reminder der sender SMS 15 min før.
+              </div>
+            </div>
+          ) : (
+            <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
+          )}
+        </Section>
+
         {/* Active automations */}
         <Section title={`aktive regler${items.length > 0 ? ` (${items.filter(i => i.enabled).length}/${items.length})` : ""}`} right={
           <button onClick={() => setEditing("new")} style={{ background: "none", border: "none", color: "#9bd0ff", fontSize: 11, cursor: "pointer", padding: 0 }}>+ ny regel</button>
@@ -347,7 +490,7 @@ export default function AutomationsPage() {
                   <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: 24 }}></th>
                   <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>navn</th>
                   <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>trigger → action</th>
-                  <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>sidst kørt</th>
+                  <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>kørsel</th>
                   <th style={{ textAlign: "right", padding: "0 0 6px 0", fontWeight: 400 }}></th>
                 </tr>
               </thead>
@@ -358,15 +501,20 @@ export default function AutomationsPage() {
                       <button onClick={() => toggle(a)} title={a.enabled ? "aktiv" : "inaktiv"} style={{ background: "none", border: "none", cursor: "pointer", color: a.enabled ? "#7dd67d" : "#6b6b6b", fontSize: 12, padding: 0 }}>●</button>
                     </td>
                     <td style={{ padding: "7px 8px 7px 0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <span style={{ color: "#9bd0ff" }}>{a.name}</span>
+                      <button
+                        onClick={() => setDetail(a)}
+                        style={{ background: "none", border: "none", padding: 0, color: "#9bd0ff", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: 12 }}
+                        title="Se historik + dry-run"
+                      >
+                        {a.name}
+                      </button>
                       {a.description && <div style={{ color: "#6b6b6b", fontSize: 11 }}>{a.description}</div>}
                     </td>
                     <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {summaryTrigger(a.trigger)}<Sep />{summaryActions(a.actions)}
                     </td>
-                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11 }}>
-                      {a.lastRunAt ? new Date(a.lastRunAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                      {a.lastStatus && <span style={{ color: a.lastStatus === "ok" ? "#7dd67d" : "#d87373", marginLeft: 4 }}>{a.lastStatus === "ok" ? "✓" : "✗"}</span>}
+                    <td style={{ padding: "7px 8px 7px 0", color: "#6b6b6b", fontSize: 11, whiteSpace: "nowrap" }}>
+                      <RunCell automation={a} />
                     </td>
                     <td style={{ padding: "7px 0 7px 0", textAlign: "right", whiteSpace: "nowrap" }}>
                       <Button size="sm" tone="accent" onClick={() => runNow(a)} className="mr-1">kør</Button>
@@ -403,7 +551,13 @@ export default function AutomationsPage() {
         <AgentLogPanel />
       </main>
 
-      <AutomationEditor target={editing} onClose={() => setEditing(null)} onSaved={load} />
+      <AutomationEditor
+        target={editing}
+        prefill={editorPrefill}
+        onClose={() => { setEditing(null); setEditorPrefill(null); }}
+        onSaved={load}
+      />
+      <AutomationDetailDrawer automation={detail} onClose={() => setDetail(null)} />
     </MinimalPageLayout>
   );
 }
@@ -492,9 +646,45 @@ function AgentLogPanel() {
   );
 }
 
+function RunCell({ automation }: { automation: Automation }) {
+  const next = automation.enabled && automation.trigger.type === "cron"
+    ? nextRuns(automation.trigger.expression, 1, automation.trigger.tz)[0]
+    : undefined;
+  const lastTxt = automation.lastRunAt
+    ? new Date(automation.lastRunAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "aldrig kørt";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+      {next ? (
+        <span style={{ color: "#9bd0ff" }}>
+          næste {relativeFromNow(next)}
+          <span style={{ color: "#3a3a3a", marginLeft: 4 }}>
+            ({new Date(next).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit" })})
+          </span>
+        </span>
+      ) : automation.trigger.type === "cron" ? (
+        <span style={{ color: "#6b6b6b" }}>(inaktiv)</span>
+      ) : automation.trigger.type === "threshold" ? (
+        <span style={{ color: "#6b6b6b" }}>tærskel-watch</span>
+      ) : (
+        <span style={{ color: "#6b6b6b" }}>manuel</span>
+      )}
+      <span style={{ color: "#525252", fontSize: 10 }}>
+        sidst: {lastTxt}
+        {automation.lastStatus && (
+          <span style={{ color: automation.lastStatus === "ok" ? "#7dd67d" : "#d87373", marginLeft: 4 }}>
+            {automation.lastStatus === "ok" ? "✓" : "✗"}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function summaryTrigger(t: Trigger): string {
   if (t.type === "cron") return `cron ${t.expression}`;
   if (t.type === "threshold") return `${t.metric} ${t.op} ${t.value}`;
+  if (t.type === "once") return `én gang ${new Date(t.runAt).toLocaleString("da-DK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
   return "manuel";
 }
 
