@@ -138,14 +138,19 @@ export function DiskWidgetMinimal() {
             <tbody>
               {storage.items.map((it) => {
                 const sz = fmtSize(it.bytes);
+                const tccBlocked = it.detail === "TCC?";
                 return (
                   <tr key={it.label} className="text-neutral-500 leading-tight">
                     <td className="py-0.5 text-neutral-400" style={{ width: 130 }}>{it.label}</td>
                     <td className="py-0.5 text-right tabular-nums text-neutral-200" style={{ width: 80 }}>
-                      {sz.num} <span className="text-neutral-600">{sz.unit}</span>
+                      {tccBlocked ? <span className="text-neutral-700">—</span> : (
+                        <>
+                          {sz.num} <span className="text-neutral-600">{sz.unit}</span>
+                        </>
+                      )}
                     </td>
-                    <td className="py-0.5 pl-3 text-neutral-700 text-[10px] truncate" title={it.detail === "TCC?" ? "Macs Privatliv & Sikkerhed blokerer adgang — giv node Full Disk Access i Systemindstillinger" : undefined}>
-                      {it.detail ?? ""}
+                    <td className="py-0.5 pl-3 text-neutral-700 text-[10px] truncate" title={tccBlocked ? "Macs Privatliv & Sikkerhed blokerer adgang — giv node Full Disk Access i Systemindstillinger" : undefined}>
+                      {tccBlocked ? <span className="text-amber-500/70">tcc-blokeret</span> : (it.detail ?? "")}
                     </td>
                   </tr>
                 );

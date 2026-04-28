@@ -50,27 +50,10 @@ function fmtRelative(ms: number): string {
   return `${d}d siden`;
 }
 
-async function findOneDrivePath(home: string): Promise<string | null> {
-  // OneDrive på macOS kan ligge:
-  //   1. ~/Library/CloudStorage/OneDrive-* (modern File Provider)
-  //   2. ~/OneDrive eller ~/OneDrive-* (legacy)
-  //   3. Custom location set af brugeren
-  const candidates: string[] = [];
-  try {
-    const cs = await readdir(path.join(home, "Library/CloudStorage"));
-    for (const e of cs) if (e.startsWith("OneDrive")) candidates.push(path.join(home, "Library/CloudStorage", e));
-  } catch { /* dir mangler eller er tom */ }
-  try {
-    const homeEntries = await readdir(home);
-    for (const e of homeEntries) if (e.startsWith("OneDrive")) candidates.push(path.join(home, e));
-  } catch { /* ignorer */ }
-  return candidates[0] ?? null;
-}
-
 async function fetchStorage(): Promise<StorageResponse> {
   const home = os.homedir();
   const desktop = path.join(home, "Desktop");
-  const onedrive = await findOneDrivePath(home);
+  const downloads = path.join(home, "Downloads");
 
   const items: StorageItem[] = [];
 
@@ -82,21 +65,13 @@ async function fetchStorage(): Promise<StorageResponse> {
     detail: desktopBytes === 0 ? "TCC?" : undefined,
   });
 
-  // OneDrive
-  if (onedrive) {
-    const odBytes = await duPath(onedrive, 60_000);
-    items.push({
-      label: "OneDrive",
-      bytes: odBytes,
-      detail: odBytes === 0 ? "TCC?" : path.basename(onedrive),
-    });
-  } else {
-    items.push({
-      label: "OneDrive",
-      bytes: 0,
-      detail: "ikke synkroniseret",
-    });
-  }
+  // Downloads
+  const downloadsBytes = await duPath(downloads, 15_000);
+  items.push({
+    label: "Downloads",
+    bytes: downloadsBytes,
+    detail: downloadsBytes === 0 ? "TCC?" : undefined,
+  });
 
   // Externe drev — alle mounts under /Volumes undtaget den interne (Macintosh HD)
   try {
