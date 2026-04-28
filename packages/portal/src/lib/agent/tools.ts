@@ -319,6 +319,38 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Transit (Rejseplanen) ────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "find_train_route",
+      description:
+        "Find næste tog/bus/metro afgange fra en station til en anden i Danmark via Rejseplanens API. Returnerer op til 3 mulige rejser med afgangstid, ankomsttid, linje (fx 'IC42', 'Re83', 'Bus 5C'), spor, varighed og evt. omstigninger. Brug ALTID dette tool ved spørgsmål om togtider/bustider/rejser i Danmark — IKKE web_search. Hvis 'rejseplanen_access_id' ikke er konfigureret returneres en klar fejl.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: {
+            type: "string",
+            description: "Afgangssted — stationsnavn (fx 'Næstved St'), by ('Næstved'), eller adresse ('Vesterbrogade 1, København'). Fuzzy match.",
+          },
+          to: {
+            type: "string",
+            description: "Destination — samme format som from (fx 'Hellerup St', 'Aarhus H', 'Lyngby').",
+          },
+          when: {
+            type: "string",
+            description: "Tidspunkt for rejsen som ISO-8601, fx '2026-04-28T15:30'. Default = nu. Fortolkes som DK-tid.",
+          },
+          isArrival: {
+            type: "boolean",
+            description: "Hvis true: 'when' er ankomst-tid (jeg vil være FREMME kl. X). Default false = afgang.",
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+  },
+
   // ── Schedule reminder (one-off automation) ───────────────────────────────
   {
     type: "function",

@@ -68,6 +68,19 @@ export function setImessageDefault(value: string): void {
   setSetting("imessage_default", value.trim().slice(0, 128));
 }
 
+/**
+ * Rejseplanen access ID — bruges af find_train_route tool. Gratis nøgle
+ * fås ved at registrere sig på Rejseplanen (https://help.rejseplanen.dk/).
+ * Uden nøgle returnerer toolet en klar fejl.
+ */
+export function getRejseplanenAccessId(): string {
+  return getSetting("rejseplanen_access_id") ?? "";
+}
+
+export function setRejseplanenAccessId(value: string): void {
+  setSetting("rejseplanen_access_id", value.trim().slice(0, 256));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {

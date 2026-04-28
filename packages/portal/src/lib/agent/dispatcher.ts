@@ -23,6 +23,7 @@ import {
   addReminder,
   completeReminder,
 } from "@/lib/integrations/reminders";
+import { findTrainRoute, RejseplanenError } from "@/lib/integrations/rejseplanen";
 import { isDestructive } from "./tools";
 
 export interface ToolCallRequest {
@@ -292,6 +293,63 @@ async function execute(
       return { ok: true, to, sent: true, message: "iMessage sendt" };
     }
 
+    // ── Rejseplanen: find_train_route ────────────────────────────────────
+    case "find_train_route": {
+      const fromInput = String(args.from ?? "").trim();
+      const toInput = String(args.to ?? "").trim();
+      if (!fromInput || !toInput) throw new Error("from og to er påkrævet");
+      const whenStr = typeof args.when === "string" ? args.when.trim() : "";
+      const when = whenStr ? new Date(whenStr) : undefined;
+      if (when && !Number.isFinite(when.getTime())) {
+        throw new Error(`ugyldig when (forventet ISO-8601): ${whenStr}`);
+      }
+      const isArrival = args.isArrival === true;
+      try {
+        const result = await findTrainRoute(fromInput, toInput, { when, isArrival });
+        // Komprimer trip-data så LLM får et kort overblik
+        const trips = result.trips.slice(0, 3).map((t) => ({
+          departure: t.departure,
+          arrival: t.arrival,
+          durationMin: t.durationMin,
+          changes: t.changes,
+          legs: t.legs.map((l) => ({
+            line: l.line,
+            category: l.category,
+            direction: l.direction,
+            track: l.track,
+            from: l.fromName,
+            to: l.toName,
+            depart: l.departure,
+            arrive: l.arrival,
+            durationMin: l.durationMin,
+          })),
+        }));
+        return {
+          ok: true,
+          from: result.from.name,
+          to: result.to.name,
+          tripCount: trips.length,
+          trips,
+        };
+      } catch (e) {
+        if (e instanceof RejseplanenError) {
+          return {
+            ok: false,
+            error: e.message,
+            code: e.code,
+            hint: e.code === "NOT_CONFIGURED"
+              ? "Bed brugeren om at sætte rejseplanen_access_id i /automations setup-tab"
+              : e.code === "API_AUTH"
+                ? "Access ID er ugyldig eller udløbet — bed brugeren tjekke det i settings"
+                : e.code === "NOT_FOUND"
+                  ? "Stationsnavn ikke fundet — prøv et andet eller mere præcist navn"
+                  : undefined,
+          };
+        }
+        throw e;
+      }
+    }
+
     // ── One-off iMessage reminder ────────────────────────────────────────
     case "schedule_imessage_reminder": {
       const { createAutomation } = await import("./automations");
@@ -415,74 +473,83 @@ async function execute(
       };
     }
 
-    // ── Web: Search (DuckDuckGo Instant Answers + HTML scrape) ───────────
+    // ── Web: Search (DDG Instant Answers + HTML SERP scrape) ─────────────
     case "web_search": {
       const query = String(args.query ?? "").trim();
       if (!query) throw new Error("query mangler");
 
-      // DuckDuckGo Instant Answer API (gratis, ingen nøgle)
-      const iaUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-      const iaRes = await fetch(iaUrl, {
-        headers: { "User-Agent": "SkynetBot/1.0" },
-        signal: AbortSignal.timeout(8_000),
-      });
-      if (!iaRes.ok) throw new Error(`DuckDuckGo API HTTP ${iaRes.status}`);
-      const ia = (await iaRes.json()) as {
-        AbstractText?: string;
-        AbstractURL?: string;
-        AbstractSource?: string;
-        RelatedTopics?: Array<{
-          Text?: string;
-          FirstURL?: string;
-          Topics?: Array<{ Text?: string; FirstURL?: string }>;
-        }>;
-        Results?: Array<{ Text?: string; FirstURL?: string }>;
-        Answer?: string;
-      };
-
       const results: Array<{ title: string; url: string; snippet: string }> = [];
 
-      // Instant Answer / Abstract
-      if (ia.AbstractText) {
-        results.push({
-          title: ia.AbstractSource ?? "Wikipedia",
-          url: ia.AbstractURL ?? "",
-          snippet: ia.AbstractText.slice(0, 400),
+      // 1) DuckDuckGo Instant Answer API — knowledge graph snippets, ofte tomt
+      try {
+        const iaUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+        const iaRes = await fetch(iaUrl, {
+          headers: { "User-Agent": "SkynetBot/1.0" },
+          signal: AbortSignal.timeout(6_000),
         });
-      }
-      if (ia.Answer) {
-        results.push({ title: "Direkte svar", url: "", snippet: ia.Answer });
-      }
-
-      // Related topics
-      for (const t of ia.RelatedTopics ?? []) {
-        if (results.length >= 5) break;
-        if (t.Text && t.FirstURL) {
-          results.push({ title: t.Text.slice(0, 80), url: t.FirstURL, snippet: t.Text.slice(0, 300) });
-        }
-        // Nested topics
-        for (const sub of t.Topics ?? []) {
-          if (results.length >= 5) break;
-          if (sub.Text && sub.FirstURL) {
-            results.push({ title: sub.Text.slice(0, 80), url: sub.FirstURL, snippet: sub.Text.slice(0, 300) });
+        if (iaRes.ok) {
+          const ia = (await iaRes.json()) as {
+            AbstractText?: string;
+            AbstractURL?: string;
+            AbstractSource?: string;
+            Answer?: string;
+          };
+          if (ia.Answer) results.push({ title: "Direkte svar", url: "", snippet: ia.Answer });
+          if (ia.AbstractText) {
+            results.push({
+              title: ia.AbstractSource ?? "Wikipedia",
+              url: ia.AbstractURL ?? "",
+              snippet: ia.AbstractText.slice(0, 400),
+            });
           }
         }
-      }
+      } catch { /* IA er nice-to-have, fortsæt med HTML SERP */ }
 
-      // Top results
-      for (const r of ia.Results ?? []) {
-        if (results.length >= 5) break;
-        if (r.Text && r.FirstURL) {
-          results.push({ title: r.Text.slice(0, 80), url: r.FirstURL, snippet: r.Text.slice(0, 300) });
+      // 2) DDG HTML SERP — det egentlige web-search-resultat
+      try {
+        const htmlRes = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+          headers: {
+            // Almindelig browser-UA — DDG returnerer meget tyndere HTML uden
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+            Accept: "text/html,application/xhtml+xml",
+            "Accept-Language": "da-DK,da;q=0.9,en;q=0.6",
+          },
+          signal: AbortSignal.timeout(8_000),
+          redirect: "follow",
+        });
+        if (htmlRes.ok) {
+          const html = await htmlRes.text();
+          // DDG indkapsler hver hit i <a class="result__a" href="..."> og en
+          // <a class="result__snippet" ...>SNIPPET</a> tæt på
+          const linkRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+          const snippetRe = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+          const links: Array<{ href: string; title: string }> = [];
+          const snippets: string[] = [];
+          let m: RegExpExecArray | null;
+          while ((m = linkRe.exec(html)) !== null) {
+            links.push({ href: decodeDdgUrl(m[1]), title: stripHtml(m[2]) });
+            if (links.length >= 8) break;
+          }
+          while ((m = snippetRe.exec(html)) !== null) {
+            snippets.push(stripHtml(m[1]).slice(0, 300));
+            if (snippets.length >= 8) break;
+          }
+          for (let i = 0; i < links.length && results.length < 8; i++) {
+            results.push({
+              title: links[i].title.slice(0, 100),
+              url: links[i].href,
+              snippet: snippets[i] ?? "",
+            });
+          }
         }
-      }
+      } catch { /* HTML SERP failed — IA-resultater er måske stadig brugbare */ }
 
       return {
         query,
         results,
         count: results.length,
         note: results.length === 0
-          ? "Ingen øjeblikkelige resultater — prøv web_fetch på en specifik URL"
+          ? "Ingen resultater — prøv en mere specifik query, eller web_fetch på en kendt URL"
           : undefined,
       };
     }
@@ -511,6 +578,40 @@ function normalizeImessageRecipient(raw: string): string {
   if (digits.length === 10 && digits.startsWith("1")) return `+${digits}`;
   if (digits.length >= 10) return `+${digits}`;
   return s;
+}
+
+/** Strip HTML-tags + de mest almindelige entities */
+function stripHtml(s: string): string {
+  return s
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** DDG html-SERP wrapper /l/?uddg=<encoded-url> → unwrap til ren URL */
+function decodeDdgUrl(href: string): string {
+  if (href.startsWith("//duckduckgo.com/l/")) {
+    try {
+      const u = new URL("https:" + href);
+      const real = u.searchParams.get("uddg");
+      if (real) return decodeURIComponent(real);
+    } catch { /* fall through */ }
+  }
+  if (href.startsWith("/l/")) {
+    try {
+      const u = new URL("https://duckduckgo.com" + href);
+      const real = u.searchParams.get("uddg");
+      if (real) return decodeURIComponent(real);
+    } catch { /* fall through */ }
+  }
+  return href;
 }
 
 /** JSON.stringify med fallback til String() + begrænsning */

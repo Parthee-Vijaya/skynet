@@ -199,6 +199,8 @@ export default function AutomationsPage() {
   const [imessageDefault, setImessageDefault] = useState("");
   const imessageDefaultLoaded = useRef(false);
   const [imessagePoller, setImessagePoller] = useState<ImessagePollerStatus | null>(null);
+  const [rejseplanenAccessId, setRejseplanenAccessId] = useState("");
+  const [hasRejseplanenAccessId, setHasRejseplanenAccessId] = useState(false);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
@@ -241,6 +243,7 @@ export default function AutomationsPage() {
         setImessageDefault(s.imessageDefault);
         imessageDefaultLoaded.current = true;
       }
+      if (typeof s?.hasRejseplanenAccessId === "boolean") setHasRejseplanenAccessId(s.hasRejseplanenAccessId);
       if (p) setImessagePoller(p);
     } finally {
       setLoading(false);
@@ -323,6 +326,18 @@ export default function AutomationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imessageDefault: value.trim() }),
     });
+  };
+
+  const saveRejseplanenAccessId = async (value: string) => {
+    if (!value.trim()) return; // Tom = behold eksisterende
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rejseplanenAccessId: value.trim() }),
+    });
+    const data = (await res.json()) as { hasRejseplanenAccessId?: boolean };
+    setHasRejseplanenAccessId(!!data.hasRejseplanenAccessId);
+    setRejseplanenAccessId(""); // Ryd input efter gem
   };
 
   const toggleImessagePoller = async (enabled: boolean) => {
@@ -592,6 +607,33 @@ export default function AutomationsPage() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            </Section>
+
+            <Section title="transit (rejseplanen)" right={hasRejseplanenAccessId ? <span style={{ color: "#7dd67d" }}>● konfigureret</span> : null} className="mb-8">
+              <div style={{ fontSize: 12 }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 8, lineHeight: 1.6 }}>
+                  Når sat kan LLM&apos;en bruge <code style={{ color: "#9bd0ff" }}>find_train_route</code> til at slå rigtige
+                  togtider, bus- og metroafgange op via Rejseplanens API.
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>access ID</span>
+                  <input
+                    type="password"
+                    value={rejseplanenAccessId}
+                    onChange={(e) => setRejseplanenAccessId(e.target.value)}
+                    onBlur={(e) => saveRejseplanenAccessId(e.target.value)}
+                    placeholder={hasRejseplanenAccessId ? "(gemt — indtast for at ændre)" : "fra rejseplanens API-portal"}
+                    autoComplete="off"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6 }}>
+                  Gratis nøgle: registrér på{" "}
+                  <a href="https://help.rejseplanen.dk" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>help.rejseplanen.dk</a>
+                  {" "}— de svarer typisk indenfor en uge. Uden nøgle returnerer{" "}
+                  <code style={{ color: "#9bd0ff" }}>find_train_route</code> en fejl der fortæller LLM at fortælle dig det.
                 </div>
               </div>
             </Section>
