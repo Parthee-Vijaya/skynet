@@ -13,11 +13,26 @@ import { appendLog } from "./log-buffer";
 export interface ActionResult {
   ok: boolean;
   message: string;
+  /** Hvis dry-run: hvad der *ville* være sendt — én pr. step */
+  dryRunPreview?: DryRunStep[];
+}
+
+export interface DryRunStep {
+  type: Action["type"];
+  /** Kort beskrivelse, fx "notify: 'Disk fuld' / Disken er over 90%…" */
+  summary: string;
+  /** Fuld payload til preview (notify-body, iMessage-tekst, tool-args mm.) */
+  detail?: Record<string, unknown>;
 }
 
 export interface ActionMeta {
   automationId?: number;
   automationName?: string;
+  /**
+   * Dry-run: ingen notifikation/iMessage/destruktiv tool-action faktisk sendes.
+   * LLM-prompten kører dog stadig (så man ser hvad der ville være sendt).
+   */
+  dryRun?: boolean;
 }
 
 /**
@@ -26,20 +41,29 @@ export interface ActionMeta {
  */
 export async function runActions(actions: Action[], meta?: ActionMeta): Promise<ActionResult> {
   if (actions.length === 0) return { ok: false, message: "ingen actions defineret" };
-  if (actions.length === 1) return runAction(actions[0], meta);
+  if (actions.length === 1) {
+    const r = await runAction(actions[0], meta);
+    return r;
+  }
 
   const msgs: string[] = [];
+  const previews: DryRunStep[] = [];
   for (let i = 0; i < actions.length; i++) {
-    appendLog("info", `trin ${i + 1}/${actions.length} starter (${actions[i].type})`, meta);
+    appendLog("info", `trin ${i + 1}/${actions.length} starter (${actions[i].type})${meta?.dryRun ? " [dry-run]" : ""}`, meta);
     const r = await runAction(actions[i], meta);
     msgs.push(`[${i + 1}] ${r.message}`);
+    if (r.dryRunPreview) previews.push(...r.dryRunPreview);
     if (!r.ok) {
       appendLog("warn", `trin ${i + 1}/${actions.length} fejlede — stopper kæden`, meta);
-      return { ok: false, message: `trin ${i + 1}/${actions.length} fejlede: ${r.message}` };
+      return { ok: false, message: `trin ${i + 1}/${actions.length} fejlede: ${r.message}`, dryRunPreview: previews };
     }
     appendLog("ok", `trin ${i + 1}/${actions.length} ok`, meta);
   }
-  return { ok: true, message: `${actions.length} trin fuldført · ${msgs.join(" · ")}` };
+  return {
+    ok: true,
+    message: `${actions.length} trin fuldført · ${msgs.join(" · ")}`,
+    dryRunPreview: previews.length > 0 ? previews : undefined,
+  };
 }
 
 export async function runAction(action: Action, meta?: ActionMeta): Promise<ActionResult> {
@@ -48,7 +72,7 @@ export async function runAction(action: Action, meta?: ActionMeta): Promise<Acti
       case "notify":
         return await runNotify(action, meta);
       case "tool":
-        return await runTool(action);
+        return await runTool(action, meta);
       case "llm_notify":
         return await runLLMNotify(action, meta);
       default: {
@@ -65,6 +89,17 @@ export async function runAction(action: Action, meta?: ActionMeta): Promise<Acti
 }
 
 async function runNotify(a: NotifyAction, meta?: ActionMeta): Promise<ActionResult> {
+  if (meta?.dryRun) {
+    return {
+      ok: true,
+      message: `[dry-run] ville sende notify "${a.title}"`,
+      dryRunPreview: [{
+        type: "notify",
+        summary: `notify "${a.title}"`,
+        detail: { title: a.title, body: a.body, priority: a.priority, tag: a.tag, url: a.url },
+      }],
+    };
+  }
   const results = await notify({
     title: a.title,
     body: a.body,
@@ -94,7 +129,18 @@ async function runNotify(a: NotifyAction, meta?: ActionMeta): Promise<ActionResu
   };
 }
 
-async function runTool(a: ToolAction): Promise<ActionResult> {
+async function runTool(a: ToolAction, meta?: ActionMeta): Promise<ActionResult> {
+  if (meta?.dryRun) {
+    return {
+      ok: true,
+      message: `[dry-run] ville kalde tool ${a.tool}`,
+      dryRunPreview: [{
+        type: "tool",
+        summary: `tool ${a.tool}(${Object.keys(a.args).join(", ")})`,
+        detail: { tool: a.tool, args: a.args, allowDestructive: a.allowDestructive === true },
+      }],
+    };
+  }
   const res = await dispatchTool(
     {
       id: `auto_${Date.now().toString(36)}`,
@@ -114,7 +160,7 @@ async function runTool(a: ToolAction): Promise<ActionResult> {
   };
 }
 
-async function runLLMNotify(a: LLMNotifyAction, meta?: { automationId?: number; automationName?: string }): Promise<ActionResult> {
+async function runLLMNotify(a: LLMNotifyAction, meta?: ActionMeta): Promise<ActionResult> {
   const { baseUrl, apiKey, systemPrompt: defaultSys } = getLLMConfig();
   const sys = a.systemPrompt?.trim() || defaultSys;
   const model = a.model || (await pickDefaultModel(baseUrl, apiKey));
@@ -213,6 +259,23 @@ async function runLLMNotify(a: LLMNotifyAction, meta?: { automationId?: number; 
   }
 
   appendLog("info", `LLM færdig · ${finalText.length} tegn genereret`, meta);
+
+  if (meta?.dryRun) {
+    return {
+      ok: true,
+      message: `[dry-run] LLM gen. ${finalText.length} tegn — ingen push/iMessage sendt`,
+      dryRunPreview: [{
+        type: "llm_notify",
+        summary: `llm_notify "${a.notifyTitle}"${a.imessageTo ? ` → iMessage ${a.imessageTo}` : ""}`,
+        detail: {
+          notifyTitle: a.notifyTitle,
+          generatedBody: finalText,
+          priority: a.priority,
+          imessageTo: a.imessageTo ?? null,
+        },
+      }],
+    };
+  }
 
   // Push-notifikation
   const notifyResults = await notify({
