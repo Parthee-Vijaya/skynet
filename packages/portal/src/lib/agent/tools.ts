@@ -319,6 +319,124 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Info: Vejr-forecast (7 dage) ─────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_forecast",
+      description:
+        "Hent 7-dages vejrudsigt for brugerens lokation via Open-Meteo: max/min temperatur, nedbør, vindstød, weather-code per dag. Brug ved spørgsmål om 'i morgen', 'weekenden', 'næste uge' eller 'hvornår bliver det varmt/regn'. Til nuværende vejr brug read_weather i stedet.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: {
+            type: "number",
+            description: "Antal dage frem (1–7). Default: 7.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Info: Trafikinfo (Vejdirektoratet) ───────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_traffic",
+      description:
+        "Hent aktuelle trafikhændelser på danske veje (motorveje + større veje): kø, vejarbejde, spærringer, ulykker. Inkluderer titel, beskrivelse, hvornår begivenheden begyndte og hvilket layer (kø/vejarbejde/spærring/etc). Brug ved spørgsmål om 'er der kø på E20', 'noget på Storebæltsbroen', 'trafiksituation'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Luftkvalitet + pollen ──────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_air_quality",
+      description:
+        "Hent aktuel luftkvalitet for brugerens lokation: AQI, PM2.5, PM10, NO2, ozon, UV-indeks, og pollenniveauer (birk, græs, bynke, oliven, malurt). Brug ved spørgsmål om allergi, luftforurening, om man kan løbe ude, eller om UV-indekset er højt.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Markeder (råvarer + valuta) ────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_markets",
+      description:
+        "Hent aktuelle priser for råvarer (guld, sølv, Brent-olie via Yahoo) og valutakurser (EUR/USD/GBP/SEK/NOK mod DKK via ECB/Frankfurter). Inkluderer dagsændring i pct. Brug ved spørgsmål om 'guldpris', 'dollarkurs', 'oliepris'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Fly i nærheden ─────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_flights",
+      description:
+        "Hent fly inden for ~50km radius af brugerens lokation via OpenSky Network: callsign, oprindelsesland, højde, fart, retning. Returnerer op til 30 fly. Brug ved spørgsmål om 'hvilket fly er over mig', 'hvor mange fly i luften lige nu'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Månefase ──────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_moon",
+      description:
+        "Hent aktuel månefase, illumination (0-100%), fase-navn på dansk (fx 'Voksende måne', 'Fuldmåne'), og næste fuldmåne/nymåne-dato. Brug ved spørgsmål om månens fase, om det er fuldmåne, eller hvornår næste fuldmåne er.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: DAWA address-opslag ────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "lookup_address",
+      description:
+        "Find danske adresser via DAWA (Danmarks Adressers Web API) — gratis, ingen nøgle. Returnerer fuld adresse, postnummer, by, kommune, region og koordinater. Brug ved fuzzy adresse-input ('Vesterbrogade 1 Kbh') eller når du skal finde koordinater for et sted i Danmark.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Adresse-tekst, fx 'vesterbrogade 1 københavn' eller 'Næstved Banegårdsplads'",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
+  // ── Info: Wikipedia ──────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "wikipedia_summary",
+      description:
+        "Hent kort introduktion til en artikel på Wikipedia (default: dansk, fallback: engelsk). Returnerer titel, kort beskrivelse, første afsnit (~250 tegn) og URL. Brug ved generelle 'hvad er X', 'hvem er Y', historiske/biografiske spørgsmål — IKKE til aktuelle nyheder eller live-data.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Sidens titel/emne, fx 'Niels Bohr', 'Kvantemekanik', 'Næstved'",
+          },
+          lang: {
+            type: "string",
+            description: "Sprog-kode: 'da' (default), 'en', 'de'.",
+          },
+        },
+        required: ["title"],
+      },
+    },
+  },
+
   // ── Transit (Rejseplanen) ────────────────────────────────────────────────
   {
     type: "function",

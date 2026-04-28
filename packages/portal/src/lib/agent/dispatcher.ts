@@ -24,6 +24,12 @@ import {
   completeReminder,
 } from "@/lib/integrations/reminders";
 import { findTrainRoute, RejseplanenError } from "@/lib/integrations/rejseplanen";
+import { getForecast, lookupAddress, wikipediaSummary } from "@/lib/integrations/info-tools";
+import { collect as collectTraffic } from "@/lib/collectors/traffic";
+import { collect as collectAir } from "@/lib/collectors/air";
+import { collect as collectMarkets } from "@/lib/collectors/markets";
+import { collect as collectFlights } from "@/lib/collectors/flights";
+import { collect as collectMoon } from "@/lib/collectors/moon";
 import { isDestructive } from "./tools";
 
 export interface ToolCallRequest {
@@ -291,6 +297,75 @@ async function execute(
       ].join("\n");
       await execFileP("/usr/bin/osascript", ["-e", script], { timeout: 12_000 });
       return { ok: true, to, sent: true, message: "iMessage sendt" };
+    }
+
+    // ── Forecast: 7-dages vejr ───────────────────────────────────────────
+    case "get_forecast": {
+      const days = typeof args.days === "number" ? Math.round(args.days) : 7;
+      return await getForecast(days);
+    }
+
+    // ── Trafikinfo (Vejdirektoratet) ──────────────────────────────────────
+    case "read_traffic": {
+      const data = await collectTraffic();
+      // Komprimer til de mest relevante felter — undgå at flooke LLM med rå geo
+      return {
+        total: data.total,
+        fetchedAt: data.fetchedAt,
+        incidents: data.incidents.slice(0, 25).map((i) => ({
+          title: i.title,
+          header: i.header,
+          description: i.description.slice(0, 240),
+          layer: i.layer,
+          begin: i.begin,
+          updated: i.updated,
+          priority: i.priority,
+        })),
+        ...(data.error ? { error: data.error } : {}),
+      };
+    }
+
+    // ── Luftkvalitet + pollen ─────────────────────────────────────────────
+    case "read_air_quality": {
+      return await collectAir();
+    }
+
+    // ── Markeder (råvarer + valuta) ───────────────────────────────────────
+    case "read_markets": {
+      return await collectMarkets();
+    }
+
+    // ── Fly i nærheden ────────────────────────────────────────────────────
+    case "read_flights": {
+      const data = await collectFlights();
+      return {
+        count: data.count,
+        radiusKm: data.radiusKm,
+        fetchedAt: data.fetchedAt,
+        flights: data.flights.slice(0, 30),
+        ...(data.error ? { error: data.error } : {}),
+      };
+    }
+
+    // ── Månefase ──────────────────────────────────────────────────────────
+    case "read_moon": {
+      return await collectMoon();
+    }
+
+    // ── DAWA address-opslag ───────────────────────────────────────────────
+    case "lookup_address": {
+      const query = String(args.query ?? "").trim();
+      if (!query) throw new Error("query er påkrævet");
+      const matches = await lookupAddress(query, 5);
+      return { query, count: matches.length, matches };
+    }
+
+    // ── Wikipedia ─────────────────────────────────────────────────────────
+    case "wikipedia_summary": {
+      const title = String(args.title ?? "").trim();
+      if (!title) throw new Error("title er påkrævet");
+      const lang = typeof args.lang === "string" && args.lang.length === 2 ? args.lang : "da";
+      return await wikipediaSummary(title, lang);
     }
 
     // ── Rejseplanen: find_train_route ────────────────────────────────────
