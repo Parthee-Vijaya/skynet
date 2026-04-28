@@ -201,6 +201,8 @@ export default function AutomationsPage() {
   const [imessagePoller, setImessagePoller] = useState<ImessagePollerStatus | null>(null);
   const [rejseplanenAccessId, setRejseplanenAccessId] = useState("");
   const [hasRejseplanenAccessId, setHasRejseplanenAccessId] = useState(false);
+  const [nzbgeekApiKey, setNzbgeekApiKey] = useState("");
+  const [hasNzbgeekApiKey, setHasNzbgeekApiKey] = useState(false);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
@@ -244,6 +246,7 @@ export default function AutomationsPage() {
         imessageDefaultLoaded.current = true;
       }
       if (typeof s?.hasRejseplanenAccessId === "boolean") setHasRejseplanenAccessId(s.hasRejseplanenAccessId);
+      if (typeof s?.hasNzbgeekApiKey === "boolean") setHasNzbgeekApiKey(s.hasNzbgeekApiKey);
       if (p) setImessagePoller(p);
     } finally {
       setLoading(false);
@@ -338,6 +341,18 @@ export default function AutomationsPage() {
     const data = (await res.json()) as { hasRejseplanenAccessId?: boolean };
     setHasRejseplanenAccessId(!!data.hasRejseplanenAccessId);
     setRejseplanenAccessId(""); // Ryd input efter gem
+  };
+
+  const saveNzbgeekApiKey = async (value: string) => {
+    if (!value.trim()) return;
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nzbgeekApiKey: value.trim() }),
+    });
+    const data = (await res.json()) as { hasNzbgeekApiKey?: boolean };
+    setHasNzbgeekApiKey(!!data.hasNzbgeekApiKey);
+    setNzbgeekApiKey("");
   };
 
   const toggleImessagePoller = async (enabled: boolean) => {
@@ -634,6 +649,32 @@ export default function AutomationsPage() {
                   <a href="https://help.rejseplanen.dk" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>help.rejseplanen.dk</a>
                   {" "}— de svarer typisk indenfor en uge. Uden nøgle returnerer{" "}
                   <code style={{ color: "#9bd0ff" }}>find_train_route</code> en fejl der fortæller LLM at fortælle dig det.
+                </div>
+              </div>
+            </Section>
+
+            <Section title="nzbgeek (film/tv-søgning)" right={hasNzbgeekApiKey ? <span style={{ color: "#7dd67d" }}>● konfigureret</span> : null} className="mb-8">
+              <div style={{ fontSize: 12 }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 8, lineHeight: 1.6 }}>
+                  Når sat kan LLM&apos;en bruge <code style={{ color: "#9bd0ff" }}>search_nzbgeek</code> til at finde
+                  trending film og søge efter specifikke film/serier i NZBgeek-indekset.
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>API key</span>
+                  <input
+                    type="password"
+                    value={nzbgeekApiKey}
+                    onChange={(e) => setNzbgeekApiKey(e.target.value)}
+                    onBlur={(e) => saveNzbgeekApiKey(e.target.value)}
+                    placeholder={hasNzbgeekApiKey ? "(gemt — indtast for at ændre)" : "din 'r'-værdi fra api.nzbgeek.info"}
+                    autoComplete="off"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6 }}>
+                  Find din nøgle på{" "}
+                  <a href="https://nzbgeek.info/account.php" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>nzbgeek.info/account.php</a>
+                  {" "}(kræver konto). Det er den værdi der står som <code style={{ color: "#9bd0ff" }}>&amp;r=...</code> i RSS-URL&apos;en.
                 </div>
               </div>
             </Section>

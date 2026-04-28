@@ -504,6 +504,34 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── NZBgeek (trending + søgning) ─────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_nzbgeek",
+      description:
+        "Søg på NZBgeek (Newznab-baseret indeks) eller hent trending film-feed. Default uden query: trending_movies. Med query: fri søgning. Returnerer titel, pubDate, IMDB-id (film), kategori, størrelse i MB, og detail-URL. Brug ved 'hvad er trending', 'find filmen X', 'hvad er der nyt af serie Y'.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeord. Tom = trending-mode (kun film). Bruges ved 'find Dune', 'søg efter Oppenheimer'.",
+          },
+          mode: {
+            type: "string",
+            enum: ["trending", "search", "tv", "movie"],
+            description: "'trending' = trending film-feed. 'search' = fri søgning på alt. 'tv' = TV-søgning (Newznab tvsearch). 'movie' = film-søgning. Default: 'trending' uden query, 'search' med query.",
+          },
+          limit: {
+            type: "number",
+            description: "Antal resultater (1-100). Default: 20.",
+          },
+        },
+      },
+    },
+  },
+
   // ── Aggregeret nyhedstool ────────────────────────────────────────────────
   {
     type: "function",

@@ -24,6 +24,7 @@ import {
   completeReminder,
 } from "@/lib/integrations/reminders";
 import { findTrainRoute, RejseplanenError } from "@/lib/integrations/rejseplanen";
+import { searchNzbgeek, NzbgeekError } from "@/lib/integrations/nzbgeek";
 import {
   getForecast,
   lookupAddress,
@@ -408,6 +409,43 @@ async function execute(
       const limit = typeof args.limit === "number" ? args.limit : undefined;
       const posts = await redditSearch({ subreddit, query, sort, time, limit });
       return { count: posts.length, posts };
+    }
+
+    // ── NZBgeek (trending + søgning) ──────────────────────────────────────
+    case "search_nzbgeek": {
+      const query = typeof args.query === "string" ? args.query.trim() : undefined;
+      const mode = typeof args.mode === "string" ? args.mode as "trending" | "search" | "tv" | "movie" : undefined;
+      const limit = typeof args.limit === "number" ? args.limit : undefined;
+      try {
+        const result = await searchNzbgeek({ query, mode, limit });
+        // Komprimer items: drop coverurl/description hvis tomme, oversæt size til MB
+        const items = result.items.map((it) => ({
+          title: it.title,
+          pubDate: it.pubDate,
+          imdbId: it.imdbId,
+          tvdbId: it.tvdbId,
+          category: it.category,
+          sizeMB: it.sizeBytes ? Math.round(it.sizeBytes / 1024 / 1024) : undefined,
+          detailUrl: it.detailUrl,
+          downloadUrl: it.link,
+          coverUrl: it.coverUrl,
+        }));
+        return { mode: result.mode, total: result.total, count: items.length, items };
+      } catch (e) {
+        if (e instanceof NzbgeekError) {
+          return {
+            ok: false,
+            error: e.message,
+            code: e.code,
+            hint: e.code === "NOT_CONFIGURED"
+              ? "Bed brugeren om at sætte nzbgeek_api_key i /automations setup-tab"
+              : e.code === "API_AUTH"
+                ? "API-nøglen blev afvist — bed brugeren tjekke den i settings"
+                : undefined,
+          };
+        }
+        throw e;
+      }
     }
 
     // ── Aggregeret nyhedstool ─────────────────────────────────────────────

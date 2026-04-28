@@ -81,6 +81,18 @@ export function setRejseplanenAccessId(value: string): void {
   setSetting("rejseplanen_access_id", value.trim().slice(0, 256));
 }
 
+/**
+ * NZBgeek API-nøgle (din "r"/"apikey" fra api.nzbgeek.info). Bruges af
+ * search_nzbgeek tool til trending-feeds og fri søgning.
+ */
+export function getNzbgeekApiKey(): string {
+  return getSetting("nzbgeek_api_key") ?? "";
+}
+
+export function setNzbgeekApiKey(value: string): void {
+  setSetting("nzbgeek_api_key", value.trim().slice(0, 256));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {

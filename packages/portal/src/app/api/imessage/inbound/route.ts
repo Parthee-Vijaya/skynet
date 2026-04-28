@@ -64,6 +64,7 @@ TOOL-VALG (brug det MEST specifikke før du går til web_search):
   Nyheder:        get_news (DR/Politiken/TV2/Berlingske + BBC/Reuters/AlJazeera/Guardian — brug scope='dk', 'world' eller 'both') · fetch_news til specifik RSS-URL
   Reddit:         reddit_search (subreddit eller fri-tekst søgning)
   Opskrifter:     search_recipes (TheMealDB — engelske søgeord virker bedst)
+  Film/TV-NZB:    search_nzbgeek (trending film-feed eller søgning på film/serier)
   Kalender:       list_calendar_events
   Påmindelser:    list_reminders, add_reminder
   System:         read_system_status, read_disk
