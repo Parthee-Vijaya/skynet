@@ -25,6 +25,7 @@ import { existsSync } from "node:fs";
 import { getSetting, setSetting } from "@/lib/settings";
 import { getControlToken } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
+import { isEchoOfRecentReply } from "@/lib/agent/imessage-loop-guard";
 
 const CHAT_DB = `${homedir()}/Library/Messages/chat.db`;
 const LAST_ROWID_KEY = "imessage_poller_last_rowid";
@@ -143,6 +144,15 @@ async function pollOnce(): Promise<void> {
   if (messages.length === 0) return;
 
   for (const m of messages) {
+    // Anti-loop: drop beskeder der matcher noget vi netop har sendt.
+    // Sker pga iCloud-sync hvor brugerens egne devices viser hinandens
+    // afsendte beskeder som "modtaget" i chat.db
+    if (isEchoOfRecentReply(m.handleId, m.text)) {
+      appendLog("warn", `echo skipped fra ${m.handleId}: ${m.text.slice(0, 60)}`, { tool: "imessage-poller" });
+      setSetting(LAST_ROWID_KEY, String(m.rowid));
+      continue;
+    }
+
     appendLog("info", `iMessage modtaget fra ${m.handleId}: ${m.text.slice(0, 60)}`, { tool: "imessage-poller" });
     try {
       const port = process.env.PORT ?? "3100";

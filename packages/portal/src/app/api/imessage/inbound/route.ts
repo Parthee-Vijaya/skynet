@@ -22,6 +22,12 @@ import { TOOLS } from "@/lib/agent/tools";
 import { dispatchTool } from "@/lib/agent/dispatcher";
 import { requireAuth } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
+import {
+  isEchoOfRecentReply,
+  recordSentReply,
+  tryAcquireInbound,
+  releaseInbound,
+} from "@/lib/agent/imessage-loop-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,11 +40,14 @@ Brugeren sender dig korte beskeder; du svarer kort tilbage via samme kanal.
 Regler:
 1. Svar ALTID på dansk
 2. Hold svar korte — max 4 linjer (det er en SMS)
-3. Brug tools til at hente reel data (web_search, web_fetch, fetch_news, read_weather, read_energy, list_calendar_events)
-4. Hvis brugeren beder om en påmindelse "X minutter før Y" eller "kl HH:MM": brug schedule_imessage_reminder med eksakt tidspunkt
-5. Hvis brugeren beder om togtider, busser, fly osv.: søg på rejseplanen.dk eller relevant kilde via web_search/web_fetch
-6. Når påmindelsen er oprettet: bekræft kort med tidspunkt
-7. INGEN markdown, INGEN emojis (med mindre brugeren bruger dem)`;
+3. Svar PRÆCIST på det brugeren spurgte om — gentag aldrig en tidligere besked
+4. Brug tools til at hente reel data (web_search, web_fetch, fetch_news, read_weather, read_energy, list_calendar_events)
+5. Hvis brugeren beder om en påmindelse "X minutter før Y" eller "kl HH:MM": brug schedule_imessage_reminder med eksakt tidspunkt
+6. TOGTIDER/REJSER: brug ALTID rejseplanen.dk — kald først web_search med query "rejseplanen.dk afgang [fra-station] [til-station]", så web_fetch på et resultat-url. Returnér konkret afgangstid + spor + linje (fx "IC42 spor 4 kl 15:32"). Hvis du ikke finder data, sig det ærligt — opfind aldrig tider
+7. BUSSER/FLY: samme strategi — find officiel kilde via web_search, hent med web_fetch
+8. Når en reminder er oprettet: bekræft med tidspunkt og hvad der sendes
+9. INGEN markdown, INGEN emojis (med mindre brugeren bruger dem)
+10. Hvis brugerens besked ligner et tidligere svar (fx "Vejret er 8°C..."), er det formentlig en echo-fejl — svar SAGLIGT på indholdet og spørg om de mente noget andet, men gentag IKKE`;
 
 interface InboundReq {
   from?: string;
@@ -72,6 +81,26 @@ export async function POST(req: NextRequest): Promise<Response> {
     return Response.json({ ok: false, error: "from + message er påkrævet" } satisfies InboundResp, { status: 400 });
   }
 
+  // Anti-loop: hvis denne besked matcher noget vi netop har sendt → echo, skip
+  if (isEchoOfRecentReply(from, message)) {
+    appendLog("warn", `echo skipped fra ${from}: ${message.slice(0, 60)}`, { tool: "imessage-inbound" });
+    return Response.json({ ok: true, reply: undefined, replied: false, error: "echo of recent reply — skipped" } satisfies InboundResp);
+  }
+
+  // Anti-loop: kun én inbound-behandling pr. nummer ad gangen
+  if (!tryAcquireInbound(from)) {
+    appendLog("warn", `inbound busy for ${from}, skipping: ${message.slice(0, 60)}`, { tool: "imessage-inbound" });
+    return Response.json({ ok: false, error: "already processing previous message from this sender" } satisfies InboundResp, { status: 429 });
+  }
+
+  try {
+    return await handleInbound(from, message, body.silent === true);
+  } finally {
+    releaseInbound(from);
+  }
+}
+
+async function handleInbound(from: string, message: string, silent: boolean): Promise<Response> {
   appendLog("info", `inbound iMessage fra ${from}: ${message.slice(0, 80)}`, { tool: "imessage-inbound" });
 
   const { baseUrl, apiKey, defaultModel } = getLLMConfig();
@@ -146,7 +175,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   // Send tilbage via send_imessage (medmindre silent=true)
   let replied = false;
-  if (!body.silent) {
+  if (!silent) {
+    // Registrér INDEN vi sender, så polleren ikke racer os og fodrer svaret
+    // tilbage som ny inbound før vi har nået at lægge det i echo-tabellen
+    recordSentReply(from, reply);
     const sendResult = await dispatchTool(
       {
         id: `inb_${Date.now().toString(36)}`,
