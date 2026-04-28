@@ -124,6 +124,42 @@ async function dDaemon(): Promise<Detection> {
     : { key: "daemon", name: "Skynet Daemon", status: "missing", details: "Ikke tilgængelig på :6767", hint: "Kontrollér at LaunchAgent com.skynet.daemon er installeret.", feature: "Agents · Automationer" };
 }
 
+async function dPaseo(): Promise<Detection> {
+  const cliInstalled = await hasCommand("paseo");
+  const daemonUp = await ping("http://localhost:6868", 2000);
+  const plistExists = await hasFile(join(homedir(), "Library", "LaunchAgents", "com.paseo.daemon.plist"));
+
+  if (!cliInstalled) {
+    return {
+      key: "paseo",
+      name: "Paseo (agent orchestrator)",
+      status: "missing",
+      details: "Paseo CLI ikke installeret",
+      hint: "Kør 'npm install -g @getpaseo/cli' eller kør install.sh igen.",
+      feature: "/agents · Claude Code/Codex/OpenCode orkestrering",
+    };
+  }
+  if (!daemonUp) {
+    return {
+      key: "paseo",
+      name: "Paseo (agent orchestrator)",
+      status: "partial",
+      details: "CLI installeret, daemon kører ikke",
+      hint: plistExists
+        ? "Kør 'launchctl kickstart -k gui/$(id -u)/com.paseo.daemon' for at starte."
+        : "LaunchAgent mangler — kør install.sh for at oprette den.",
+      feature: "/agents · Claude Code/Codex/OpenCode orkestrering",
+    };
+  }
+  return {
+    key: "paseo",
+    name: "Paseo (agent orchestrator)",
+    status: "ok",
+    details: `Kører på :6868 ${plistExists ? "· auto-start aktiv" : "· uden LaunchAgent"}`,
+    feature: "/agents · Claude Code/Codex/OpenCode orkestrering",
+  };
+}
+
 async function dLaunchAgents(): Promise<Detection> {
   const portal = join(homedir(), "Library", "LaunchAgents", "com.skynet.portal.plist");
   const daemon = join(homedir(), "Library", "LaunchAgents", "com.skynet.daemon.plist");
@@ -246,19 +282,19 @@ export async function geocodeCity(city: string): Promise<LocationSetting | null>
 
 export async function GET() {
   const [
-    internet, node, autostart, daemon,
+    internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
     plex, tailscale, ntfy,
     tmux, brrr, zshrcTmux,
   ] = await Promise.all([
-    dInternet(), dNode(), dLaunchAgents(), dDaemon(),
+    dInternet(), dNode(), dLaunchAgents(), dDaemon(), dPaseo(),
     dLmStudio(), dGitHub(), dWeather(), dNasaApod(),
     dPlex(), dTailscale(), dNtfy(),
     dTmux(), dBrrr(), dZshrcAutoAttach(),
   ]);
 
   const detections: Detection[] = [
-    internet, node, autostart, daemon,
+    internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
     plex, tailscale, ntfy,
     tmux, brrr, zshrcTmux,

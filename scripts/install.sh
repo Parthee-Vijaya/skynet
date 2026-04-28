@@ -233,6 +233,87 @@ for LABEL in "$PORTAL_LABEL" "com.skynet.daemon"; do
   ok "$LABEL startet"
 done
 
+# ── Paseo (multi-agent orchestrator) ────────────────────────────────────
+step "Paseo agent orchestrator"
+
+PASEO_PORT=6868
+if ! command -v paseo >/dev/null 2>&1; then
+  info "Installerer Paseo CLI globalt…"
+  npm install -g @getpaseo/cli >/dev/null 2>&1 || warn "Paseo CLI install fejlede — fortsætter (du kan installere senere)"
+fi
+
+if command -v paseo >/dev/null 2>&1; then
+  ok "Paseo CLI: $(paseo --version 2>/dev/null || echo '?')"
+
+  # LaunchAgent for Paseo daemon — port 6868 så det ikke kolliderer med
+  # Skynet-daemon på 6767. Paseo's web app på app.paseo.sh forbinder via
+  # relay.paseo.sh og parrer med lokal daemon.
+  PASEO_PLIST="$TARGET_DIR/com.paseo.daemon.plist"
+  PASEO_BIN="$(command -v paseo)"
+  cat > "$PASEO_PLIST" << PASEOPLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.paseo.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${PASEO_BIN}</string>
+        <string>daemon</string>
+        <string>start</string>
+        <string>--port</string>
+        <string>${PASEO_PORT}</string>
+        <string>--foreground</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>${NODE_DIR}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>${USER_HOME}</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>${USER_HOME}</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>${USER_HOME}/Library/Logs/paseo.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>${USER_HOME}/Library/Logs/paseo.err.log</string>
+</dict>
+</plist>
+PASEOPLIST
+  ok "Paseo plist: $PASEO_PLIST"
+
+  # Bootstrap Paseo LaunchAgent
+  if launchctl list | grep -q "com.paseo.daemon"; then
+    info "com.paseo.daemon kørte allerede — genindlæser"
+    launchctl bootout "$DOMAIN/com.paseo.daemon" 2>/dev/null || true
+    sleep 1
+  fi
+  launchctl bootstrap "$DOMAIN" "$PASEO_PLIST" 2>/dev/null || true
+  launchctl kickstart -k "$DOMAIN/com.paseo.daemon" 2>/dev/null || true
+
+  # Verify
+  for i in {1..10}; do
+    if curl -s -o /dev/null --max-time 2 "http://localhost:${PASEO_PORT}" 2>/dev/null; then
+      ok "Paseo daemon kører på :${PASEO_PORT}"
+      break
+    fi
+    if (( i == 10 )); then
+      warn "Paseo daemon svarer ikke endnu — tjek ~/Library/Logs/paseo.err.log"
+    fi
+    sleep 1
+  done
+else
+  warn "Paseo ikke installeret — Skynet /agents-side kræver det. Kør 'npm install -g @getpaseo/cli' senere."
+fi
+
 # ── Valgfrit: Swift HUD ─────────────────────────────────────────────────
 step "Swift HUD (valgfrit)"
 
