@@ -1,274 +1,130 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
-import { Section, Dot, Sep } from "@/components/minimal/primitives";
+import { Section, Dot } from "@/components/minimal/primitives";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import type { PaseoStatus } from "@/app/api/paseo/status/route";
+import type { PaseoPair } from "@/app/api/paseo/pair/route";
 
-interface Agent {
-  id: string;
-  status: string;
-  provider?: string;
-  model?: string;
-  directory?: string;
-  prompt?: string;
-  createdAt?: string;
-}
-
-interface AgentsResponse {
-  online: boolean;
-  agents: Agent[];
-  error?: string;
-}
-
-interface ModelEntry {
-  id: string;
-  label?: string;
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "#7dd67d",
-  idle: "#9bd0ff",
-  stopped: "#6b6b6b",
-  error: "#d87373",
-  waiting: "#e6b450",
-  initializing: "#e6b450",
-  closed: "#6b6b6b",
-};
-
+/**
+ * Agents-side er en Paseo-embed: Paseo daemon kører på :6868, og vi viser
+ * Paseo's hosted web app (https://app.paseo.sh) pre-paret med lokal daemon
+ * via daemonens pair-URL. Det giver fuld agent-orkestrering (Claude Code,
+ * Codex, OpenCode, Pi) uden at Skynet skal genimplementere UI'en.
+ */
 export default function AgentsPage() {
-  const [data, setData] = useState<AgentsResponse | null>(null);
+  const [status, setStatus] = useState<PaseoStatus | null>(null);
+  const [pair, setPair] = useState<PaseoPair | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("");
-  const [models, setModels] = useState<ModelEntry[]>([]);
-  const [creating, setCreating] = useState(false);
+  const [embed, setEmbed] = useState(true);
 
-  const fetchAgents = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/daemon/agents");
-      const json = await res.json();
-      setData(json);
+      const [s, p] = await Promise.all([
+        fetch("/api/paseo/status").then((r) => r.json()) as Promise<PaseoStatus>,
+        fetch("/api/paseo/pair").then((r) => r.json()) as Promise<PaseoPair>,
+      ]);
+      setStatus(s);
+      setPair(p);
     } catch {
-      setData({ online: false, agents: [] });
+      // ignore
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetch("/api/chat/models", { cache: "no-store" });
-      const d = await res.json() as { available: boolean; models: ModelEntry[] };
-      if (d.available && d.models.length > 0) {
-        setModels(d.models);
-        setModel((cur) => cur || d.models[0].id);
-      }
-    } catch { /* noop */ }
-  }, []);
-
   useEffect(() => {
-    fetchAgents();
-    fetchModels();
-    const id = setInterval(fetchAgents, 5000);
+    refresh();
+    const id = setInterval(refresh, 10_000);
     return () => clearInterval(id);
-  }, [fetchAgents, fetchModels]);
+  }, [refresh]);
 
-  const handleCreate = async () => {
-    if (!prompt.trim()) return;
-    setCreating(true);
-    try {
-      await fetch("/api/daemon/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim(), model: model || undefined }),
-      });
-      setPrompt("");
-      setShowCreate(false);
-      fetchAgents();
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const running = data?.agents.filter((a) => a.status === "running" || a.status === "initializing") ?? [];
-  const others = data?.agents.filter((a) => a.status !== "running" && a.status !== "initializing") ?? [];
+  const online = status?.online ?? false;
 
   return (
     <MinimalPageLayout active="agents">
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px 60px" }}>
-        {/* Header row */}
-        <div className="flex items-baseline justify-between mb-6">
-          <div>
-            <h1 className="font-mono text-[11px] text-neutral-500 lowercase tracking-wide">
-              <span className="mr-1">#</span>agents
-              <span className="float-right ml-4 text-neutral-700">daemon :6767</span>
-            </h1>
-            <div className="font-mono text-[12px] mt-2">
+      <main style={{ maxWidth: 1400, margin: "0 auto", padding: "20px 24px 60px" }}>
+        {/* Status-banner */}
+        <Section
+          title="paseo · agent orchestrator"
+          right={
+            <span className="font-mono">
               {loading ? (
-                <span className="text-neutral-600">forbinder…</span>
-              ) : data?.online ? (
-                <span className="text-[#7dd67d]"><Dot tone="ok" />daemon online<Sep />{data.agents.length} agents</span>
+                <span className="text-neutral-700">indlæser…</span>
+              ) : online ? (
+                <>
+                  <Dot tone="ok" />
+                  <span className="text-[#7dd67d]">running</span>
+                  <span className="text-neutral-700"> · {status?.listen}</span>
+                  <span className="text-neutral-700"> · v{status?.daemonVersion}</span>
+                </>
               ) : (
-                <span className="text-[#d87373]"><Dot tone="bad" />daemon offline</span>
+                <>
+                  <Dot tone="bad" />
+                  <span className="text-[#d87373]">stopped</span>
+                </>
+              )}
+            </span>
+          }
+          className="mb-4"
+        >
+          {online ? (
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 font-mono text-[12px] text-neutral-500 mb-3">
+              <span><span className="text-neutral-700">running </span><span className="text-neutral-200 tabular-nums">{status?.runningAgents ?? 0}</span></span>
+              <span><span className="text-neutral-700">idle </span><span className="text-neutral-200 tabular-nums">{status?.idleAgents ?? 0}</span></span>
+              <span><span className="text-neutral-700">started </span><span className="text-neutral-300">{status?.startedAt ? new Date(status.startedAt).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "—"}</span></span>
+              <span className="text-neutral-700">pid {status?.pid}</span>
+              <div className="flex-1" />
+              <Button size="sm" tone="ghost" onClick={() => setEmbed((v) => !v)}>
+                {embed ? "→ skjul embed" : "→ vis embed"}
+              </Button>
+              {pair?.url && (
+                <ButtonLink size="sm" tone="accent" href={pair.url} target="_blank" rel="noreferrer">
+                  → åbn i ny fane
+                </ButtonLink>
               )}
             </div>
-          </div>
-          <div className="flex gap-3 font-mono text-[11px]">
-            <a href="/delegate" className="text-neutral-500 hover:text-neutral-100">delegate →</a>
-            <button
-              onClick={() => setShowCreate(!showCreate)}
-              className="text-neutral-100 hover:text-white"
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-            >
-              {showCreate ? "× annuller" : "+ ny agent"}
-            </button>
-          </div>
-        </div>
-
-        {/* Create form */}
-        {showCreate && (
-          <div
-            className="mb-6 font-mono"
-            style={{ borderTop: "1px dashed #262626", borderBottom: "1px dashed #262626", padding: "16px 0" }}
-          >
-            <div className="text-[11px] text-neutral-500 mb-2">prompt</div>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={3}
-              placeholder="beskriv opgaven for agenten…"
-              style={{
-                width: "100%",
-                background: "#111",
-                border: "1px dashed #262626",
-                padding: "8px 10px",
-                color: "#e5e5e5",
-                fontFamily: "inherit",
-                fontSize: 12,
-                resize: "vertical",
-                outline: "none",
-              }}
-            />
-            <div className="flex items-center gap-3 mt-3 text-[11px]">
-              <span style={{ color: "#6b6b6b" }}>model</span>
-              {models.length > 0 ? (
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  style={{
-                    background: "#111",
-                    border: "1px dashed #333",
-                    padding: "3px 8px",
-                    color: "#9bd0ff",
-                    fontFamily: "inherit",
-                    fontSize: 11,
-                    outline: "none",
-                    flex: 1,
-                    maxWidth: 340,
-                  }}
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label ? `${m.label} · ${m.id.split("/").pop()}` : m.id.split("/").pop()}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span style={{ color: "#444" }}>LM Studio ikke tilgængeligt</span>
-              )}
-            </div>
-            <div className="flex justify-end gap-4 mt-3 text-[11px]">
-              <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", color: "#6b6b6b", cursor: "pointer" }}>
-                annuller
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={creating || !prompt.trim()}
-                style={{ background: "none", border: "none", color: creating || !prompt.trim() ? "#6b6b6b" : "#f5f5f5", cursor: "pointer" }}
-              >
-                {creating ? "opretter…" : "→ start agent"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Offline */}
-        {!loading && !data?.online && (
-          <div className="font-mono" style={{ paddingTop: 40 }}>
-            <div className="text-[#d87373] mb-3"><Dot tone="bad" />daemon offline · port 6767</div>
-            <div className="text-neutral-500 text-[12px] mb-2">start daemon med:</div>
-            <code style={{ display: "block", color: "#9bd0ff", fontSize: 12 }}>
-              cd /Users/parthee/Desktop/Claude/projekter/skynet && npm run dev:daemon
-            </code>
-          </div>
-        )}
-
-        {/* Agent tables */}
-        {!loading && data?.online && (
-          <>
-            {data.agents.length === 0 && (
-              <div className="font-mono text-neutral-600 text-[12px]" style={{ paddingTop: 40 }}>
-                ingen aktive agents · klik &quot;+ ny agent&quot; for at starte en
+          ) : (
+            <div className="font-mono text-[12px] text-neutral-500 space-y-2">
+              <div className="text-[#d87373]">Paseo daemon kører ikke.</div>
+              <div className="text-neutral-600">
+                Start med <code className="text-neutral-400">launchctl kickstart -k gui/$(id -u)/com.paseo.daemon</code>
+                {" "}eller installer via <a href="https://paseo.sh/download" target="_blank" rel="noreferrer" className="text-sky-400/70">paseo.sh/download</a>.
               </div>
-            )}
+              {status?.error && <div className="text-neutral-700 text-[11px]">fejl: {status.error}</div>}
+            </div>
+          )}
+        </Section>
 
-            {running.length > 0 && (
-              <Section title={`kørende (${running.length})`} className="mb-8">
-                <AgentTable agents={running} />
-              </Section>
-            )}
-
-            {others.length > 0 && (
-              <Section title={`afsluttede (${others.length})`}>
-                <AgentTable agents={others} dim />
-              </Section>
-            )}
-          </>
+        {/* Embed Paseo's web app */}
+        {online && embed && pair?.url && (
+          <div
+            className="border border-dashed border-neutral-800"
+            style={{ height: "calc(100vh - 220px)", minHeight: 600 }}
+          >
+            <iframe
+              src={pair.url}
+              title="Paseo agents"
+              className="w-full h-full"
+              style={{ border: "none", background: "#0a0a0a" }}
+              allow="clipboard-read; clipboard-write; microphone"
+            />
+          </div>
         )}
+
+        {online && !embed && (
+          <div className="font-mono text-[11px] text-neutral-600 mt-3">
+            Embed skjult. Brug "åbn i ny fane" eller download Paseo desktop-appen fra{" "}
+            <a href="https://paseo.sh/download" target="_blank" rel="noreferrer" className="text-sky-400/70">paseo.sh/download</a>.
+          </div>
+        )}
+
+        {/* Provider-info */}
+        <div className="mt-4 font-mono text-[10px] text-neutral-700">
+          providers: claude-code · codex · opencode · pi · copilot · skift via{" "}
+          <code className="text-neutral-500">paseo provider ls</code>
+        </div>
       </main>
     </MinimalPageLayout>
-  );
-}
-
-function AgentTable({ agents, dim }: { agents: Agent[]; dim?: boolean }) {
-  return (
-    <table style={{ width: "100%", fontFamily: "inherit", fontSize: 12, borderCollapse: "collapse" }}>
-      <thead>
-        <tr style={{ color: "#6b6b6b", borderBottom: "1px dashed #262626" }}>
-          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: "120px" }}>id</th>
-          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400, width: "80px" }}>status</th>
-          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>prompt</th>
-          <th style={{ textAlign: "left", padding: "0 8px 6px 0", fontWeight: 400 }}>model</th>
-          <th style={{ textAlign: "left", padding: "0 0 6px 0", fontWeight: 400 }}>mappe</th>
-        </tr>
-      </thead>
-      <tbody>
-        {agents.map((a) => (
-          <tr
-            key={a.id}
-            style={{ borderBottom: "1px dashed #1c1c1c", color: dim ? "#6b6b6b" : "#e5e5e5" }}
-          >
-            <td style={{ padding: "8px 8px 8px 0", fontFamily: "inherit", color: "#9bd0ff" }}>
-              {a.id.slice(0, 10)}
-            </td>
-            <td style={{ padding: "8px 8px 8px 0" }}>
-              <span style={{ color: STATUS_COLOR[a.status] ?? "#6b6b6b" }}>
-                ● {a.status}
-              </span>
-            </td>
-            <td style={{ padding: "8px 8px 8px 0", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {a.prompt ?? "—"}
-            </td>
-            <td style={{ padding: "8px 8px 8px 0", color: "#6b6b6b" }}>
-              {a.provider ? `${a.provider}` : ""}
-              {a.model ? ` · ${a.model}` : "—"}
-            </td>
-            <td style={{ padding: "8px 0 8px 0", color: "#6b6b6b", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
-              {a.directory ?? "—"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
