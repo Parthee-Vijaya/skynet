@@ -319,6 +319,42 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Schedule reminder (one-off automation) ───────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "schedule_imessage_reminder",
+      description:
+        "Planlæg en one-off iMessage-påmindelse der sendes på et eksakt fremtidigt tidspunkt. Bruges fx til 'send mig en sms 15 minutter før toget kører' eller 'mind mig om mødet kl 13:45'. Opretter en automation med engangs-trigger der auto-sletter efter kørsel.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: {
+            type: "string",
+            description:
+              "Modtager: telefonnummer (fx '+4512345678') eller iCloud-e-mail. Hvis tom: brug iMessage-default fra settings.",
+          },
+          message: {
+            type: "string",
+            description:
+              "Tekst der skal sendes. Vær konkret (fx 'Toget mod Valby kører om 15 min — IC42 spor 4').",
+          },
+          sendAtIso: {
+            type: "string",
+            description:
+              "Eksakt ISO-8601 tidspunkt for afsendelse, fx '2026-04-28T13:45:00+02:00'. Skal være i fremtiden.",
+          },
+          name: {
+            type: "string",
+            description:
+              "Kort navn på påmindelsen — vises i automation-listen, fx 'Tog Næstved → Valby'.",
+          },
+        },
+        required: ["message", "sendAtIso", "name"],
+      },
+    },
+  },
+
   // ── News (RSS) ───────────────────────────────────────────────────────────
   {
     type: "function",

@@ -8,7 +8,7 @@
 
 // ── Triggers ────────────────────────────────────────────────────────────────
 
-export type TriggerType = "cron" | "threshold" | "manual";
+export type TriggerType = "cron" | "threshold" | "manual" | "once";
 
 export interface CronTrigger {
   type: "cron";
@@ -35,7 +35,20 @@ export interface ManualTrigger {
   type: "manual";
 }
 
-export type Trigger = CronTrigger | ThresholdTrigger | ManualTrigger;
+/**
+ * One-off trigger: kører præcis én gang på et bestemt tidspunkt og slettes
+ * automatisk efter kørsel. Bruges af LLM-genererede reminders ("send mig en
+ * sms 15 min før toget kører").
+ */
+export interface OnceTrigger {
+  type: "once";
+  /** Eksakt køretidspunkt som ms-since-epoch */
+  runAt: number;
+  /** Slet automation efter første kørsel (default: true) */
+  deleteAfterRun?: boolean;
+}
+
+export type Trigger = CronTrigger | ThresholdTrigger | ManualTrigger | OnceTrigger;
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 

@@ -292,6 +292,49 @@ async function execute(
       return { ok: true, to, sent: true, message: "iMessage sendt" };
     }
 
+    // ── One-off iMessage reminder ────────────────────────────────────────
+    case "schedule_imessage_reminder": {
+      const { createAutomation } = await import("./automations");
+      const { reloadScheduler } = await import("@/jobs/scheduler");
+      const { getImessageDefault } = await import("@/lib/settings");
+      const rawTo = String(args.to ?? "").trim() || getImessageDefault();
+      if (!rawTo) {
+        throw new Error("ingen modtager: angiv 'to' eller sæt iMessage-default i settings");
+      }
+      const to = normalizeImessageRecipient(rawTo);
+      const message = String(args.message ?? "").trim();
+      const sendAtIso = String(args.sendAtIso ?? "").trim();
+      const name = String(args.name ?? "").trim() || "iMessage-påmindelse";
+      if (!message) throw new Error("message er påkrævet");
+      if (!sendAtIso) throw new Error("sendAtIso er påkrævet (ISO-8601)");
+      const ts = Date.parse(sendAtIso);
+      if (!Number.isFinite(ts)) throw new Error(`ugyldig sendAtIso: ${sendAtIso}`);
+      if (ts < Date.now() - 60_000) {
+        throw new Error("sendAtIso er i fortiden");
+      }
+      const created = createAutomation({
+        name: name.slice(0, 64),
+        description: `One-off reminder · ${new Date(ts).toLocaleString("da-DK")}`,
+        trigger: { type: "once", runAt: ts, deleteAfterRun: true },
+        actions: [
+          {
+            type: "tool",
+            tool: "send_imessage",
+            args: { to, message },
+          },
+        ],
+        enabled: true,
+      });
+      reloadScheduler();
+      return {
+        ok: true,
+        automationId: created.id,
+        sendsAt: new Date(ts).toISOString(),
+        to,
+        message: `Påmindelse oprettet (id ${created.id}). Sender iMessage til ${to} ${new Date(ts).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}.`,
+      };
+    }
+
     // ── News (RSS) ────────────────────────────────────────────────────────
     case "fetch_news": {
       const feedUrl = String(args.url ?? "").trim();
