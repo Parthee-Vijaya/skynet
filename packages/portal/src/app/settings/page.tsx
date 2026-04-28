@@ -16,10 +16,19 @@ interface SettingsResp {
 
 interface ModelsResp {
   available: boolean;
+  provider?: string;
   baseUrl: string;
   models: Array<{ id: string; label?: string; tag?: string }>;
   missing: Array<{ hint: string; label: string; tag: string }>;
   error?: string;
+}
+
+function detectProviderName(baseUrl: string): string {
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1?\])/i.test(baseUrl)) return "LM Studio";
+  if (baseUrl.includes("generativelanguage.googleapis.com")) return "Gemini";
+  if (baseUrl.includes("openai.com")) return "OpenAI";
+  if (baseUrl.includes("anthropic.com")) return "Anthropic";
+  return "forbindelse";
 }
 
 const inputStyle = {
@@ -240,7 +249,7 @@ export default function SettingsPage() {
               {saved && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
               <div style={{ flex: 1 }} />
               <Button size="sm" tone="accent" onClick={runTest} disabled={testing}>
-                {testing ? "tester…" : "test lm studio"}
+                {testing ? "tester…" : `test ${detectProviderName(llm.baseUrl).toLowerCase()}`}
               </Button>
             </div>
 
