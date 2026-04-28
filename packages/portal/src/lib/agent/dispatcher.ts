@@ -24,7 +24,15 @@ import {
   completeReminder,
 } from "@/lib/integrations/reminders";
 import { findTrainRoute, RejseplanenError } from "@/lib/integrations/rejseplanen";
-import { getForecast, lookupAddress, wikipediaSummary } from "@/lib/integrations/info-tools";
+import {
+  getForecast,
+  lookupAddress,
+  wikipediaSummary,
+  getWeatherWarnings,
+  searchRecipes,
+  redditSearch,
+  getNews,
+} from "@/lib/integrations/info-tools";
 import { collect as collectTraffic } from "@/lib/collectors/traffic";
 import { collect as collectAir } from "@/lib/collectors/air";
 import { collect as collectMarkets } from "@/lib/collectors/markets";
@@ -366,6 +374,47 @@ async function execute(
       if (!title) throw new Error("title er påkrævet");
       const lang = typeof args.lang === "string" && args.lang.length === 2 ? args.lang : "da";
       return await wikipediaSummary(title, lang);
+    }
+
+    // ── Vejrvarsler (MeteoAlarm) ─────────────────────────────────────────
+    case "get_weather_warnings": {
+      const warnings = await getWeatherWarnings();
+      return {
+        count: warnings.length,
+        warnings,
+        message: warnings.length === 0 ? "Ingen aktive vejrvarsler i Danmark lige nu" : undefined,
+      };
+    }
+
+    // ── Opskrifter (TheMealDB) ───────────────────────────────────────────
+    case "search_recipes": {
+      const query = String(args.query ?? "").trim();
+      const recipes = await searchRecipes(query, 5);
+      if (recipes.length === 0) {
+        return { ok: false, query, message: `Ingen opskrifter fundet for "${query}". TheMealDB er en engelsk database — prøv et engelsk søgeord.` };
+      }
+      return { query, count: recipes.length, recipes };
+    }
+
+    // ── Reddit ────────────────────────────────────────────────────────────
+    case "reddit_search": {
+      const subreddit = typeof args.subreddit === "string" ? args.subreddit.replace(/^r\//i, "").trim() : undefined;
+      const query = typeof args.query === "string" ? args.query.trim() : undefined;
+      if (!subreddit && !query) {
+        throw new Error("subreddit eller query er påkrævet");
+      }
+      const sort = typeof args.sort === "string" ? args.sort as "hot" | "top" | "new" | "rising" | "relevance" : undefined;
+      const time = typeof args.time === "string" ? args.time as "hour" | "day" | "week" | "month" | "year" | "all" : undefined;
+      const limit = typeof args.limit === "number" ? args.limit : undefined;
+      const posts = await redditSearch({ subreddit, query, sort, time, limit });
+      return { count: posts.length, posts };
+    }
+
+    // ── Aggregeret nyhedstool ─────────────────────────────────────────────
+    case "get_news": {
+      const scope = typeof args.scope === "string" ? args.scope as "dk" | "world" | "both" : "both";
+      const limitPerSource = typeof args.limitPerSource === "number" ? args.limitPerSource : 3;
+      return await getNews({ scope, limitPerSource });
     }
 
     // ── Rejseplanen: find_train_route ────────────────────────────────────

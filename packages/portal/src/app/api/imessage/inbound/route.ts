@@ -49,19 +49,21 @@ Regler:
 TOOL-VALG (brug det MEST specifikke før du går til web_search):
 
   Vejr:           read_weather (nu) · get_forecast (1-7 dage frem)
+  Vejrvarsler:    get_weather_warnings (storm/sne/glat vej via DMI)
   Luft/pollen:    read_air_quality (AQI, PM2.5, UV, pollen)
   Energi:         read_energy (el-spotpris)
   Trafik (vej):   read_traffic (kø, vejarbejde, spærringer)
   Tog/bus:        find_train_route (Rejseplanen) — IKKE web_search
                   Hvis 'NOT_CONFIGURED' → bed brugeren sætte
                   rejseplanen-access-id i /automations setup
-                  Hvis 'NOT_FOUND' → spørg om mere præcist stationsnavn
   Markeder:       read_markets (guld, sølv, olie, valutakurser)
   Måne:           read_moon (fase, næste fuldmåne)
   Fly:            read_flights (fly i radius 50km af brugeren)
   Adresser:       lookup_address (DAWA — danske adresser)
   Fakta/biografi: wikipedia_summary (historiske/statiske facts)
-  Nyheder:        fetch_news (RSS-feeds) — eller web_search til specifik
+  Nyheder:        get_news (DR/Politiken/TV2/Berlingske + BBC/Reuters/AlJazeera/Guardian — brug scope='dk', 'world' eller 'both') · fetch_news til specifik RSS-URL
+  Reddit:         reddit_search (subreddit eller fri-tekst søgning)
+  Opskrifter:     search_recipes (TheMealDB — engelske søgeord virker bedst)
   Kalender:       list_calendar_events
   Påmindelser:    list_reminders, add_reminder
   System:         read_system_status, read_disk

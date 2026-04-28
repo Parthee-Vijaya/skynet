@@ -437,6 +437,97 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Vejrvarsler (DMI via MeteoAlarm — gratis, ingen key) ─────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_weather_warnings",
+      description:
+        "Hent aktuelle vejrvarsler for Danmark via MeteoAlarm (aggregerer DMI-varsler). Returnerer event-type (storm/sne/oversvømmelse/glat vej osv), niveau (yellow/orange/red), område, start- og sluttidspunkt og beskrivelse. Brug ved spørgsmål om varsler, storm, sneorkan, oversvømmelse, glat vej, kraftigt regn, hagl. Tom liste = ingen aktive varsler.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Opskrifter (TheMealDB — gratis, ingen key) ───────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_recipes",
+      description:
+        "Søg opskrifter i TheMealDB (engelsk database, gratis). Returnerer titel, kategori, område, fulde instruktioner og ingrediensliste. Tom query → tilfældig opskrift. Fungerer bedst med engelske søgeord (fx 'pasta', 'chicken curry', 'pancakes').",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeord på engelsk (fx 'pasta', 'beef stew'). Tom = tilfældig opskrift.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Reddit (gratis ingen key) ────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "reddit_search",
+      description:
+        "Søg på Reddit eller hent top-posts fra et bestemt subreddit. Returnerer titel, subreddit, score, antal kommentarer, URL og evt. selftext. Brug ved 'hvad sker der på r/X', 'find diskussioner om Y på Reddit', 'top posts på r/worldnews'.",
+      parameters: {
+        type: "object",
+        properties: {
+          subreddit: {
+            type: "string",
+            description: "Subreddit-navn uden 'r/', fx 'worldnews', 'denmark', 'programming'. Valgfri hvis 'query' er sat.",
+          },
+          query: {
+            type: "string",
+            description: "Søgeord. Hvis subreddit også er sat: søg kun i det subreddit.",
+          },
+          sort: {
+            type: "string",
+            enum: ["hot", "top", "new", "rising", "relevance"],
+            description: "Sortering. Default: 'top' for subreddit-kun, 'relevance' for søgning.",
+          },
+          time: {
+            type: "string",
+            enum: ["hour", "day", "week", "month", "year", "all"],
+            description: "Tidsvindue for top/relevance. Default: 'day'.",
+          },
+          limit: {
+            type: "number",
+            description: "Max antal posts (1-25). Default: 10.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Aggregeret nyhedstool ────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_news",
+      description:
+        "Hent aktuelle nyheder fra danske og/eller internationale RSS-feeds. Aggregerer DR, Politiken, TV2, Berlingske (DK) og BBC, Reuters, Al Jazeera, Guardian (verden). Resultater sorteres efter dato, nyeste først. Brug 'scope' til at vælge fokus.",
+      parameters: {
+        type: "object",
+        properties: {
+          scope: {
+            type: "string",
+            enum: ["dk", "world", "both"],
+            description: "'dk' = kun danske kilder, 'world' = kun internationale, 'both' (default) = top fra begge",
+          },
+          limitPerSource: {
+            type: "number",
+            description: "Antal nyheder pr. kilde (1-10). Default: 3.",
+          },
+        },
+      },
+    },
+  },
+
   // ── Transit (Rejseplanen) ────────────────────────────────────────────────
   {
     type: "function",

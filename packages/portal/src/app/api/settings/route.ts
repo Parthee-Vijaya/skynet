@@ -17,9 +17,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string; imessageDefault?: string; rejseplanenAccessId?: string };
+  let body: {
+    llm?: Partial<LLMConfig>; userName?: string; city?: string;
+    githubUser?: string; githubToken?: string; imessageDefault?: string;
+    rejseplanenAccessId?: string;
+  };
   try {
-    body = (await req.json()) as { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string; imessageDefault?: string; rejseplanenAccessId?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
