@@ -15,6 +15,7 @@ import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
 import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { TmuxAgentsWidget } from "./TmuxAgentsWidget";
+import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -25,9 +26,12 @@ registerWidget({ id: "net",      group: "system",   colSpan: 4,  Component: NetW
 // ── Row: weather (left) + plex (right) ─────────────────────────────────────
 registerWidget({ id: "weather",  group: "ambient",  colSpan: 6,  Component: WeatherWidgetMinimal });
 registerWidget({ id: "plex",     group: "ambient",  colSpan: 6,  Component: PlexWidgetMinimal });
-// ── Row: tmux (left) + sabnzbd (right — under plex) ────────────────────────
-registerWidget({ id: "tmux",      group: "ambient", colSpan: 6,  Component: TmuxAgentsWidget });
+// ── Row: paseo agents (left) + sabnzbd (right) ────────────────────────────
+// Erstattet tmux pocket-agents — bruger nu Paseo (multi-provider orkestrering)
+registerWidget({ id: "paseo",    group: "ambient", colSpan: 6,  Component: PaseoAgentsWidget });
 registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: SabnzbdWidgetMinimal });
+// TmuxAgentsWidget er stadig importeret — kan registreres igen hvis du vil have begge
+void TmuxAgentsWidget;
 // ── Row: disk (left) + github personal (right) ─────────────────────────────
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
 registerWidget({ id: "github",   group: "ambient",  colSpan: 6,  Component: GithubWidgetMinimal });
