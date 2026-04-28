@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getLLMConfig, setLLMConfig, DEFAULT_LLM_CONFIG, LLMConfig, getUserName, setUserName, getLocation, getSetting, setSetting } from "@/lib/settings";
+import { getLLMConfig, setLLMConfig, DEFAULT_LLM_CONFIG, LLMConfig, getUserName, setUserName, getLocation, getSetting, setSetting, getImessageDefault, setImessageDefault } from "@/lib/settings";
 import { geocodeCity } from "@/app/api/setup/route";
 
 export const runtime = "nodejs";
@@ -11,13 +11,14 @@ export async function GET() {
   const location = getLocation();
   const githubUser = getSetting("github_user") ?? "";
   const hasGithubToken = !!getSetting("github_token");
-  return Response.json({ llm, defaults: DEFAULT_LLM_CONFIG, userName, location, githubUser, hasGithubToken });
+  const imessageDefault = getImessageDefault();
+  return Response.json({ llm, defaults: DEFAULT_LLM_CONFIG, userName, location, githubUser, hasGithubToken, imessageDefault });
 }
 
 export async function POST(req: NextRequest) {
-  let body: { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string };
+  let body: { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string; imessageDefault?: string };
   try {
-    body = (await req.json()) as { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string };
+    body = (await req.json()) as { llm?: Partial<LLMConfig>; userName?: string; city?: string; githubUser?: string; githubToken?: string; imessageDefault?: string };
   } catch {
     return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   if (typeof body.userName === "string") setUserName(body.userName);
   if (typeof body.githubUser === "string") setSetting("github_user", body.githubUser.trim());
   if (typeof body.githubToken === "string") setSetting("github_token", body.githubToken.trim());
+  if (typeof body.imessageDefault === "string") setImessageDefault(body.imessageDefault);
   if (typeof body.city === "string" && body.city.trim()) {
     const { setSettingJSON } = await import("@/lib/settings");
     const loc = await geocodeCity(body.city.trim());
@@ -38,5 +40,6 @@ export async function POST(req: NextRequest) {
     location: getLocation(),
     githubUser: getSetting("github_user") ?? "",
     hasGithubToken: !!getSetting("github_token"),
+    imessageDefault: getImessageDefault(),
   });
 }

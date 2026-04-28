@@ -55,6 +55,19 @@ export function setUserName(name: string): void {
   setSetting("user_name", name.trim().slice(0, 64));
 }
 
+/**
+ * Default iMessage-modtager (telefonnummer eller iCloud-adresse).
+ * Bruges af automation-templates og inbound iMessage-handler.
+ * Format: '+4512345678' eller 'navn@icloud.com'.
+ */
+export function getImessageDefault(): string {
+  return getSetting("imessage_default") ?? "";
+}
+
+export function setImessageDefault(value: string): void {
+  setSetting("imessage_default", value.trim().slice(0, 128));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {
