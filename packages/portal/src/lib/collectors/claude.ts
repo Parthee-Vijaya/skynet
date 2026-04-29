@@ -28,8 +28,12 @@ interface StatsCacheResult {
 function humanizeResetIn(resetsAtMs: number | null): string {
   if (!resetsAtMs) return "";
   const diff = resetsAtMs - Date.now();
-  if (diff <= 0) return "nu";
+  // Tidspunkt i fortiden → nulstillingen er sket; den gemte usedPercent er
+  // dermed irrelevant (eller gammel snapshot). Vis ingen "om X" tekst — det
+  // skulle være tydeligt at værdien ikke er live længere.
+  if (diff < 0) return "udløbet";
   const mins = Math.round(diff / 60_000);
+  if (mins < 1) return "nu";
   if (mins < 60) return `om ${mins}m`;
   const hours = Math.round(mins / 60);
   if (hours < 48) return `om ${hours}t`;

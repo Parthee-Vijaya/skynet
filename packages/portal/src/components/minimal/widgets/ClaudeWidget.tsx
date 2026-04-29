@@ -10,8 +10,20 @@ function fmtTok(n: number): string {
   return String(n);
 }
 
+function timeSince(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 0) return "lige nu";
+  const mins = Math.round(diff / 60_000);
+  if (mins < 1) return "lige nu";
+  if (mins < 60) return `${mins}m siden`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours}t siden`;
+  const days = Math.round(hours / 24);
+  return `${days}d siden`;
+}
+
 /** Én plan-usage linje · "5-hour limit   16% · resets 1h" */
-function PlanRow({ label, bucket }: { label: string; bucket: ClaudeRateLimit | null }) {
+function PlanRow({ label, bucket, stale }: { label: string; bucket: ClaudeRateLimit | null; stale?: boolean }) {
   if (!bucket) {
     return (
       <tr>
@@ -21,14 +33,17 @@ function PlanRow({ label, bucket }: { label: string; bucket: ClaudeRateLimit | n
     );
   }
   const pct = Math.round(bucket.usedPercent);
-  const tone = pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
+  // Når stale: dæmp farverne så det er tydeligt at det IKKE er live data
+  const tone = stale
+    ? "text-neutral-600"
+    : pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
   return (
     <tr>
-      <td className="text-neutral-500 py-0.5 truncate">{label}</td>
+      <td className={`py-0.5 truncate ${stale ? "text-neutral-700" : "text-neutral-500"}`}>{label}</td>
       <td className={`text-right ${tone} tabular-nums`}>
         {pct}%
         {bucket.resetsIn && (
-          <span className="text-neutral-600 font-normal ml-1.5">· {bucket.resetsIn}</span>
+          <span className={`font-normal ml-1.5 ${stale ? "text-neutral-700" : "text-neutral-600"}`}>· {bucket.resetsIn}</span>
         )}
       </td>
     </tr>
@@ -78,18 +93,34 @@ export function ClaudeWidget() {
         {rl && (rl.fiveHour || rl.sevenDay || rl.sevenDayOpus) && (
           <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-800">
             <div className="flex items-baseline justify-between mb-1">
-              <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-600">plan usage</span>
-              {rl.stale && (
-                <span className="text-[10px] text-amber-500/70">⚠ gamle data</span>
-              )}
+              <span className={`text-[10px] uppercase tracking-[0.2em] ${rl.stale ? "text-neutral-700" : "text-neutral-600"}`}>
+                plan usage
+              </span>
+              {rl.stale ? (
+                <span
+                  className="text-[10px] text-amber-500/80"
+                  title="Værdierne er ikke live — kør 'claude' for at opdatere"
+                >
+                  ⚠ ikke live · {timeSince(rl.updatedAt)}
+                </span>
+              ) : rl.updatedAt ? (
+                <span className="text-[10px] text-neutral-700">
+                  opdateret {timeSince(rl.updatedAt)}
+                </span>
+              ) : null}
             </div>
             <table className="w-full text-[12px]">
               <tbody>
-                <PlanRow label="5-hour limit" bucket={rl.fiveHour} />
-                <PlanRow label="weekly · all models" bucket={rl.sevenDay} />
-                <PlanRow label="weekly · opus/sonnet" bucket={rl.sevenDayOpus} />
+                <PlanRow label="5-hour limit" bucket={rl.fiveHour} stale={rl.stale} />
+                <PlanRow label="weekly · all models" bucket={rl.sevenDay} stale={rl.stale} />
+                <PlanRow label="weekly · opus/sonnet" bucket={rl.sevenDayOpus} stale={rl.stale} />
               </tbody>
             </table>
+            {rl.stale && (
+              <div className="text-[10px] text-neutral-700 mt-1.5 leading-snug">
+                Kør <code className="text-neutral-500">claude</code> en gang for at refreshe rate-limits via statusline-hook.
+              </div>
+            )}
           </div>
         )}
 

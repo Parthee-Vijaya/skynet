@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type {
   Automation,
   Trigger,
@@ -10,10 +10,19 @@ import type {
   LLMNotifyAction,
   ToolAction,
 } from "@/lib/agent/types";
+import { inspectCron, relativeFromNow } from "@/lib/cron-utils";
 
 interface Props {
   /** Hvis null: opret ny. Hvis Automation: redigér eksisterende. */
   target: Automation | "new" | null;
+  /** Forhåndsudfyld editoren (fx fra NL→automation-forslag) — kun hvis target === "new" */
+  prefill?: {
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    trigger: Trigger;
+    actions: Action[];
+  } | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -21,7 +30,8 @@ interface Props {
 type DraftTrigger =
   | (CronTrigger & { type: "cron" })
   | (ThresholdTrigger & { type: "threshold" })
-  | { type: "manual" };
+  | { type: "manual" }
+  | { type: "once"; runAt: number; deleteAfterRun?: boolean };
 
 type DraftAction =
   | (NotifyAction & { type: "notify" })
@@ -61,7 +71,7 @@ function emptyDraft(): {
   };
 }
 
-export function AutomationEditor({ target, onClose, onSaved }: Props) {
+export function AutomationEditor({ target, prefill, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState(emptyDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,11 +97,19 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
         trigger: target.trigger as DraftTrigger,
         actions: (target.actions ?? [target.action]) as DraftAction[],
       });
+    } else if (target === "new" && prefill) {
+      setDraft({
+        name: prefill.name,
+        description: prefill.description ?? "",
+        enabled: prefill.enabled !== false,
+        trigger: prefill.trigger as DraftTrigger,
+        actions: prefill.actions as DraftAction[],
+      });
     } else {
       setDraft(emptyDraft());
     }
     setError(null);
-  }, [target]);
+  }, [target, prefill]);
 
   if (target === null) return null;
 
@@ -216,7 +234,7 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
           {/* Trigger-sektion */}
           <section className="border-t border-cyan-400/10 pt-4">
             <Label>TRIGGER</Label>
-            <div className="flex gap-2 mt-1 mb-3">
+            <div className="flex gap-2 mt-1 mb-3 flex-wrap">
               {(["cron", "threshold", "manual"] as const).map((t) => (
                 <button
                   key={t}
@@ -230,29 +248,23 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
                   {t === "cron" ? "Tid (cron)" : t === "threshold" ? "Tærskel" : "Manuel"}
                 </button>
               ))}
+              {draft.trigger.type === "once" && (
+                <span className="px-3 py-1.5 rounded-lg text-[12px] border border-amber-400/40 bg-amber-500/10 text-amber-200">
+                  Engang (auto-genereret)
+                </span>
+              )}
             </div>
 
             {draft.trigger.type === "cron" && (
-              <div className="space-y-2">
-                <Field label="Cron-expression">
-                  <input
-                    type="text"
-                    value={draft.trigger.expression}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        trigger: { ...draft.trigger, expression: e.target.value } as DraftTrigger,
-                      })
-                    }
-                    className={`${inputCls} font-mono`}
-                    placeholder="0 7 * * *"
-                  />
-                </Field>
-                <div className="text-[11px] text-neutral-500 font-mono">
-                  min · time · dag · mdr · uge · &nbsp;&nbsp;Fx &quot;0 7 * * *&quot; = 07:00 hver dag ·
-                  &quot;*/15 * * * *&quot; = hvert 15. min · &quot;0 22 * * 0&quot; = 22:00 søndage
-                </div>
-              </div>
+              <CronEditor
+                expression={draft.trigger.expression}
+                onChange={(expression) =>
+                  setDraft({
+                    ...draft,
+                    trigger: { ...draft.trigger, expression } as DraftTrigger,
+                  })
+                }
+              />
             )}
 
             {draft.trigger.type === "threshold" && (
@@ -351,6 +363,18 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
             {draft.trigger.type === "manual" && (
               <div className="text-[12px] text-neutral-500">
                 Kører kun når du trykker &quot;kør&quot; manuelt.
+              </div>
+            )}
+
+            {draft.trigger.type === "once" && (
+              <div className="text-[12px] text-amber-200/80 bg-amber-500/5 border border-amber-400/20 rounded-lg px-3 py-2 leading-relaxed">
+                One-off reminder oprettet af AI · sendes{" "}
+                <strong className="text-amber-100">
+                  {new Date(draft.trigger.runAt).toLocaleString("da-DK", {
+                    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                  })}
+                </strong>{" "}
+                og slettes automatisk efter kørsel. Skift til cron/threshold/manuel hvis du vil ændre denne adfærd.
               </div>
             )}
           </section>
@@ -463,6 +487,100 @@ export function AutomationEditor({ target, onClose, onSaved }: Props) {
             {saving ? "gemmer…" : isEdit ? "Gem ændringer" : "Opret"}
           </button>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+// ── Cron-editor med live feedback ────────────────────────────────────────────
+
+const CRON_PRESETS: Array<{ label: string; expr: string }> = [
+  { label: "07:00 hverdag", expr: "0 7 * * 1-5" },
+  { label: "07:00 hver dag", expr: "0 7 * * *" },
+  { label: "Hver 15. min", expr: "*/15 * * * *" },
+  { label: "Hver time", expr: "0 * * * *" },
+  { label: "Søndag 22:00", expr: "0 22 * * 0" },
+  { label: "1. i måneden 09:00", expr: "0 9 1 * *" },
+];
+
+function CronEditor({
+  expression,
+  onChange,
+}: {
+  expression: string;
+  onChange: (expr: string) => void;
+}) {
+  const info = useMemo(() => inspectCron(expression), [expression]);
+  return (
+    <div className="space-y-2">
+      <Field label="Cron-expression">
+        <input
+          type="text"
+          value={expression}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${inputCls} font-mono ${
+            info.valid
+              ? "border-emerald-400/40"
+              : "border-rose-500/40"
+          }`}
+          placeholder="0 7 * * *"
+        />
+      </Field>
+      <div className="flex flex-wrap gap-1.5">
+        {CRON_PRESETS.map((p) => (
+          <button
+            key={p.expr}
+            onClick={() => onChange(p.expr)}
+            className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
+              expression.trim() === p.expr
+                ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-100"
+                : "border-cyan-400/15 text-neutral-400 hover:border-cyan-400/40"
+            }`}
+            title={p.expr}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div
+        className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+          info.valid
+            ? "border-emerald-400/20 bg-emerald-500/5"
+            : "border-rose-500/30 bg-rose-950/20"
+        }`}
+      >
+        {info.valid ? (
+          <>
+            <div className="text-emerald-200 mb-1">
+              ✓ {info.description}
+            </div>
+            <div className="text-neutral-500 font-mono">
+              <span className="text-neutral-600">næste 3 kørsler · </span>
+              {info.nextRuns?.map((ts, i) => (
+                <span key={i}>
+                  {i > 0 && <span className="text-neutral-700"> · </span>}
+                  <span className="text-neutral-300">{relativeFromNow(ts)}</span>
+                  <span className="text-neutral-600">
+                    {" "}
+                    ({new Date(ts).toLocaleString("da-DK", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })})
+                  </span>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="text-rose-300">
+            ✗ {info.error ?? "ugyldig"}
+            <span className="text-neutral-500 ml-2 font-mono">
+              format: min time dag måned uge — fx &quot;0 7 * * *&quot;
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

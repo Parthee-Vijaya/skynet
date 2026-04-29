@@ -1,116 +1,241 @@
-# S.K.Y.N.E.T.
+# Skynet
 
-**System for Knowledge, Yielding Neural Engagement & Tasks**
-
-Personlig intelligens-platform til macOS — live cockpit-dashboard, lokal AI-chat, agent-orkestrering og smarte automationer. Alt kører lokalt, ingen cloud-afhængighed.
+**Personlig AI-platform til macOS** — live cockpit-dashboard, iMessage-assistent med 33 tools, automation-motor og embedded multi-agent orchestrator. Kører lokalt (LM Studio) eller mod cloud (Google Gemini), efter dit valg.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Parthee-Vijaya/skynet/main/scripts/install.sh | bash
 ```
 
-Installerer Homebrew, Node 20+, kloner repo, bygger alt og sætter LaunchAgents op så Skynet starter automatisk ved login.
+Idempotent installer: Homebrew, Node 20+, klon af repo, build af alle pakker, LaunchAgents til auto-start ved login. Kør igen for at opdatere.
 
 ---
 
-## Screenshots
+## Skærmbilleder
 
-### Cockpit · Dashboard
+### Cockpit · `/minimal`
 
-![Skynet dashboard](docs/screenshots/dashboard.png)
+![Skynet cockpit](docs/screenshots/dashboard.png)
 
-Live cockpit i starquake-minimal-stil. Venstre: animeret Three.js-globus med SKYNET-overlay, live ur og dato, roterende citater. Midt: system-widgets — CPU-ring med historik-sparkline, RAM, netværk. Højre: Claude Code-statistik. Nedenunder: disk-volumener, services & porte og GitHub Trending repos (live, opdateres hvert 5 min).
+Starquake-minimal-stil i `#0a0a0a` med JetBrains Mono og dashed borders. Live data fra ~20 collectors: vejr, energi, system-telemetri, GitHub trending, Plex, SABnzbd, paseo-agents, månefase, fly i radius, jordskælv, nordlys-chance, plus en animeret Three.js-globus med roterende citater og live ur.
 
----
+### iMessage-assistent
 
-### Agents
+Send Skynet en iMessage — den slår op, svarer tilbage, og kan oprette one-off påmindelser.
 
-![Agents side](docs/screenshots/agents.png)
+```
+Mig:    Hvornår kører næste tog fra Næstved til Hellerup?
+Skynet: IC42 spor 4 kl. 15:32, ankomst Hellerup 16:48 (1t 16m).
 
-Oversigt over alle kørende og afsluttede AI-agenter. Daemon-status i realtid (WebSocket :6767). Opret en ny agent med et prompt og vælg model fra LM Studio — agenten kører i baggrunden og vises med status (`running`, `idle`, `stopped`, `error`). Klik `delegate →` for direkte prompt-routing.
-
----
-
-### Automations
-
-![Automations side](docs/screenshots/automations.png)
-
-Regel-motor med tre trigger-typer og tre action-typer:
-
-| Trigger | Beskrivelse |
-|---------|-------------|
-| **Cron** | Standard cron-expression (`0 7 * * *` = 07:00 hver dag) |
-| **Tærskel** | Metrik-baseret (`disk_percent > 90`, `temperature > 85`…) |
-| **Manuel** | Klik `kør` fra UI |
-
-| Action | Beskrivelse |
-|--------|-------------|
-| **Simpel besked** | Fast push-notifikation via ntfy eller macOS Notification Center |
-| **LLM-genereret besked** | LM Studio-model genererer tekst med tool-calling (vejr, el-pris, nyheder, web-søgning) — resultatet pushes som notifikation og/eller sendes som iMessage |
-| **Kør tool** | Direkte kald til et system-tool: `send_imessage`, `control_app`, `fetch_news`, `web_search` m.fl. |
-
-Notifikations-backends: ntfy (iPhone/Android push), macOS Notification Center.
-
----
-
-### Chat
-
-![Chat side](docs/screenshots/chat.png)
-
-Lokal AI-chat drevet af LM Studio på din Mac. Model-picker øverst — skifter live mellem alle indlæste modeller (GGUF, MLX). Sidebar med samtale-historik. Streaming-svar med Markdown-rendering. Understøtter tool-invocations (system-status, kalender, vejr, web-søgning) vist inline i chatten.
-
----
-
-## Features
-
-- **Cockpit-dashboard** — starquake minimal-stil, `#0a0a0a`, JetBrains Mono, dashed borders
-- **Animated globe** — Three.js + three-globe, blue halo, auto-rotation, SKYNET-overlay
-- **GitHub Trending** — top repos fra sidste 7 dage, language-dots, HOT/NEW badges, live ★-count
-- **System-telemetri** — CPU, RAM, netværk, disk, temperatur, top-processer
-- **Services & porte** — scanner via `lsof`, viser status, kategori og PID
-- **LM Studio chat** — lokal model, streaming, tool-calling, Markdown
-- **Agent-daemon** — AI-agenter der kører autonomt (WebSocket-protokol)
-- **Automations** — cron + tærskel triggers, kædede actions, LLM-actions med tools, push + iMessage delivery
-- **Proaktive agents** — LLM kan returnere `NONE` for at skippe notifikation · kun pinger når noget er handlingsværdigt
-- **iMessage delivery** — send LLM-genererede briefings direkte til din iPhone
-- **Nyhedsfeeds** — `fetch_news` tool parser RSS-feeds (DR, TV2, Børsen…)
-- **Web tools** — `web_fetch` + `web_search` (DuckDuckGo) til LLM-tool-loop
-- **macOS-integrationer** — kalender, påmindelser, apps (`open -a`), LaunchAgents
-- **ntfy push** — pushes til iPhone/Android uden Apple Developer-konto
-- **PWA / iOS home-screen** — installér som app via Safari "Føj til hjemmeskærm" · manifest, service-worker, standalone-mode
-- **Siri-endpoint** — `/api/siri?q=...` returnerer kort plain-text · fede Apple Shortcut → "Hey Siri, spørg Skynet ..."
-- **Plex nu-afspilles** — live streams, progress, bibliotek-stats i cockpit
-
----
-
-## Hurtig start
-
-```bash
-# Fresh Mac — installér alt
-curl -fsSL https://raw.githubusercontent.com/Parthee-Vijaya/skynet/main/scripts/install.sh | bash
+Mig:    Send mig en sms 15 min før det kører.
+Skynet: Påmindelse oprettet — sender SMS kl. 15:17 om "Toget mod
+        Hellerup kører om 15 min — IC42 spor 4".
 ```
 
-Scriptet er idempotent — kan køres igen for at opdatere.
+LLM tvinges til at kalde et tool på første turn — ingen flere generiske "hej, hvad kan jeg hjælpe med?"-svar uden data.
 
-**Valgfrie env-variabler:**
+### Automations · `/automations`
 
-```bash
-SKYNET_HOME=~/mit-skynet \
-SKYNET_REPO=https://github.com/Parthee-Vijaya/skynet.git \
-  bash <(curl -fsSL …/install.sh)
-```
+Tre tabs: regler / setup / logs. NL→automation-genererer regler fra fri tekst ("send push når disken er over 90%"). 9 indbyggede skabeloner. Run-historik drawer pr. regel + dry-run-knap der viser hvad der ville være sendt uden faktisk at sende.
 
 ---
 
-## Development
+## Highlight-features
 
-```bash
-npm install              # Installer alle workspace-dependencies
-npm run dev              # Portal + daemon (concurrent)
-npm run dev:portal       # Kun portal  → http://localhost:3100
-npm run dev:daemon       # Kun daemon  → ws://localhost:6767
-npm run build:daemon     # Byg highlight + relay + daemon + cli
-npm run typecheck        # Typecheck alle pakker
+| | |
+|---|---|
+| 💬 **iMessage-assistent** | Indkommende beskeder → LLM med 33 tools → svar tilbage. One-off reminders ("send sms 15 min før mødet") oprettes som auto-slettende automations. Anti-loop-guard mod iCloud-echo. |
+| 🤖 **Multi-provider LLM** | LM Studio (lokal, GGUF/MLX) eller Google Gemini (cloud, OpenAI-kompatibel mode). Skift med ét klik i Settings — samme tool-loop, samme prompt. |
+| 🧠 **Forced tool-use** | LLM SKAL kalde et tool på første turn → svaret er altid baseret på reel realtids-data, aldrig training-data-gæt. |
+| ⚙️ **Automation-motor** | Cron, threshold og once-triggers. Multi-step action-kæder (notify → llm_notify → tool). LLM-genererede regler via fri tekst-input. |
+| 📊 **Live dashboard** | ~20 widgets med data fra 50+ kilder. Three.js-globus, sparklines, GitHub trending, Plex now-playing, paseo-agents, vejr, energi, fly, jordskælv. |
+| 🤝 **Paseo agents** | Embedded multi-agent orchestrator (Claude Code/Codex/OpenCode/Pi) på `/agents`. Egen daemon på :6868. |
+| 📱 **PWA + Siri** | iPhone-installerbar via Safari "Føj til hjemmeskærm". Apple Shortcut → "Hey Siri, spørg Skynet ..." via `/api/siri?q=...`. |
+| 🔔 **Multi-backend push** | macOS Notification Center, ntfy.sh til iPhone, Pushover. Per-action-fejl logges separat. |
+
+---
+
+## 33 tools til LLM
+
+Brugeren stiller et spørgsmål → LLM vælger automatisk det mest specifikke tool fra denne tabel. Falder kun tilbage til `web_search` hvis intet andet passer.
+
+### Information & data
+
+| Tool | Kilde | Bruges til |
+|---|---|---|
+| `read_weather` | Open-Meteo | Vejret nu (temp, vind, fugt) |
+| `get_forecast` | Open-Meteo | 7-dages udsigt (max/min, nedbør, UV) |
+| `get_weather_warnings` | MeteoAlarm.org | DMI-varsler (storm/sne/glat vej/oversvømmelse) |
+| `read_air_quality` | Open-Meteo | AQI, PM2.5, UV, pollen (birk/græs/bynke/oliven) |
+| `read_energy` | Energi Data Service | El-spotpris (DK1/DK2) |
+| `read_traffic` | Vejdirektoratet | Aktuelle hændelser på danske veje |
+| `read_markets` | Yahoo + ECB | Guld/sølv/Brent + EUR/USD/SEK/NOK→DKK |
+| `read_flights` | OpenSky Network | Fly i 50km radius |
+| `read_moon` | SunCalc | Månefase + næste fuldmåne/nymåne |
+| `lookup_address` | DAWA | Danske adresser (vej, postnr, koordinater) |
+
+### Nyheder & web
+
+| Tool | Kilde | Bruges til |
+|---|---|---|
+| `get_news` | DR/Politiken/TV2/Berlingske + BBC/Reuters/AlJazeera/Guardian | Aggregeret nyheds-feed (`scope: dk\|world\|both`) |
+| `fetch_news` | RSS | Specifik feed-URL |
+| `reddit_search` | reddit.com/search.json | Subreddit-top eller fri søgning |
+| `wikipedia_summary` | Wikipedia REST | Fakta/biografi (DA → EN fallback) |
+| `web_search` | DuckDuckGo HTML SERP | Generel web-søgning (8 resultater) |
+| `web_fetch` | direkte HTTP | Hent + parse en specifik URL |
+
+### Transport
+
+| Tool | Kilde | Bruges til |
+|---|---|---|
+| `find_train_route` | Rejseplanen API | Tog/bus/metro Danmark (afgang, spor, varighed). Kræver gratis access ID. |
+
+### Underholdning
+
+| Tool | Kilde | Bruges til |
+|---|---|---|
+| `search_nzbgeek` | NZBgeek (Newznab) | Trending film + søgning. Kræver API-key. |
+| `search_recipes` | TheMealDB | Opskrifter (engelsk database) |
+
+### macOS-integration
+
+| Tool | Bruges til |
+|---|---|
+| `read_system_status` | CPU, RAM, disk, temperatur |
+| `read_disk`, `read_file`, `list_files` | Disk- og filsystem |
+| `list_services`, `control_service` | LaunchAgents (start/stop) |
+| `list_apps`, `control_app` | macOS-apps (open/quit) |
+| `list_calendar_events` | Apple Calendar (i dag + næste 7 dage) |
+| `list_reminders`, `add_reminder`, `complete_reminder` | Apple Reminders |
+| `send_imessage` | Send iMessage via Messages.app |
+| `schedule_imessage_reminder` | Opret one-off iMessage-reminder (auto-sletter efter kørsel) |
+| `run_discovery` | Auto-detect nye services/apps |
+
+---
+
+## Providers
+
+### LM Studio (lokal)
+
+Default. Kør GGUF eller MLX-modeller lokalt på din Mac. Ingen netværk, ingen API-omkostninger, intet data forlader maskinen.
+
 ```
+base url:    http://localhost:1234/v1
+api-nøgle:   (vilkårlig værdi — LM Studio ignorerer)
+modeller:    Mistral Small 3.2, Munin-7b, gpt-oss-20b … hvad du nu har loaded
+```
+
+### Google Gemini (cloud)
+
+Klik **`Google Gemini`** under `/settings` → "llm / provider" → indsæt din nøgle.
+
+```
+base url:       https://generativelanguage.googleapis.com/v1beta/openai/
+api-nøgle:      gratis fra aistudio.google.com/apikey
+default model:  gemini-2.5-flash (hurtig) eller gemini-2.5-pro (kraftigst)
+```
+
+Bruger Geminis OpenAI-kompatible endpoint, så al eksisterende Skynet-kode (chat/completions, Bearer auth, tool-format) virker direkte.
+
+### Custom
+
+Enhver OpenAI-kompatibel base URL virker — Anthropic claude, OpenRouter, vLLM osv. Sæt baseUrl + api-nøgle + model-id manuelt.
+
+---
+
+## iMessage-assistent
+
+Aktivér i `/automations` → setup-tab → "iMessage". Kræver:
+
+- **iMessage default-modtager** (dit eget nummer eller Apple-ID)
+- **Full Disk Access** til `/opt/homebrew/bin/node` (System Settings → Privacy & Security → Full Disk Access). UI'et viser et stort gult banner indtil det er ordnet.
+- **Toggle "aktivér inbound"** — polleren læser `~/Library/Messages/chat.db` hvert 30. sek.
+
+### Test uden FDA
+
+Setup-tab har en "test inbound LLM"-boks der curler `/api/imessage/inbound` med `silent: true` og viser LLM-svaret + tools-used direkte i UI'et. Brug det til at teste flowet før du sætter polleren op.
+
+### Anti-loop
+
+Når Skynet sender et svar via `send_imessage`, dukker beskeden op i chat.db igen pga. iCloud-sync. To beskyttelseslag forhindrer endeløs loop:
+
+1. **Echo-tracker**: hver afsendt reply huskes i 10 min — match → skip
+2. **In-flight semaphore pr. nummer**: returnerer 429 hvis vi allerede behandler en besked fra samme afsender
+
+### Apple Shortcut alternativ
+
+Hvis du ikke vil give Full Disk Access:
+
+1. Opret iOS Shortcut: "When I receive a message" → "Get URL" → `https://<din-mac>:3100/api/imessage/inbound`
+2. Method POST, body `{ "from": "+45...", "message": <message text> }`
+3. Header `Authorization: Bearer <control_token>` (find i `/automations` setup)
+
+Samme flow uden chat.db-polling.
+
+---
+
+## Automations
+
+### Triggers
+
+| Type | Eksempel | Bruges til |
+|---|---|---|
+| `cron` | `0 7 * * *` | Tidspunkts-baseret. Live-feedback i editor (cronstrue + cron-parser) viser dansk beskrivelse + næste 3 udløb. |
+| `threshold` | `disk_percent > 90` | Metrik-baseret med cooldown og sustain. Auto-evalueres mod alle collectors. |
+| `once` | `runAt: 2026-04-30T15:17:00` | One-off tidspunkt. Auto-sletter efter kørsel. Bruges af `schedule_imessage_reminder`. |
+| `manual` | (klik "kør") | Kun manuelt. Bruges til testing. |
+
+### Actions
+
+Multi-step kæder — actions køres sekventielt, stopper ved første fejl.
+
+| Type | Funktion |
+|---|---|
+| `notify` | Push via aktive backends (macOS, ntfy, pushover). Per-backend-fejl logges separat. |
+| `llm_notify` | LLM med tool-calling genererer en besked → push og/eller iMessage. Returnerer `NONE` hvis den ikke har noget værdigt at pinge om — hindrer spam. |
+| `tool` | Direkte kald af et af de 33 tools. Destruktive actions (stop/restart/quit) kræver explicit `allowDestructive: true`. |
+
+### NL → automation
+
+Skriv på dansk hvad du vil have:
+
+> "Send push når disken er over 90%"
+
+→ LLM genererer en regel med threshold-trigger og notify-action → editor åbnes prefilled → du bekræfter eller redigerer før gem.
+
+### Run-historik + dry-run
+
+Klik på en regels navn i listen → side-drawer med sidste 25 kørsler (tid, status, message) + en "🧪 test (dry-run)"-knap der kører action-kæden men markerer notify/iMessage som "ville have sendt: ..." uden faktisk at sende.
+
+---
+
+## Tools der kræver API-nøgler
+
+Alle gratis. Sættes under `/automations` → setup-tab.
+
+| Tool | Hvor får jeg nøglen | Hvad det giver |
+|---|---|---|
+| `find_train_route` | [help.rejseplanen.dk](https://help.rejseplanen.dk) (svar typisk indenfor en uge) | Rigtige togtider — uden den falder LLM tilbage til web_search og kan ikke garantere præcision |
+| `search_nzbgeek` | Din `r=`-værdi fra nzbgeek.info-konto | Trending film + Newznab-søgning |
+| Gemini API | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (gratis tier) | Cloud-LLM med generøs free quota |
+
+Nøgler gemmes i `packages/portal/data/skynet.db` (SQLite, gitignored). Aldrig i kildekoden, aldrig i git, aldrig i logs.
+
+---
+
+## Sider
+
+| Path | Funktion |
+|---|---|
+| `/` → `/minimal` | Cockpit-dashboard |
+| `/automations` | Regel-motor (3 tabs: regler/setup/logs) |
+| `/agents` | Embedded Paseo multi-agent orchestrator |
+| `/chat` | LM Studio chat med tool-calling |
+| `/terminal` | xterm.js til tmux via WebSocket |
+| `/settings` | Profil + LLM-provider + GitHub PAT |
+| `/setup` | First-run wizard med auto-discovery |
+| `/api/siri?q=...` | Plain-text endpoint for Apple Shortcuts |
+| `/api/imessage/inbound` | Inbound iMessage handler (token-auth) |
 
 ---
 
@@ -119,205 +244,106 @@ npm run typecheck        # Typecheck alle pakker
 ```
 skynet/
 ├── packages/
-│   ├── portal/         Next.js 16 dashboard (port 3100)
-│   │   ├── src/app/    App Router: /, /minimal, /agents, /automations, /chat, /settings
-│   │   └── src/lib/    Collectors, agent-tools, dispatcher, automations-engine
-│   ├── daemon/         Agent-daemon (port 6767, WebSocket)
-│   ├── relay/          WebSocket relay bridge
-│   ├── highlight/      Syntax highlighting engine
-│   ├── cli/            CLI-tool (`skynet`)
-│   └── hud/            Native macOS menu-bar (Swift)
+│   ├── portal/         Next.js 16 app router (port 3100)
+│   │   ├── src/app/    Sider + ~50 API-routes
+│   │   ├── src/lib/
+│   │   │   ├── collectors/      ~20 data-kilder (vejr, system, github…)
+│   │   │   ├── agent/           tools.ts, dispatcher.ts, actions.ts
+│   │   │   ├── integrations/    rejseplanen, nzbgeek, info-tools
+│   │   │   └── settings.ts      SQLite-backed config
+│   │   ├── src/jobs/   Scheduler, imessage-poller, sparkline-collector
+│   │   └── data/       SQLite-database (gitignored)
+│   ├── daemon/         Agent-daemon (port 6767, WebSocket-protokol)
+│   ├── relay/          WebSocket relay til cross-device
+│   ├── highlight/      Syntax-highlighter
+│   ├── cli/            `skynet` CLI
+│   └── hud/            Native macOS menu-bar (Swift + Porcupine wake-word)
 ├── scripts/
-│   ├── install.sh      One-command installer
-│   └── dev.sh          Development-starter
+│   ├── install.sh      One-command installer (idempotent)
+│   ├── bootstrap-pocket-agents.sh  tmux + brrr + zshrc-patch
+│   └── snap.mjs        Playwright screenshot-capture m. PII-masking
 └── docs/
     └── screenshots/    README-screenshots
 ```
 
+### Services
+
+| Service | Port | LaunchAgent | Beskrivelse |
+|---|---|---|---|
+| Portal | 3100 (+ 3101 WS) | `com.skynet.portal` | Web-dashboard, API, scheduler, iMessage-poller |
+| Daemon | 6767 | `com.skynet.daemon` | Agent-livscyklus |
+| Paseo daemon | 6868 | `com.paseo.daemon` | Multi-agent orchestrator |
+| HUD | — | (manuel) | macOS menu-bar app |
+
 ---
 
-## Services
-
-| Service | Port | Beskrivelse |
-|---------|------|-------------|
-| Portal  | 3100 | Web dashboard — widgets, chat, agents, automations |
-| Daemon  | 6767 | Agent-livscyklus via WebSocket |
-| HUD     | —    | Native macOS menu-bar companion |
-
----
-
-## LaunchAgents (autostart)
-
-Installeret af `install.sh` til `~/Library/LaunchAgents/`:
-
-```
-com.skynet.portal.plist   → npm start @ packages/portal (port 3100)
-com.skynet.daemon.plist   → npm start @ root (daemon, port 6767)
-```
+## Development
 
 ```bash
-# Start / stop manuelt
+npm install              # alle workspace-deps
+npm run dev              # portal + daemon parallelt
+npm run dev:portal       # kun portal (http://localhost:3100)
+npm run dev:daemon       # kun daemon (ws://localhost:6767)
+npm run build:daemon     # build daemon + relay + highlight + cli
+npm run typecheck        # alle pakker
+
+# Genstart efter build
 launchctl kickstart -k gui/$(id -u)/com.skynet.portal
-launchctl bootout   gui/$(id -u)/com.skynet.portal
+launchctl kickstart -k gui/$(id -u)/com.skynet.daemon
 
 # Logs
+tail -f ~/Library/Logs/skynet.err.log
 tail -f ~/Library/Logs/skynet-daemon.err.log
 ```
 
----
+### Tilføj en widget
 
-## Opdatering
+```ts
+// packages/portal/src/components/minimal/widgets/MinWidget.tsx
+export function MinWidget() { return <Section title="…">{/* … */}</Section>; }
 
-```bash
-cd ~/skynet
-git pull
-npm install
-npm run build:daemon
-npm run build --workspace=@skynet/portal
-launchctl kickstart -k gui/$(id -u)/com.skynet.portal
-launchctl kickstart -k gui/$(id -u)/com.skynet.daemon
+// packages/portal/src/components/minimal/widgets/index.ts
+registerWidget({ id: "min", group: "system", colSpan: 4, Component: MinWidget });
 ```
 
----
+### Tilføj et tool
 
-## Tilføj widgets
+1. **Schema** i `src/lib/agent/tools.ts` (OpenAI function-format)
+2. **Handler** i `src/lib/agent/dispatcher.ts` — `case "min_tool": return await ...`
+3. **Tilgængeligt automatisk** i alle LLM-loops (inbound, siri, llm_notify) og som `ToolAction`-target i automations
 
-1. Opret `packages/portal/src/components/minimal/widgets/MinWidget.tsx`
-2. Registrér i `widgets/index.ts`:
-   ```ts
-   registerWidget({ id: "min", group: "system", colSpan: 4, Component: MinWidget });
-   ```
-3. Rebuild og genstart portal.
+### Tilføj en collector
 
----
-
-## Tilføj automation-tools
-
-1. Tilføj schema i `src/lib/agent/tools.ts`
-2. Tilføj handler i `src/lib/agent/dispatcher.ts`
-3. Tool er automatisk tilgængeligt i LLM-tool-loop og `ToolAction`-automationer.
-
----
-
-## iOS / Siri
-
-**PWA på iPhone hjemmeskærm:**
-
-1. Åbn `http://<din-mac>:3100/minimal` i Safari på iPhone (samme WiFi eller via Tailscale)
-2. Del-knap → **"Føj til hjemmeskærm"**
-3. Åbner i standalone-mode · live vejr/energi/status opdateres hvert 15 min selv når skærmen er væk
-
-**Siri via Apple Shortcuts:**
-
-1. Opret en ny shortcut → **"Hent URL"** action → `http://<din-mac>:3100/api/siri?q=[Diktér tekst]`
-2. Sæt headers til `Accept: text/plain` · brug `POST` hvis du vil lade spørgsmålet være længere
-3. Tilføj **"Tal tekst"** action efter med output fra forrige step
-4. Navngiv shortcut "Spørg Skynet" → **"Hey Siri, spørg Skynet"** virker nu
-
-LLM'en har adgang til alle Skynet tools (vejr, energi, kalender, nyheder, web-søgning) og svaret er begrænset til 2-3 korte danske sætninger.
-
----
-
-## Pocket Agents — coding agents i lommen
-
-Inspiration: [Simon BS' "Put your coding agents in your pocket"](https://simonbs.dev/posts/put-your-coding-agents-in-your-pocket/). Kør Claude Code, Codex eller anden AI-coding-agent på din Mac i tmux-sessioner · check ind fra iPhone hvor som helst · få push når agenten beder om input.
-
-### Opsætning
-
-```bash
-cd ~/skynet
-./scripts/bootstrap-pocket-agents.sh
-```
-
-Scriptet er idempotent og installerer/konfigurerer:
-
-1. **tmux** (via Homebrew) — baggrunds-sessioner til agenter
-2. **brrr CLI** (Simon's idle-detector) — installeres, men webhook skal konfigureres manuelt (se under "Push når agent beder om input" nedenfor)
-3. **~/.zshrc patch** — SSH login attacher automatisk til `agents` tmux-session
-
-Bootstrap laver backup af din eksisterende `.zshrc` før ændring.
-
-### Brug
-
-**Fra din Mac (lokal udvikling):**
-
-```bash
-tmux new -s agents          # eller: tmux attach -t agents
-cd ~/projekt-hvor-du-koder
-claude                      # kør Claude Code
-# ⌃B c → nyt vindue · ⌃B n → næste vindue · ⌃B d → detach
-```
-
-**Fra iPhone (Termius via Tailscale):**
-
-1. Installer [Termius](https://apps.apple.com/app/termius/id549039908) (gratis tier er nok)
-2. Tilføj host: adresse = din Mac's Tailscale-IP eller `<hostname>.local`, bruger = dit Mac-brugernavn
-3. Connect → tmux attacher automatisk til `agents`-sessionen (fordi `.zshrc` er patched)
-4. Du ser den LIVE kørende agent — skriv prompts direkte, fuld terminal-interaktion
-
-**Fra iPhone (Skynet PWA terminal — ingen SSH-klient nødvendig):**
-
-1. Åbn `http://<mac-tailscale-ip>:3100/terminal` i Safari (eller Skynet PWA-genvej)
-2. xterm.js attacher til tmux via WebSocket på port 3101
-3. Skriv prompts direkte i browseren — synkroniserer live med en evt samtidig Termius-session
-
-### Overblik i cockpittet
-
-På `/minimal` dashboard er der en **"pocket agents"-widget** der viser:
-
-- Alle aktive tmux-sessioner (navn + attached/detached status + window-count + sidste aktivitet)
-- Hvilken kommando der kører i hvert vindue (🤖 fremhæves hvis det er en agent som `claude`/`codex`/`aider`)
-- Direkte "→ terminal"-link pr session
-- "📋 SSH-kommando" button kopierer ssh + attach-kommando til clipboard
-
-### Push når agent beder om input
-
-Skynet har et webhook-endpoint `POST /api/agent-events` der modtager events og sender push via eksisterende `notify()`-pipeline (macOS Notification Center + ntfy → iPhone). Body-format:
-
-```json
-{ "agent": "claude", "session": "agents", "event": "idle", "idle_seconds": 22, "message": "Waiting for input" }
-```
-
-Events pipes til Skynet agent-log-panelet under `/automations` og sender ntfy-push til iPhone med URL tilbage til `/terminal?session=<name>`. Klik pushen → åbner terminalen direkte i PWA'en.
-
-**To måder at trigger events på:**
-
-**A) brrr.now** (Simon's original-setup) — kræver konto på [brrr.now](https://brrr.now):
-```bash
-# hent webhook fra brrr.now-dashboardet, derefter:
-brrr agent install all --webhook https://api.brrr.now/v1/br_XXXXXXXX --idle-seconds 20
-```
-Push kommer til brrr iOS-appen (ikke Skynet).
-
-**B) Direkte til Skynet** (anbefalet) — ingen tredjepartstjeneste:
-Kald `/api/agent-events` fra en Claude Code `Stop`-hook eller en lille cron-wrapper der tjekker tmux-pane for idle. Token-auth krævet (Bearer `control_token` — generer via `GET /api/control/token` i browseren).
-
-```bash
-# Eksempel: manual trigger via curl
-TOKEN=$(curl -s -H "Origin: http://localhost:3100" http://localhost:3100/api/control/token | jq -r .token)
-curl -X POST http://localhost:3100/api/agent-events \
-  -H "authorization: Bearer $TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"agent":"claude","session":"agents","event":"waiting","message":"Kræver godkendelse"}'
-```
-
-### Sikkerhed
-
-- WS-terminal på :3101 kræver `control_token` (roterbar via `POST /api/control/token`)
-- Session-navne valideres mod `[a-zA-Z0-9_-]{1,64}` for at forhindre shell-injection
-- Tailscale-netværket er privat — ingen public SSH-eksponering
+1. **Implementér** `src/lib/collectors/min.ts` med `export async function collect(): Promise<MinData>`
+2. **Type** i `src/lib/types.ts`
+3. **API-route** i `src/app/api/min/route.ts` (1-2 linjer wrapper)
+4. **Widget** der bruger `usePoll<MinData>("/api/min", 30000)`
 
 ---
 
 ## Krav
 
 - macOS 13+ (Ventura eller nyere)
-- Node.js 20+
-- LM Studio (valgfrit — til chat og LLM-automationer)
-- ntfy-app (valgfrit — til iPhone/Android push)
+- Node 20+
+- Valgfri:
+  - **LM Studio** — for lokal LLM (download fra lmstudio.ai)
+  - **Gemini API-key** — for cloud-LLM (gratis tier på aistudio.google.com/apikey)
+  - **ntfy-app** — for push til iPhone/Android uden Apple Developer-konto
+  - **Tailscale** — for at tilgå Skynet fra iPhone udenfor hjemme-WiFi
+
+---
+
+## Sikkerhedsmodel
+
+- **Same-origin auto-allow**: requests fra browseren på localhost tillades uden token
+- **Bearer token**: `control_token` (auto-genereret, roterbar) til alle eksterne kald — herunder `/api/imessage/inbound` og chat.db-polleren
+- **Destruktive actions**: `control_service stop/restart`, `control_app quit` kræver eksplicit confirmation
+- **Session-navne valideres** mod `[a-zA-Z0-9_-]{1,64}` for at undgå shell-injection
+- **API-nøgler** lever kun i lokal SQLite-DB, gitignored, aldrig i kildekode eller logs
+- **Screenshot-redaktion**: `snap.mjs` masker PII (navne, e-mails, tokens) automatisk inden upload
 
 ---
 
 ## License
 
-Private.
+Privat / personligt brug. Ingen distribution uden tilladelse.

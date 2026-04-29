@@ -319,6 +319,311 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Info: Vejr-forecast (7 dage) ─────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_forecast",
+      description:
+        "Hent 7-dages vejrudsigt for brugerens lokation via Open-Meteo: max/min temperatur, nedbør, vindstød, weather-code per dag. Brug ved spørgsmål om 'i morgen', 'weekenden', 'næste uge' eller 'hvornår bliver det varmt/regn'. Til nuværende vejr brug read_weather i stedet.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: {
+            type: "number",
+            description: "Antal dage frem (1–7). Default: 7.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Info: Trafikinfo (Vejdirektoratet) ───────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_traffic",
+      description:
+        "Hent aktuelle trafikhændelser på danske veje (motorveje + større veje): kø, vejarbejde, spærringer, ulykker. Inkluderer titel, beskrivelse, hvornår begivenheden begyndte og hvilket layer (kø/vejarbejde/spærring/etc). Brug ved spørgsmål om 'er der kø på E20', 'noget på Storebæltsbroen', 'trafiksituation'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Luftkvalitet + pollen ──────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_air_quality",
+      description:
+        "Hent aktuel luftkvalitet for brugerens lokation: AQI, PM2.5, PM10, NO2, ozon, UV-indeks, og pollenniveauer (birk, græs, bynke, oliven, malurt). Brug ved spørgsmål om allergi, luftforurening, om man kan løbe ude, eller om UV-indekset er højt.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Markeder (råvarer + valuta) ────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_markets",
+      description:
+        "Hent aktuelle priser for råvarer (guld, sølv, Brent-olie via Yahoo) og valutakurser (EUR/USD/GBP/SEK/NOK mod DKK via ECB/Frankfurter). Inkluderer dagsændring i pct. Brug ved spørgsmål om 'guldpris', 'dollarkurs', 'oliepris'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Fly i nærheden ─────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_flights",
+      description:
+        "Hent fly inden for ~50km radius af brugerens lokation via OpenSky Network: callsign, oprindelsesland, højde, fart, retning. Returnerer op til 30 fly. Brug ved spørgsmål om 'hvilket fly er over mig', 'hvor mange fly i luften lige nu'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: Månefase ──────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "read_moon",
+      description:
+        "Hent aktuel månefase, illumination (0-100%), fase-navn på dansk (fx 'Voksende måne', 'Fuldmåne'), og næste fuldmåne/nymåne-dato. Brug ved spørgsmål om månens fase, om det er fuldmåne, eller hvornår næste fuldmåne er.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Info: DAWA address-opslag ────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "lookup_address",
+      description:
+        "Find danske adresser via DAWA (Danmarks Adressers Web API) — gratis, ingen nøgle. Returnerer fuld adresse, postnummer, by, kommune, region og koordinater. Brug ved fuzzy adresse-input ('Vesterbrogade 1 Kbh') eller når du skal finde koordinater for et sted i Danmark.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Adresse-tekst, fx 'vesterbrogade 1 københavn' eller 'Næstved Banegårdsplads'",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
+  // ── Info: Wikipedia ──────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "wikipedia_summary",
+      description:
+        "Hent kort introduktion til en artikel på Wikipedia (default: dansk, fallback: engelsk). Returnerer titel, kort beskrivelse, første afsnit (~250 tegn) og URL. Brug ved generelle 'hvad er X', 'hvem er Y', historiske/biografiske spørgsmål — IKKE til aktuelle nyheder eller live-data.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Sidens titel/emne, fx 'Niels Bohr', 'Kvantemekanik', 'Næstved'",
+          },
+          lang: {
+            type: "string",
+            description: "Sprog-kode: 'da' (default), 'en', 'de'.",
+          },
+        },
+        required: ["title"],
+      },
+    },
+  },
+
+  // ── Vejrvarsler (DMI via MeteoAlarm — gratis, ingen key) ─────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_weather_warnings",
+      description:
+        "Hent aktuelle vejrvarsler for Danmark via MeteoAlarm (aggregerer DMI-varsler). Returnerer event-type (storm/sne/oversvømmelse/glat vej osv), niveau (yellow/orange/red), område, start- og sluttidspunkt og beskrivelse. Brug ved spørgsmål om varsler, storm, sneorkan, oversvømmelse, glat vej, kraftigt regn, hagl. Tom liste = ingen aktive varsler.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+
+  // ── Opskrifter (TheMealDB — gratis, ingen key) ───────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_recipes",
+      description:
+        "Søg opskrifter i TheMealDB (engelsk database, gratis). Returnerer titel, kategori, område, fulde instruktioner og ingrediensliste. Tom query → tilfældig opskrift. Fungerer bedst med engelske søgeord (fx 'pasta', 'chicken curry', 'pancakes').",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeord på engelsk (fx 'pasta', 'beef stew'). Tom = tilfældig opskrift.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Reddit (gratis ingen key) ────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "reddit_search",
+      description:
+        "Søg på Reddit eller hent top-posts fra et bestemt subreddit. Returnerer titel, subreddit, score, antal kommentarer, URL og evt. selftext. Brug ved 'hvad sker der på r/X', 'find diskussioner om Y på Reddit', 'top posts på r/worldnews'.",
+      parameters: {
+        type: "object",
+        properties: {
+          subreddit: {
+            type: "string",
+            description: "Subreddit-navn uden 'r/', fx 'worldnews', 'denmark', 'programming'. Valgfri hvis 'query' er sat.",
+          },
+          query: {
+            type: "string",
+            description: "Søgeord. Hvis subreddit også er sat: søg kun i det subreddit.",
+          },
+          sort: {
+            type: "string",
+            enum: ["hot", "top", "new", "rising", "relevance"],
+            description: "Sortering. Default: 'top' for subreddit-kun, 'relevance' for søgning.",
+          },
+          time: {
+            type: "string",
+            enum: ["hour", "day", "week", "month", "year", "all"],
+            description: "Tidsvindue for top/relevance. Default: 'day'.",
+          },
+          limit: {
+            type: "number",
+            description: "Max antal posts (1-25). Default: 10.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── NZBgeek (trending + søgning) ─────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_nzbgeek",
+      description:
+        "Søg på NZBgeek (Newznab-baseret indeks) eller hent trending film-feed. Default uden query: trending_movies. Med query: fri søgning. Returnerer titel, pubDate, IMDB-id (film), kategori, størrelse i MB, og detail-URL. Brug ved 'hvad er trending', 'find filmen X', 'hvad er der nyt af serie Y'.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Søgeord. Tom = trending-mode (kun film). Bruges ved 'find Dune', 'søg efter Oppenheimer'.",
+          },
+          mode: {
+            type: "string",
+            enum: ["trending", "search", "tv", "movie"],
+            description: "'trending' = trending film-feed. 'search' = fri søgning på alt. 'tv' = TV-søgning (Newznab tvsearch). 'movie' = film-søgning. Default: 'trending' uden query, 'search' med query.",
+          },
+          limit: {
+            type: "number",
+            description: "Antal resultater (1-100). Default: 20.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Aggregeret nyhedstool ────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_news",
+      description:
+        "Hent aktuelle nyheder fra danske og/eller internationale RSS-feeds. Aggregerer DR, Politiken, TV2, Berlingske (DK) og BBC, Reuters, Al Jazeera, Guardian (verden). Resultater sorteres efter dato, nyeste først. Brug 'scope' til at vælge fokus.",
+      parameters: {
+        type: "object",
+        properties: {
+          scope: {
+            type: "string",
+            enum: ["dk", "world", "both"],
+            description: "'dk' = kun danske kilder, 'world' = kun internationale, 'both' (default) = top fra begge",
+          },
+          limitPerSource: {
+            type: "number",
+            description: "Antal nyheder pr. kilde (1-10). Default: 3.",
+          },
+        },
+      },
+    },
+  },
+
+  // ── Transit (Rejseplanen) ────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "find_train_route",
+      description:
+        "Find næste tog/bus/metro afgange fra en station til en anden i Danmark via Rejseplanens API. Returnerer op til 3 mulige rejser med afgangstid, ankomsttid, linje (fx 'IC42', 'Re83', 'Bus 5C'), spor, varighed og evt. omstigninger. Brug ALTID dette tool ved spørgsmål om togtider/bustider/rejser i Danmark — IKKE web_search. Hvis 'rejseplanen_access_id' ikke er konfigureret returneres en klar fejl.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: {
+            type: "string",
+            description: "Afgangssted — stationsnavn (fx 'Næstved St'), by ('Næstved'), eller adresse ('Vesterbrogade 1, København'). Fuzzy match.",
+          },
+          to: {
+            type: "string",
+            description: "Destination — samme format som from (fx 'Hellerup St', 'Aarhus H', 'Lyngby').",
+          },
+          when: {
+            type: "string",
+            description: "Tidspunkt for rejsen som ISO-8601, fx '2026-04-28T15:30'. Default = nu. Fortolkes som DK-tid.",
+          },
+          isArrival: {
+            type: "boolean",
+            description: "Hvis true: 'when' er ankomst-tid (jeg vil være FREMME kl. X). Default false = afgang.",
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+  },
+
+  // ── Schedule reminder (one-off automation) ───────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "schedule_imessage_reminder",
+      description:
+        "Planlæg en one-off iMessage-påmindelse der sendes på et eksakt fremtidigt tidspunkt. Bruges fx til 'send mig en sms 15 minutter før toget kører' eller 'mind mig om mødet kl 13:45'. Opretter en automation med engangs-trigger der auto-sletter efter kørsel.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: {
+            type: "string",
+            description:
+              "Modtager: telefonnummer (fx '+4512345678') eller iCloud-e-mail. Hvis tom: brug iMessage-default fra settings.",
+          },
+          message: {
+            type: "string",
+            description:
+              "Tekst der skal sendes. Vær konkret (fx 'Toget mod Valby kører om 15 min — IC42 spor 4').",
+          },
+          sendAtIso: {
+            type: "string",
+            description:
+              "Eksakt ISO-8601 tidspunkt for afsendelse, fx '2026-04-28T13:45:00+02:00'. Skal være i fremtiden.",
+          },
+          name: {
+            type: "string",
+            description:
+              "Kort navn på påmindelsen — vises i automation-listen, fx 'Tog Næstved → Valby'.",
+          },
+        },
+        required: ["message", "sendAtIso", "name"],
+      },
+    },
+  },
+
   // ── News (RSS) ───────────────────────────────────────────────────────────
   {
     type: "function",

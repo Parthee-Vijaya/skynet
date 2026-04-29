@@ -8,12 +8,13 @@ interface Ctx {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(_: NextRequest, ctx: Ctx) {
+export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const n = Number(id);
   if (!Number.isFinite(n)) {
     return Response.json({ error: "invalid id" }, { status: 400 });
   }
-  const result = await runAutomationManually(n);
+  const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
+  const result = await runAutomationManually(n, { dryRun });
   return Response.json(result, { status: result.ok ? 200 : 500 });
 }

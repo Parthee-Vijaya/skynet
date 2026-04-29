@@ -55,6 +55,44 @@ export function setUserName(name: string): void {
   setSetting("user_name", name.trim().slice(0, 64));
 }
 
+/**
+ * Default iMessage-modtager (telefonnummer eller iCloud-adresse).
+ * Bruges af automation-templates og inbound iMessage-handler.
+ * Format: '+4512345678' eller 'navn@icloud.com'.
+ */
+export function getImessageDefault(): string {
+  return getSetting("imessage_default") ?? "";
+}
+
+export function setImessageDefault(value: string): void {
+  setSetting("imessage_default", value.trim().slice(0, 128));
+}
+
+/**
+ * Rejseplanen access ID — bruges af find_train_route tool. Gratis nøgle
+ * fås ved at registrere sig på Rejseplanen (https://help.rejseplanen.dk/).
+ * Uden nøgle returnerer toolet en klar fejl.
+ */
+export function getRejseplanenAccessId(): string {
+  return getSetting("rejseplanen_access_id") ?? "";
+}
+
+export function setRejseplanenAccessId(value: string): void {
+  setSetting("rejseplanen_access_id", value.trim().slice(0, 256));
+}
+
+/**
+ * NZBgeek API-nøgle (din "r"/"apikey" fra api.nzbgeek.info). Bruges af
+ * search_nzbgeek tool til trending-feeds og fri søgning.
+ */
+export function getNzbgeekApiKey(): string {
+  return getSetting("nzbgeek_api_key") ?? "";
+}
+
+export function setNzbgeekApiKey(value: string): void {
+  setSetting("nzbgeek_api_key", value.trim().slice(0, 256));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {
