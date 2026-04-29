@@ -31,6 +31,14 @@ interface ImessagePollerStatus {
   fdaOk: boolean;
 }
 
+interface TelegramStatus {
+  enabled: boolean;
+  hasBotToken: boolean;
+  allowedChatIds: string[];
+  bot?: { id: number; username: string; first_name: string };
+  botError?: string;
+}
+
 const TEMPLATES: Array<{
   name: string;
   description: string;
@@ -203,6 +211,10 @@ export default function AutomationsPage() {
   const [hasRejseplanenAccessId, setHasRejseplanenAccessId] = useState(false);
   const [nzbgeekApiKey, setNzbgeekApiKey] = useState("");
   const [hasNzbgeekApiKey, setHasNzbgeekApiKey] = useState(false);
+  const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
+  const [telegramTokenInput, setTelegramTokenInput] = useState("");
+  const [telegramAllowedInput, setTelegramAllowedInput] = useState("");
+  const telegramAllowedLoaded = useRef(false);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
@@ -229,12 +241,13 @@ export default function AutomationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, n, g, s, p] = await Promise.all([
+      const [a, n, g, s, p, t] = await Promise.all([
         fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/telegram/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       setItems(a.automations ?? []);
       setNotifyCfg(n);
@@ -248,6 +261,13 @@ export default function AutomationsPage() {
       if (typeof s?.hasRejseplanenAccessId === "boolean") setHasRejseplanenAccessId(s.hasRejseplanenAccessId);
       if (typeof s?.hasNzbgeekApiKey === "boolean") setHasNzbgeekApiKey(s.hasNzbgeekApiKey);
       if (p) setImessagePoller(p);
+      if (t) {
+        setTelegram(t);
+        if (!telegramAllowedLoaded.current) {
+          setTelegramAllowedInput((t.allowedChatIds ?? []).join(", "));
+          telegramAllowedLoaded.current = true;
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -353,6 +373,31 @@ export default function AutomationsPage() {
     const data = (await res.json()) as { hasNzbgeekApiKey?: boolean };
     setHasNzbgeekApiKey(!!data.hasNzbgeekApiKey);
     setNzbgeekApiKey("");
+  };
+
+  const patchTelegram = async (patch: { enabled?: boolean; botToken?: string; allowedChatIds?: string }) => {
+    const res = await fetch("/api/telegram/status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = (await res.json()) as TelegramStatus;
+    setTelegram(data);
+    return data;
+  };
+
+  const saveTelegramToken = async (value: string) => {
+    if (!value.trim()) return;
+    await patchTelegram({ botToken: value.trim() });
+    setTelegramTokenInput("");
+  };
+
+  const saveTelegramAllowed = async (value: string) => {
+    await patchTelegram({ allowedChatIds: value });
+  };
+
+  const toggleTelegram = async (enabled: boolean) => {
+    await patchTelegram({ enabled });
   };
 
   const toggleImessagePoller = async (enabled: boolean) => {
@@ -622,6 +667,94 @@ export default function AutomationsPage() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            </Section>
+
+            <Section
+              title="telegram bot (anbefalet 2-vejs)"
+              right={telegram?.enabled ? <span style={{ color: "#7dd67d" }}>● poller aktiv</span> : null}
+              className="mb-8"
+            >
+              <div style={{ fontSize: 12 }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 8, lineHeight: 1.6 }}>
+                  Sikrere alternativ til iMessage — botten har sit eget Telegram-handle og taler kun med chat_ids du explicit
+                  godkender. Ingen iCloud-sync-loops, ingen FDA-krav.
+                </div>
+
+                {/* Bot-token */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>bot-token</span>
+                  <input
+                    type="password"
+                    value={telegramTokenInput}
+                    onChange={(e) => setTelegramTokenInput(e.target.value)}
+                    onBlur={(e) => saveTelegramToken(e.target.value)}
+                    placeholder={telegram?.hasBotToken ? "(gemt — indtast for at ændre)" : "fra @BotFather i Telegram"}
+                    autoComplete="off"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 14 }}>
+                  Skriv til{" "}
+                  <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>@BotFather</a>
+                  {" "}i Telegram → <code style={{ color: "#9bd0ff" }}>/newbot</code> → giv den et navn → kopiér token (formateret som <code>123456789:ABC...</code>).
+                </div>
+
+                {/* Bot-info hvis token virker */}
+                {telegram?.bot && (
+                  <div style={{ background: "#0a1a0a", border: "1px solid #2c4a2c", padding: "8px 12px", marginBottom: 14, fontSize: 11 }}>
+                    <span style={{ color: "#7dd67d" }}>✓ forbundet til</span>{" "}
+                    <a href={`https://t.me/${telegram.bot.username}`} target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>
+                      @{telegram.bot.username}
+                    </a>
+                    <span style={{ color: "#6b6b6b" }}> · {telegram.bot.first_name} (id {telegram.bot.id})</span>
+                  </div>
+                )}
+                {telegram?.hasBotToken && telegram?.botError && (
+                  <div style={{ background: "#1f0a0a", border: "1px solid #5a2c2c", padding: "8px 12px", marginBottom: 14, fontSize: 11 }}>
+                    <span style={{ color: "#d87373" }}>✗ token-fejl: {telegram.botError}</span>
+                  </div>
+                )}
+
+                {/* Allowed chat_ids */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>tilladte chats</span>
+                  <input
+                    type="text"
+                    value={telegramAllowedInput}
+                    onChange={(e) => setTelegramAllowedInput(e.target.value)}
+                    onBlur={(e) => saveTelegramAllowed(e.target.value)}
+                    placeholder="123456789, -987654321 (komma-separeret)"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 14 }}>
+                  Sikker default: tom liste = botten ignorerer ALT. Find din chat_id ved at:
+                  (1) skriv til botten en gang → (2) besøg{" "}
+                  <code style={{ color: "#9bd0ff" }}>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>
+                  {" "}→ (3) kopiér <code style={{ color: "#9bd0ff" }}>chat.id</code> fra svaret. Negative IDs = grupper.
+                </div>
+
+                {/* Toggle */}
+                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: telegram?.hasBotToken ? "pointer" : "not-allowed" }}>
+                  <input
+                    type="checkbox"
+                    checked={telegram?.enabled ?? false}
+                    disabled={!telegram?.hasBotToken}
+                    onChange={(e) => toggleTelegram(e.target.checked)}
+                  />
+                  <span style={{ color: telegram?.hasBotToken ? "#e5e5e5" : "#525252" }}>
+                    aktivér Telegram-poller (long-polling /getUpdates)
+                  </span>
+                  {!telegram?.hasBotToken && (
+                    <span style={{ color: "#6b6b6b", fontSize: 11 }}>(kræver bot-token)</span>
+                  )}
+                </label>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
+                  Indkommende beskeder fra tilladte chats kører gennem LLM med tools. Reminders oprettes via{" "}
+                  <code style={{ color: "#9bd0ff" }}>schedule_telegram_reminder</code>. Ingen polling-delay — Telegram pusher
+                  beskeder live til botten.
                 </div>
               </div>
             </Section>

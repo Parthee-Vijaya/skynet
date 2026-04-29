@@ -8,6 +8,7 @@ export async function register(): Promise<void> {
     { startMeetingPrep },
     { startTerminalServer },
     { startPoller: startImessagePoller },
+    { startPoller: startTelegramPoller },
   ] = await Promise.all([
     import("@/jobs/sparkline-collector"),
     import("@/jobs/plex-token-import"),
@@ -15,6 +16,7 @@ export async function register(): Promise<void> {
     import("@/jobs/meeting-prep"),
     import("@/jobs/terminal-server"),
     import("@/jobs/imessage-poller"),
+    import("@/jobs/telegram-poller"),
   ]);
 
   await autoImportPlexToken();
@@ -25,4 +27,6 @@ export async function register(): Promise<void> {
   startTerminalServer().catch((e) => console.error("[terminal-ws] startup failed:", e));
   // iMessage-poller — best-effort, fejler tavst hvis FDA mangler
   try { startImessagePoller(); } catch (e) { console.warn("[imessage-poller] startup failed:", e); }
+  // Telegram-poller — best-effort, kun aktiv hvis token + toggle er sat
+  try { startTelegramPoller(); } catch (e) { console.warn("[telegram-poller] startup failed:", e); }
 }

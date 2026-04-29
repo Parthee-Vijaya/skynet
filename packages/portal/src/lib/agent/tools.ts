@@ -588,6 +588,62 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Telegram: send proaktiv besked ───────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "send_telegram_message",
+      description:
+        "Send en Telegram-besked til en bestemt chat_id. Modtager skal være i telegram_allowed_chat_ids-listen i settings (sikkerhed). Brug til proaktive notifikationer eller når brugeren beder dig kontakte sig via Telegram.",
+      parameters: {
+        type: "object",
+        properties: {
+          chatId: {
+            type: "number",
+            description: "Telegram chat_id. Findes i settings-UI'et eller fra inbound-meddelelser.",
+          },
+          message: {
+            type: "string",
+            description: "Beskedtekst (max 4096 tegn).",
+          },
+        },
+        required: ["chatId", "message"],
+      },
+    },
+  },
+
+  // ── Telegram: schedule one-off reminder ──────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "schedule_telegram_reminder",
+      description:
+        "Planlæg en one-off Telegram-besked der sendes på et eksakt fremtidigt tidspunkt. Bruges til 'send mig en besked 15 min før X' når brugeren chatter via Telegram. Opretter en automation med once-trigger der auto-sletter efter kørsel. Brug ALTID dette tool (ikke schedule_imessage_reminder) når brugeren chatter fra Telegram.",
+      parameters: {
+        type: "object",
+        properties: {
+          chatId: {
+            type: "number",
+            description: "Telegram chat_id (typisk brugerens egen — angives i system-prompten ved inbound).",
+          },
+          message: {
+            type: "string",
+            description: "Tekst der skal sendes når påmindelsen fyrer.",
+          },
+          sendAtIso: {
+            type: "string",
+            description: "Eksakt ISO-8601 tidspunkt for afsendelse, fx '2026-04-29T13:45:00+02:00'. Skal være i fremtiden.",
+          },
+          name: {
+            type: "string",
+            description: "Kort navn på påmindelsen — vises i automation-listen.",
+          },
+        },
+        required: ["chatId", "message", "sendAtIso", "name"],
+      },
+    },
+  },
+
   // ── Schedule reminder (one-off automation) ───────────────────────────────
   {
     type: "function",
