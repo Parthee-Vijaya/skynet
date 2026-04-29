@@ -215,6 +215,13 @@ export default function AutomationsPage() {
   const [telegramTokenInput, setTelegramTokenInput] = useState("");
   const [telegramAllowedInput, setTelegramAllowedInput] = useState("");
   const telegramAllowedLoaded = useRef(false);
+  const [tgDiscovered, setTgDiscovered] = useState<{
+    ok: boolean;
+    chats?: Array<{ chatId: number; type: string; title?: string; username?: string; firstName?: string; lastMessageText: string }>;
+    error?: string;
+    hint?: string;
+  } | null>(null);
+  const [tgDiscoverBusy, setTgDiscoverBusy] = useState(false);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
@@ -398,6 +405,27 @@ export default function AutomationsPage() {
 
   const toggleTelegram = async (enabled: boolean) => {
     await patchTelegram({ enabled });
+  };
+
+  const discoverTelegramChats = async () => {
+    setTgDiscoverBusy(true);
+    setTgDiscovered(null);
+    try {
+      const res = await fetch("/api/telegram/discover-chats");
+      setTgDiscovered((await res.json()) as typeof tgDiscovered);
+    } catch (e) {
+      setTgDiscovered({ ok: false, error: e instanceof Error ? e.message : "fejl" });
+    } finally {
+      setTgDiscoverBusy(false);
+    }
+  };
+
+  const addChatIdToAllowlist = (chatId: number) => {
+    const current = telegramAllowedInput.split(",").map((s) => s.trim()).filter(Boolean);
+    if (current.includes(String(chatId))) return;
+    const next = [...current, String(chatId)].join(", ");
+    setTelegramAllowedInput(next);
+    saveTelegramAllowed(next);
   };
 
   const toggleImessagePoller = async (enabled: boolean) => {
@@ -729,12 +757,54 @@ export default function AutomationsPage() {
                     style={{ ...inputStyle, flex: 1 }}
                   />
                 </div>
-                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 14 }}>
-                  Sikker default: tom liste = botten ignorerer ALT. Find din chat_id ved at:
-                  (1) skriv til botten en gang → (2) besøg{" "}
-                  <code style={{ color: "#9bd0ff" }}>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>
-                  {" "}→ (3) kopiér <code style={{ color: "#9bd0ff" }}>chat.id</code> fra svaret. Negative IDs = grupper.
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 8 }}>
+                  Sikker default: tom liste = botten ignorerer ALT. Skriv til botten i Telegram først, klik så
+                  knappen nedenfor for at finde dit chat_id automatisk.
                 </div>
+                <div style={{ marginLeft: 110, marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <Button size="sm" tone="accent" onClick={discoverTelegramChats} disabled={tgDiscoverBusy || !telegram?.hasBotToken}>
+                    {tgDiscoverBusy ? "henter…" : "→ find chat_id automatisk"}
+                  </Button>
+                  {tgDiscovered && (
+                    <span style={{ fontSize: 11, color: tgDiscovered.ok ? "#7dd67d" : "#d87373" }}>
+                      {tgDiscovered.ok
+                        ? `${tgDiscovered.chats?.length ?? 0} chats fundet`
+                        : `✗ ${tgDiscovered.error}`}
+                    </span>
+                  )}
+                </div>
+                {tgDiscovered?.chats && tgDiscovered.chats.length > 0 && (
+                  <div style={{ marginLeft: 110, marginBottom: 14, border: "1px dashed #262626", padding: "8px 12px", fontSize: 11 }}>
+                    {tgDiscovered.chats.map((c) => {
+                      const isAllowed = telegramAllowedInput.split(",").map((s) => s.trim()).includes(String(c.chatId));
+                      return (
+                        <div key={c.chatId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px dashed #1c1c1c", gap: 10 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ color: "#e5e5e5" }}>
+                              <code style={{ color: "#9bd0ff" }}>{c.chatId}</code>
+                              <span style={{ color: "#6b6b6b", marginLeft: 8 }}>
+                                {c.type}{c.title ? ` · ${c.title}` : ""}{c.username ? ` · @${c.username}` : ""}{c.firstName ? ` · ${c.firstName}` : ""}
+                              </span>
+                            </div>
+                            <div style={{ color: "#525252", fontSize: 10, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              &ldquo;{c.lastMessageText}&rdquo;
+                            </div>
+                          </div>
+                          {isAllowed ? (
+                            <span style={{ color: "#7dd67d", fontSize: 11, whiteSpace: "nowrap" }}>✓ tilføjet</span>
+                          ) : (
+                            <Button size="sm" onClick={() => addChatIdToAllowlist(c.chatId)}>+ tilføj</Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {tgDiscovered?.hint && (
+                  <div style={{ marginLeft: 110, marginBottom: 14, fontSize: 11, color: "#e6b450" }}>
+                    💡 {tgDiscovered.hint}
+                  </div>
+                )}
 
                 {/* Toggle */}
                 <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: telegram?.hasBotToken ? "pointer" : "not-allowed" }}>
