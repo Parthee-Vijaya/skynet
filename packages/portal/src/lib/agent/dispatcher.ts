@@ -536,6 +536,33 @@ async function execute(
       }
     }
 
+    // ── Continue Claude Code-session ─────────────────────────────────────
+    case "continue_claude_session": {
+      const sessionId = String(args.sessionId ?? "").trim();
+      const prompt = String(args.prompt ?? "").trim();
+      const cwd = typeof args.cwd === "string" ? args.cwd.trim() : undefined;
+      if (!sessionId || !/^[0-9a-fA-F-]{8,64}$/.test(sessionId)) {
+        return { ok: false, error: "ugyldig sessionId — skal være UUID-format" };
+      }
+      if (!prompt) return { ok: false, error: "prompt er påkrævet" };
+      // Kald vores eget endpoint så vi genbruger spawn-logikken
+      const port = process.env.PORT ?? "3100";
+      const { getControlToken } = await import("@/lib/control/auth");
+      const token = getControlToken();
+      try {
+        const res = await fetch(`http://localhost:${port}/api/claude/continue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId, prompt, cwd }),
+          signal: AbortSignal.timeout(8_000),
+        });
+        const data = await res.json() as { ok: boolean; pid?: number; message?: string; error?: string };
+        return data;
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "kunne ikke kalde continue-endpoint" };
+      }
+    }
+
     // ── Telegram: schedule one-off reminder ───────────────────────────────
     case "schedule_telegram_reminder": {
       const { createAutomation } = await import("./automations");

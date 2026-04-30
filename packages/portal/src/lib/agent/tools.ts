@@ -612,6 +612,34 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Continue Claude Code session ─────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "continue_claude_session",
+      description:
+        "Genstart en tidligere Claude Code-session med en ny prompt. Bruges når brugeren via Telegram beder dig fortsætte arbejdet (fx 'fortsæt sessionen og fix bugen' eller 'kør den her ekstra ændring'). Sessionen kører i baggrunden og sender ny push-notifikation når Claude Code er færdig. Brug session-id'et fra system-context (det dukker op i agent-event-loggen) eller spørg brugeren hvilken session.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "UUID for Claude Code-sessionen — typisk givet i den tidligere notifikation eller agent-log",
+          },
+          prompt: {
+            type: "string",
+            description: "Den nye prompt som Claude Code skal køre i den genstartede session",
+          },
+          cwd: {
+            type: "string",
+            description: "Working directory hvor sessionen oprindeligt kørte (valgfri — falder tilbage til $HOME hvis ikke givet)",
+          },
+        },
+        required: ["sessionId", "prompt"],
+      },
+    },
+  },
+
   // ── Telegram: schedule one-off reminder ──────────────────────────────────
   {
     type: "function",
