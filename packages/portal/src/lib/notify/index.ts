@@ -11,7 +11,7 @@
 
 import { exec } from "child_process";
 import { promisify } from "util";
-import { getNotifyConfig, type NotifyConfig } from "../settings";
+import { getNotifyConfig, getSkynetPublicUrl, type NotifyConfig } from "../settings";
 
 const execAsync = promisify(exec);
 
@@ -24,7 +24,14 @@ export interface NotifyMessage {
   url?: string;
   /** Tag/emoji (kun ntfy) — fx "warning", "rotating_light" */
   tag?: string;
+  /** Op til 3 ntfy action-buttons (view/http/broadcast) */
+  actions?: NtfyAction[];
 }
+
+export type NtfyAction =
+  | { type: "view"; label: string; url: string; clear?: boolean }
+  | { type: "http"; label: string; url: string; method?: string; headers?: Record<string, string>; body?: string; clear?: boolean }
+  | { type: "broadcast"; label: string; intent?: string; extras?: Record<string, string> };
 
 export interface NotifyResult {
   backend: "macos" | "ntfy" | "pushover";
@@ -74,20 +81,35 @@ async function sendMacOS(msg: NotifyMessage): Promise<NotifyResult> {
 async function sendNtfy(msg: NotifyMessage, cfg: NotifyConfig): Promise<NotifyResult> {
   try {
     const base = cfg.ntfyServer.replace(/\/+$/, "");
-    const url = `${base}/${encodeURIComponent(cfg.ntfyTopic)}`;
-    // HTTP-headers er byte-strings (ISO-8859-1) — ntfy accepterer RFC 2047
-    // `=?utf-8?B?...?=` encoding for non-ASCII titler (emoji fx)
-    const headers: Record<string, string> = {
-      Title: encodeHeaderValue(msg.title),
-      Priority: mapPriorityNtfy(msg.priority),
+    // JSON publishing-form håndterer non-ASCII (emoji, æøå, →) naturligt og
+    // har struktureret support for actions. Doc:
+    // https://docs.ntfy.sh/publish/#publish-as-json
+    const payload: Record<string, unknown> = {
+      topic: cfg.ntfyTopic,
+      title: msg.title,
+      message: msg.body,
+      priority: mapPriorityNtfyJson(msg.priority),
     };
-    if (msg.tag) headers.Tags = msg.tag;
-    if (msg.url) headers.Click = msg.url;
+    // Tilføj 'skynet-bot' til alle outgoing — bruges af subscriber til at
+    // filtrere botens egne beskeder fra brugerens manuelle replies.
+    const tags = msg.tag ? ["skynet-bot", msg.tag] : ["skynet-bot"];
+    payload.tags = tags;
+    if (msg.url) {
+      const click = absoluteUrlFor(msg.url);
+      if (click) payload.click = click;
+    }
+    if (msg.actions && msg.actions.length > 0) {
+      const acts = msg.actions
+        .slice(0, 3)
+        .map((a) => actionToJson(a))
+        .filter((a): a is Record<string, unknown> => a !== null);
+      if (acts.length > 0) payload.actions = acts;
+    }
 
-    const res = await fetch(url, {
+    const res = await fetch(base, {
       method: "POST",
-      headers,
-      body: msg.body,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
@@ -104,6 +126,37 @@ async function sendNtfy(msg: NotifyMessage, cfg: NotifyConfig): Promise<NotifyRe
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+function actionToJson(a: NtfyAction): Record<string, unknown> | null {
+  if (a.type === "view") {
+    const url = absoluteUrlFor(a.url);
+    if (!url) return null; // skip view-action hvis vi ikke har public URL
+    return { action: "view", label: a.label, url, clear: a.clear };
+  }
+  if (a.type === "http") {
+    const url = absoluteUrlFor(a.url);
+    if (!url) return null;
+    return {
+      action: "http",
+      label: a.label,
+      url,
+      method: a.method,
+      headers: a.headers,
+      body: a.body,
+      clear: a.clear,
+    };
+  }
+  return { action: "broadcast", label: a.label, intent: a.intent, extras: a.extras };
+}
+
+function mapPriorityNtfyJson(p: NotifyMessage["priority"]): number {
+  // ntfy JSON priority: 1 (min) — 5 (max). default = 3
+  switch (p) {
+    case "low": return 2;
+    case "high": return 4;
+    default: return 3;
   }
 }
 
@@ -141,17 +194,6 @@ async function sendPushover(msg: NotifyMessage, cfg: NotifyConfig): Promise<Noti
   }
 }
 
-function mapPriorityNtfy(p: NotifyMessage["priority"]): string {
-  switch (p) {
-    case "low":
-      return "low";
-    case "high":
-      return "high";
-    default:
-      return "default";
-  }
-}
-
 function mapPriorityPushover(p: NotifyMessage["priority"]): number {
   switch (p) {
     case "low":
@@ -163,20 +205,34 @@ function mapPriorityPushover(p: NotifyMessage["priority"]): number {
   }
 }
 
-/**
- * Encode header value så ntfy (og andre HTTP-servere) accepterer emoji / æøå.
- * Hvis strengen er ren ASCII: returnér som-er. Ellers: RFC 2047 B-encoding
- * ('=?utf-8?B?<base64>?=') som ntfy dekoder korrekt ved levering.
- */
-function encodeHeaderValue(s: string): string {
-  // ASCII-kun (byte-string safe)
-  // eslint-disable-next-line no-control-regex
-  if (/^[\x00-\x7F]*$/.test(s)) return s;
-  const b64 = Buffer.from(s, "utf8").toString("base64");
-  return `=?utf-8?B?${b64}?=`;
-}
-
 function escapeAS(s: string): string {
   // AppleScript escape: kun backslash og double-quote
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
+
+/**
+ * ntfy Click + Action-URLs skal være absolutte (iPhone-app kan ikke åbne
+ * relative paths). Vi prøver i rækkefølge: settings.skynet_public_url →
+ * env-var SKYNET_PUBLIC_URL → null.
+ *
+ * Hvis vi ikke har en gyldig public URL: returnér null så caller ved at
+ * de skal udelade click/action-URL helt. Det får ntfy-appen på iPhone til
+ * at åbne sin egen besked-visning ved tap (i stedet for at sende brugeren
+ * til en localhost-URL der ikke virker).
+ */
+function publicBase(): string | null {
+  const fromSettings = getSkynetPublicUrl();
+  if (fromSettings) return fromSettings.replace(/\/+$/, "");
+  const fromEnv = process.env.SKYNET_PUBLIC_URL?.replace(/\/+$/, "");
+  if (fromEnv && !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(fromEnv)) return fromEnv;
+  return null;
+}
+
+function absoluteUrlFor(input: string): string | null {
+  if (/^https?:\/\//i.test(input)) return input;
+  const base = publicBase();
+  if (!base) return null;
+  if (input.startsWith("/")) return `${base}${input}`;
+  return `${base}/${input}`;
+}
+

@@ -25,6 +25,8 @@ import {
 } from "@/lib/integrations/reminders";
 import { findTrainRoute, RejseplanenError } from "@/lib/integrations/rejseplanen";
 import { searchNzbgeek, NzbgeekError } from "@/lib/integrations/nzbgeek";
+import { sendMessage as sendTelegramMessage, TelegramError } from "@/lib/integrations/telegram";
+import { getTelegramAllowedChatIds } from "@/lib/settings";
 import {
   getForecast,
   lookupAddress,
@@ -510,6 +512,96 @@ async function execute(
         }
         throw e;
       }
+    }
+
+    // ── Telegram: send proaktiv besked ────────────────────────────────────
+    case "send_telegram_message": {
+      const chatId = typeof args.chatId === "number" ? args.chatId : parseInt(String(args.chatId ?? ""), 10);
+      const message = String(args.message ?? "").trim();
+      if (!Number.isFinite(chatId)) throw new Error("chatId skal være et number");
+      if (!message) throw new Error("message er påkrævet");
+      // Allowlist-check også i tool — forhindrer LLM i at sende til vilkårlige chats
+      const allowed = getTelegramAllowedChatIds();
+      if (!allowed.includes(String(chatId))) {
+        return { ok: false, error: `chat_id ${chatId} er ikke i telegram_allowed_chat_ids — botten må ikke kontakte ukendte chats` };
+      }
+      try {
+        const r = await sendTelegramMessage({ chatId, text: message });
+        return { ok: true, messageId: r.message_id, chatId };
+      } catch (e) {
+        if (e instanceof TelegramError) {
+          return { ok: false, error: e.message, code: e.code };
+        }
+        throw e;
+      }
+    }
+
+    // ── Continue Claude Code-session ─────────────────────────────────────
+    case "continue_claude_session": {
+      const sessionId = String(args.sessionId ?? "").trim();
+      const prompt = String(args.prompt ?? "").trim();
+      const cwd = typeof args.cwd === "string" ? args.cwd.trim() : undefined;
+      if (!sessionId || !/^[0-9a-fA-F-]{8,64}$/.test(sessionId)) {
+        return { ok: false, error: "ugyldig sessionId — skal være UUID-format" };
+      }
+      if (!prompt) return { ok: false, error: "prompt er påkrævet" };
+      // Kald vores eget endpoint så vi genbruger spawn-logikken
+      const port = process.env.PORT ?? "3100";
+      const { getControlToken } = await import("@/lib/control/auth");
+      const token = getControlToken();
+      try {
+        const res = await fetch(`http://localhost:${port}/api/claude/continue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId, prompt, cwd }),
+          signal: AbortSignal.timeout(8_000),
+        });
+        const data = await res.json() as { ok: boolean; pid?: number; message?: string; error?: string };
+        return data;
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "kunne ikke kalde continue-endpoint" };
+      }
+    }
+
+    // ── Telegram: schedule one-off reminder ───────────────────────────────
+    case "schedule_telegram_reminder": {
+      const { createAutomation } = await import("./automations");
+      const { reloadScheduler } = await import("@/jobs/scheduler");
+      const chatId = typeof args.chatId === "number" ? args.chatId : parseInt(String(args.chatId ?? ""), 10);
+      const message = String(args.message ?? "").trim();
+      const sendAtIso = String(args.sendAtIso ?? "").trim();
+      const name = String(args.name ?? "").trim() || "Telegram-påmindelse";
+      if (!Number.isFinite(chatId)) throw new Error("chatId skal være et number");
+      if (!message) throw new Error("message er påkrævet");
+      if (!sendAtIso) throw new Error("sendAtIso er påkrævet (ISO-8601)");
+      const ts = Date.parse(sendAtIso);
+      if (!Number.isFinite(ts)) throw new Error(`ugyldig sendAtIso: ${sendAtIso}`);
+      if (ts < Date.now() - 60_000) throw new Error("sendAtIso er i fortiden");
+      const allowed = getTelegramAllowedChatIds();
+      if (!allowed.includes(String(chatId))) {
+        return { ok: false, error: `chat_id ${chatId} er ikke i allowlist` };
+      }
+      const created = createAutomation({
+        name: name.slice(0, 64),
+        description: `Telegram one-off · ${new Date(ts).toLocaleString("da-DK")}`,
+        trigger: { type: "once", runAt: ts, deleteAfterRun: true },
+        actions: [
+          {
+            type: "tool",
+            tool: "send_telegram_message",
+            args: { chatId, message },
+          },
+        ],
+        enabled: true,
+      });
+      reloadScheduler();
+      return {
+        ok: true,
+        automationId: created.id,
+        sendsAt: new Date(ts).toISOString(),
+        chatId,
+        message: `Påmindelse oprettet (id ${created.id}). Sender Telegram-besked ${new Date(ts).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}.`,
+      };
     }
 
     // ── One-off iMessage reminder ────────────────────────────────────────

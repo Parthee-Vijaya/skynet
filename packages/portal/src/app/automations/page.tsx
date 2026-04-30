@@ -31,6 +31,23 @@ interface ImessagePollerStatus {
   fdaOk: boolean;
 }
 
+interface NtfySubscriberStatus {
+  enabled: boolean;
+  ntfyTopic: string;
+  ntfyServer: string;
+  publicUrl: string;
+  lastFinishedSessionId?: string;
+  lastFinishedSessionAt?: string;
+}
+
+interface TelegramStatus {
+  enabled: boolean;
+  hasBotToken: boolean;
+  allowedChatIds: string[];
+  bot?: { id: number; username: string; first_name: string };
+  botError?: string;
+}
+
 const TEMPLATES: Array<{
   name: string;
   description: string;
@@ -203,6 +220,20 @@ export default function AutomationsPage() {
   const [hasRejseplanenAccessId, setHasRejseplanenAccessId] = useState(false);
   const [nzbgeekApiKey, setNzbgeekApiKey] = useState("");
   const [hasNzbgeekApiKey, setHasNzbgeekApiKey] = useState(false);
+  const [telegram, setTelegram] = useState<TelegramStatus | null>(null);
+  const [telegramTokenInput, setTelegramTokenInput] = useState("");
+  const [telegramAllowedInput, setTelegramAllowedInput] = useState("");
+  const telegramAllowedLoaded = useRef(false);
+  const [ntfySub, setNtfySub] = useState<NtfySubscriberStatus | null>(null);
+  const [publicUrlInput, setPublicUrlInput] = useState("");
+  const publicUrlLoaded = useRef(false);
+  const [tgDiscovered, setTgDiscovered] = useState<{
+    ok: boolean;
+    chats?: Array<{ chatId: number; type: string; title?: string; username?: string; firstName?: string; lastMessageText: string }>;
+    error?: string;
+    hint?: string;
+  } | null>(null);
+  const [tgDiscoverBusy, setTgDiscoverBusy] = useState(false);
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailTesting, setGmailTesting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState("");
@@ -229,12 +260,14 @@ export default function AutomationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, n, g, s, p] = await Promise.all([
+      const [a, n, g, s, p, t, ns] = await Promise.all([
         fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/telegram/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/ntfy/subscriber", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       setItems(a.automations ?? []);
       setNotifyCfg(n);
@@ -248,6 +281,20 @@ export default function AutomationsPage() {
       if (typeof s?.hasRejseplanenAccessId === "boolean") setHasRejseplanenAccessId(s.hasRejseplanenAccessId);
       if (typeof s?.hasNzbgeekApiKey === "boolean") setHasNzbgeekApiKey(s.hasNzbgeekApiKey);
       if (p) setImessagePoller(p);
+      if (t) {
+        setTelegram(t);
+        if (!telegramAllowedLoaded.current) {
+          setTelegramAllowedInput((t.allowedChatIds ?? []).join(", "));
+          telegramAllowedLoaded.current = true;
+        }
+      }
+      if (ns) {
+        setNtfySub(ns);
+        if (!publicUrlLoaded.current) {
+          setPublicUrlInput(ns.publicUrl ?? "");
+          publicUrlLoaded.current = true;
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -353,6 +400,71 @@ export default function AutomationsPage() {
     const data = (await res.json()) as { hasNzbgeekApiKey?: boolean };
     setHasNzbgeekApiKey(!!data.hasNzbgeekApiKey);
     setNzbgeekApiKey("");
+  };
+
+  const patchTelegram = async (patch: { enabled?: boolean; botToken?: string; allowedChatIds?: string }) => {
+    const res = await fetch("/api/telegram/status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = (await res.json()) as TelegramStatus;
+    setTelegram(data);
+    return data;
+  };
+
+  const saveTelegramToken = async (value: string) => {
+    if (!value.trim()) return;
+    await patchTelegram({ botToken: value.trim() });
+    setTelegramTokenInput("");
+  };
+
+  const saveTelegramAllowed = async (value: string) => {
+    await patchTelegram({ allowedChatIds: value });
+  };
+
+  const toggleTelegram = async (enabled: boolean) => {
+    await patchTelegram({ enabled });
+  };
+
+  const patchNtfySub = async (patch: { enabled?: boolean; publicUrl?: string }) => {
+    const res = await fetch("/api/ntfy/subscriber", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = (await res.json()) as NtfySubscriberStatus;
+    setNtfySub(data);
+    return data;
+  };
+
+  const savePublicUrl = async (value: string) => {
+    await patchNtfySub({ publicUrl: value.trim() });
+  };
+
+  const toggleNtfySub = async (enabled: boolean) => {
+    await patchNtfySub({ enabled });
+  };
+
+  const discoverTelegramChats = async () => {
+    setTgDiscoverBusy(true);
+    setTgDiscovered(null);
+    try {
+      const res = await fetch("/api/telegram/discover-chats");
+      setTgDiscovered((await res.json()) as typeof tgDiscovered);
+    } catch (e) {
+      setTgDiscovered({ ok: false, error: e instanceof Error ? e.message : "fejl" });
+    } finally {
+      setTgDiscoverBusy(false);
+    }
+  };
+
+  const addChatIdToAllowlist = (chatId: number) => {
+    const current = telegramAllowedInput.split(",").map((s) => s.trim()).filter(Boolean);
+    if (current.includes(String(chatId))) return;
+    const next = [...current, String(chatId)].join(", ");
+    setTelegramAllowedInput(next);
+    saveTelegramAllowed(next);
   };
 
   const toggleImessagePoller = async (enabled: boolean) => {
@@ -507,6 +619,55 @@ export default function AutomationsPage() {
                     </Button>
                     {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
                   </div>
+
+                  {/* Public URL — bruges af ntfy click-actions */}
+                  <div style={{ borderTop: "1px dashed #262626", marginTop: 14, paddingTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <span style={{ color: "#6b6b6b", width: 90 }}>public URL</span>
+                      <input
+                        type="text"
+                        value={publicUrlInput}
+                        onChange={(e) => setPublicUrlInput(e.target.value)}
+                        onBlur={(e) => savePublicUrl(e.target.value)}
+                        placeholder="fx http://din-mac.tail-XXXX.ts.net:3100 (Tailscale)"
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                    </div>
+                    <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, lineHeight: 1.6 }}>
+                      Når sat: notif-tap åbner Skynet&apos;s reply-side på iPhone. Hvis tom: tap åbner ntfy-appen
+                      naturligt og du kan svare direkte i ntfy (kræver subscriber-toggle nedenfor).
+                    </div>
+                  </div>
+
+                  {/* ntfy reply-back subscriber */}
+                  <div style={{ borderTop: "1px dashed #262626", marginTop: 14, paddingTop: 12 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: notifyCfg.ntfyTopic ? "pointer" : "not-allowed" }}>
+                      <input
+                        type="checkbox"
+                        checked={ntfySub?.enabled ?? false}
+                        disabled={!notifyCfg.ntfyTopic}
+                        onChange={(e) => toggleNtfySub(e.target.checked)}
+                      />
+                      <span style={{ color: notifyCfg.ntfyTopic ? "#e5e5e5" : "#525252" }}>
+                        aktivér ntfy reply-back
+                      </span>
+                      {ntfySub?.enabled && <span style={{ color: "#7dd67d", fontSize: 11 }}>● subscriber kører</span>}
+                      {!notifyCfg.ntfyTopic && <span style={{ color: "#6b6b6b", fontSize: 11 }}>(kræver ntfy-topic)</span>}
+                    </label>
+                    <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
+                      Når aktiv: Skynet lytter på ntfy-topic via SSE. Skriver du en besked i ntfy-app&apos;en
+                      (publish-knappen), bliver den brugt som reply til seneste Claude Code-session →
+                      <code style={{ color: "#9bd0ff" }}> claude --resume</code>{" "}
+                      kører i baggrunden og sender ny push når den er færdig.
+                      Botens egne beskeder filtreres væk via <code style={{ color: "#9bd0ff" }}>skynet-bot</code> tag.
+                    </div>
+                    {ntfySub?.lastFinishedSessionId && (
+                      <div style={{ color: "#525252", fontSize: 10, marginLeft: 24, marginTop: 6 }}>
+                        Seneste claude-session: <code style={{ color: "#6b6b6b" }}>{ntfySub.lastFinishedSessionId.slice(0, 8)}…</code>
+                        {ntfySub.lastFinishedSessionAt && ` · ${new Date(ntfySub.lastFinishedSessionAt).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}`}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <span style={{ color: "#6b6b6b", fontSize: 12 }}>indlæser…</span>
@@ -622,6 +783,136 @@ export default function AutomationsPage() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            </Section>
+
+            <Section
+              title="telegram bot (anbefalet 2-vejs)"
+              right={telegram?.enabled ? <span style={{ color: "#7dd67d" }}>● poller aktiv</span> : null}
+              className="mb-8"
+            >
+              <div style={{ fontSize: 12 }}>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 8, lineHeight: 1.6 }}>
+                  Sikrere alternativ til iMessage — botten har sit eget Telegram-handle og taler kun med chat_ids du explicit
+                  godkender. Ingen iCloud-sync-loops, ingen FDA-krav.
+                </div>
+
+                {/* Bot-token */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>bot-token</span>
+                  <input
+                    type="password"
+                    value={telegramTokenInput}
+                    onChange={(e) => setTelegramTokenInput(e.target.value)}
+                    onBlur={(e) => saveTelegramToken(e.target.value)}
+                    placeholder={telegram?.hasBotToken ? "(gemt — indtast for at ændre)" : "fra @BotFather i Telegram"}
+                    autoComplete="off"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 14 }}>
+                  Skriv til{" "}
+                  <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>@BotFather</a>
+                  {" "}i Telegram → <code style={{ color: "#9bd0ff" }}>/newbot</code> → giv den et navn → kopiér token (formateret som <code>123456789:ABC...</code>).
+                </div>
+
+                {/* Bot-info hvis token virker */}
+                {telegram?.bot && (
+                  <div style={{ background: "#0a1a0a", border: "1px solid #2c4a2c", padding: "8px 12px", marginBottom: 14, fontSize: 11 }}>
+                    <span style={{ color: "#7dd67d" }}>✓ forbundet til</span>{" "}
+                    <a href={`https://t.me/${telegram.bot.username}`} target="_blank" rel="noreferrer" style={{ color: "#9bd0ff" }}>
+                      @{telegram.bot.username}
+                    </a>
+                    <span style={{ color: "#6b6b6b" }}> · {telegram.bot.first_name} (id {telegram.bot.id})</span>
+                  </div>
+                )}
+                {telegram?.hasBotToken && telegram?.botError && (
+                  <div style={{ background: "#1f0a0a", border: "1px solid #5a2c2c", padding: "8px 12px", marginBottom: 14, fontSize: 11 }}>
+                    <span style={{ color: "#d87373" }}>✗ token-fejl: {telegram.botError}</span>
+                  </div>
+                )}
+
+                {/* Allowed chat_ids */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#6b6b6b", width: 100 }}>tilladte chats</span>
+                  <input
+                    type="text"
+                    value={telegramAllowedInput}
+                    onChange={(e) => setTelegramAllowedInput(e.target.value)}
+                    onBlur={(e) => saveTelegramAllowed(e.target.value)}
+                    placeholder="123456789, -987654321 (komma-separeret)"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 110, lineHeight: 1.6, marginBottom: 8 }}>
+                  Sikker default: tom liste = botten ignorerer ALT. Skriv til botten i Telegram først, klik så
+                  knappen nedenfor for at finde dit chat_id automatisk.
+                </div>
+                <div style={{ marginLeft: 110, marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <Button size="sm" tone="accent" onClick={discoverTelegramChats} disabled={tgDiscoverBusy || !telegram?.hasBotToken}>
+                    {tgDiscoverBusy ? "henter…" : "→ find chat_id automatisk"}
+                  </Button>
+                  {tgDiscovered && (
+                    <span style={{ fontSize: 11, color: tgDiscovered.ok ? "#7dd67d" : "#d87373" }}>
+                      {tgDiscovered.ok
+                        ? `${tgDiscovered.chats?.length ?? 0} chats fundet`
+                        : `✗ ${tgDiscovered.error}`}
+                    </span>
+                  )}
+                </div>
+                {tgDiscovered?.chats && tgDiscovered.chats.length > 0 && (
+                  <div style={{ marginLeft: 110, marginBottom: 14, border: "1px dashed #262626", padding: "8px 12px", fontSize: 11 }}>
+                    {tgDiscovered.chats.map((c) => {
+                      const isAllowed = telegramAllowedInput.split(",").map((s) => s.trim()).includes(String(c.chatId));
+                      return (
+                        <div key={c.chatId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px dashed #1c1c1c", gap: 10 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ color: "#e5e5e5" }}>
+                              <code style={{ color: "#9bd0ff" }}>{c.chatId}</code>
+                              <span style={{ color: "#6b6b6b", marginLeft: 8 }}>
+                                {c.type}{c.title ? ` · ${c.title}` : ""}{c.username ? ` · @${c.username}` : ""}{c.firstName ? ` · ${c.firstName}` : ""}
+                              </span>
+                            </div>
+                            <div style={{ color: "#525252", fontSize: 10, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              &ldquo;{c.lastMessageText}&rdquo;
+                            </div>
+                          </div>
+                          {isAllowed ? (
+                            <span style={{ color: "#7dd67d", fontSize: 11, whiteSpace: "nowrap" }}>✓ tilføjet</span>
+                          ) : (
+                            <Button size="sm" onClick={() => addChatIdToAllowlist(c.chatId)}>+ tilføj</Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {tgDiscovered?.hint && (
+                  <div style={{ marginLeft: 110, marginBottom: 14, fontSize: 11, color: "#e6b450" }}>
+                    💡 {tgDiscovered.hint}
+                  </div>
+                )}
+
+                {/* Toggle */}
+                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: telegram?.hasBotToken ? "pointer" : "not-allowed" }}>
+                  <input
+                    type="checkbox"
+                    checked={telegram?.enabled ?? false}
+                    disabled={!telegram?.hasBotToken}
+                    onChange={(e) => toggleTelegram(e.target.checked)}
+                  />
+                  <span style={{ color: telegram?.hasBotToken ? "#e5e5e5" : "#525252" }}>
+                    aktivér Telegram-poller (long-polling /getUpdates)
+                  </span>
+                  {!telegram?.hasBotToken && (
+                    <span style={{ color: "#6b6b6b", fontSize: 11 }}>(kræver bot-token)</span>
+                  )}
+                </label>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
+                  Indkommende beskeder fra tilladte chats kører gennem LLM med tools. Reminders oprettes via{" "}
+                  <code style={{ color: "#9bd0ff" }}>schedule_telegram_reminder</code>. Ingen polling-delay — Telegram pusher
+                  beskeder live til botten.
                 </div>
               </div>
             </Section>

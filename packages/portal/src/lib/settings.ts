@@ -93,6 +93,53 @@ export function setNzbgeekApiKey(value: string): void {
   setSetting("nzbgeek_api_key", value.trim().slice(0, 256));
 }
 
+/**
+ * Skynet public URL — bruges til ntfy click-URLs og action-buttons.
+ * Skal være en URL som iPhone/eksterne devices kan nå (typisk Tailscale
+ * MagicDNS, fx http://parthee-mac.tail-XXXX.ts.net:3100).
+ *
+ * Tom = vi udelader click-URL i ntfy, så tap på notif blot åbner ntfy-
+ * appen naturligt i stedet for at lande på localhost (som kun virker fra
+ * Mac selv).
+ */
+export function getSkynetPublicUrl(): string {
+  return getSetting("skynet_public_url") ?? "";
+}
+
+export function setSkynetPublicUrl(value: string): void {
+  setSetting("skynet_public_url", value.trim().replace(/\/+$/, "").slice(0, 256));
+}
+
+/**
+ * Telegram bot — token fra @BotFather. Tom = poller deaktiveret.
+ */
+export function getTelegramBotToken(): string {
+  return getSetting("telegram_bot_token") ?? "";
+}
+
+export function setTelegramBotToken(value: string): void {
+  setSetting("telegram_bot_token", value.trim().slice(0, 256));
+}
+
+/**
+ * Komma-separeret liste af tilladte Telegram chat_ids. Tom = ingen
+ * (sikker default — botten svarer kun til kendte chats).
+ */
+export function getTelegramAllowedChatIds(): string[] {
+  const raw = getSetting("telegram_allowed_chat_ids") ?? "";
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export function setTelegramAllowedChatIds(value: string): void {
+  // Normalisér: drop whitespace, slet duplikater, kun cifre + minus (chat_ids kan være negative for groups)
+  const list = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^-?\d+$/.test(s));
+  const unique = Array.from(new Set(list));
+  setSetting("telegram_allowed_chat_ids", unique.join(","));
+}
+
 // --- LLM / Chat ---
 
 export interface LLMConfig {

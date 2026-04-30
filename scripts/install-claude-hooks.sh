@@ -46,16 +46,18 @@ if [ -z "$TOKEN" ]; then
   echo "  REPLACE_WITH_CONTROL_TOKEN i $STOP_HOOK"
 fi
 
-# ── Skriv Stop-hook (push + rate-limits dump) ───────────────────────────────
+# ── Skriv Stop-hook (push + rate-limits dump + sessionId-extraction) ────────
 cat > "$STOP_HOOK" <<EOF
 #!/usr/bin/env bash
 # Skynet Claude Code Stop-hook (genereret af scripts/install-claude-hooks.sh)
 #
-# To opgaver:
-#   1. Push-notifikation til iPhone via /api/agent-events
+# Tre opgaver:
+#   1. Push-notifikation til iPhone via /api/agent-events MED sessionId+cwd
+#      så Skynet kan læse JSONL'en og bygge en detaljeret besked med
+#      "Du: '...', Claude: '...', tools: [...]"
 #   2. Dump rate_limits til ~/.claude/rate-limits.json så cockpit-widget
-#      kan vise live plan-usage uden at brugeren behøver bruge Claude Code
-#      interaktivt (statusline-hook fyrer kun under interaktive sessions).
+#      kan vise live plan-usage
+#   3. Send via Telegram-bridge hvis konfigureret (håndteres af endpoint)
 #
 # Fejler silent — påvirker aldrig Claude Code-sessionen.
 
@@ -65,6 +67,10 @@ PROJECT=\$(basename "\${PWD:-unknown}" | tr -cd '[:alnum:]_-' | cut -c1-50)
 
 # Læs hook-input én gang — Claude Code sender JSON-envelope på stdin
 INPUT=\$(cat 2>/dev/null || echo "{}")
+
+# Quiet-mode: hvis SKYNET_REFRESH er sat (fra refresh-rate-limits.sh),
+# opdater kun rate-limits.json — skip push-notifikationen.
+QUIET="\${SKYNET_REFRESH:-}"
 
 # 1) Dump rate_limits til cockpit-widget
 echo "\$INPUT" | python3 -c "
@@ -79,12 +85,52 @@ except Exception:
     pass
 " 2>/dev/null || true
 
-# 2) Push til Skynet
-curl -sS --max-time 2 -X POST http://localhost:3100/api/agent-events \\
-  -H "Authorization: Bearer \$TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d "{\"agent\":\"claude-code\",\"session\":\"\${PROJECT}\",\"event\":\"finished\",\"message\":\"Claude Code færdig i \${PROJECT}\"}" \\
-  > /dev/null 2>&1 || true
+# 2) Udled session_id + cwd fra envelope (begge optional)
+SESSION_ID=\$(echo "\$INPUT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('session_id') or d.get('sessionId') or '')
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+
+ENVELOPE_CWD=\$(echo "\$INPUT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('cwd') or '')
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+
+EFFECTIVE_CWD="\${ENVELOPE_CWD:-\$PWD}"
+
+# 3) Byg JSON-payload med sessionId+cwd så Skynet kan læse JSONL
+PAYLOAD=\$(python3 -c "
+import json
+print(json.dumps({
+    'agent': 'claude-code',
+    'session': '\${PROJECT}',
+    'event': 'finished',
+    'sessionId': '\${SESSION_ID}' if '\${SESSION_ID}' else None,
+    'cwd': '\${EFFECTIVE_CWD}' if '\${EFFECTIVE_CWD}' else None,
+    'message': 'Claude Code færdig i \${PROJECT}',
+}))
+" 2>/dev/null)
+
+if [ -z "\$PAYLOAD" ]; then
+  PAYLOAD="{\\"agent\\":\\"claude-code\\",\\"session\\":\\"\${PROJECT}\\",\\"event\\":\\"finished\\",\\"message\\":\\"Claude Code færdig i \${PROJECT}\\"}"
+fi
+
+# 4) Push til Skynet (skip hvis quiet-mode = auto-refresh)
+if [ -z "\$QUIET" ]; then
+  curl -sS --max-time 5 -X POST http://localhost:3100/api/agent-events \\
+    -H "Authorization: Bearer \$TOKEN" \\
+    -H "Content-Type: application/json" \\
+    -d "\$PAYLOAD" \\
+    > /dev/null 2>&1 || true
+fi
 
 exit 0
 EOF
@@ -175,7 +221,54 @@ else:
 settings_path.write_text(json.dumps(data, indent=2) + "\n")
 EOF
 
+# ── Auto-refresh LaunchAgent (rate-limits hver 4 time) ─────────────────────
+REFRESH_SCRIPT_REPO="$(cd "$(dirname "$0")" && pwd)/refresh-claude-rate-limits.sh"
+REFRESH_PLIST="$HOME/Library/LaunchAgents/com.skynet.refresh-rate-limits.plist"
+
+if [ -f "$REFRESH_SCRIPT_REPO" ]; then
+  cat > "$REFRESH_PLIST" <<EOF2
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.skynet.refresh-rate-limits</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$REFRESH_SCRIPT_REPO</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>$HOME</string>
+        <key>SKYNET_REFRESH</key>
+        <string>1</string>
+    </dict>
+    <key>StartInterval</key>
+    <integer>14400</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/skynet-refresh-rate-limits.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/skynet-refresh-rate-limits.err.log</string>
+</dict>
+</plist>
+EOF2
+  # Re-load plist (safe selv hvis ikke loadet før)
+  launchctl bootout "gui/$(id -u)" "$REFRESH_PLIST" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$REFRESH_PLIST" 2>/dev/null || true
+  echo "✓ Refresh-job → kører hver 4 time · plist: $REFRESH_PLIST"
+else
+  echo "⚠ refresh-claude-rate-limits.sh ikke fundet — auto-refresh ikke installeret"
+fi
+
 echo
 echo "Færdig. Næste gang du bruger Claude Code (interaktivt eller -p),"
 echo "vil ~/.claude/rate-limits.json blive opdateret automatisk."
-echo "Skynet cockpit-widget poller hvert 60. sek."
+echo "Plus: LaunchAgent kører claude -p stille hver 4 time så cockpit-widget"
+echo "viser friske plan-usage data — også når du ikke bruger Claude Code."
+echo "Cost: ~\$1.80/mdr i API-kald. Slå fra ved at unloade plist'en."
