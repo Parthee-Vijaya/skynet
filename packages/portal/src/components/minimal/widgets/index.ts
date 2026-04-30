@@ -14,6 +14,7 @@ import { WeatherWidgetMinimal } from "./WeatherWidgetMinimal";
 import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
 import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
+import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -24,7 +25,8 @@ registerWidget({ id: "net",      group: "system",   colSpan: 4,  Component: NetW
 // ── Row: weather (left) + plex (right) ─────────────────────────────────────
 registerWidget({ id: "weather",  group: "ambient",  colSpan: 6,  Component: WeatherWidgetMinimal });
 registerWidget({ id: "plex",     group: "ambient",  colSpan: 6,  Component: PlexWidgetMinimal });
-// ── Row: sabnzbd (under plex) ──────────────────────────────────────────────
+// ── Row: paseo agents (left) + sabnzbd (right) ────────────────────────────
+registerWidget({ id: "paseo",    group: "ambient", colSpan: 6,  Component: PaseoAgentsWidget });
 registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: SabnzbdWidgetMinimal });
 // ── Row: disk (left) + github personal (right) ─────────────────────────────
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
