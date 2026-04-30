@@ -95,7 +95,7 @@ export function AutomationEditor({ target, prefill, onClose, onSaved }: Props) {
         description: target.description ?? "",
         enabled: target.enabled,
         trigger: target.trigger as DraftTrigger,
-        actions: (target.actions ?? [target.action]) as DraftAction[],
+        actions: target.actions as DraftAction[],
       });
     } else if (target === "new" && prefill) {
       setDraft({
