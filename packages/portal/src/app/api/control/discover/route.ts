@@ -163,90 +163,6 @@ async function detectTailscale(): Promise<Detection> {
   };
 }
 
-async function detectTmux(): Promise<Detection> {
-  const p = await hasCommand("tmux");
-  if (p) {
-    return {
-      key: "tmux",
-      name: "tmux",
-      status: "ok",
-      details: p,
-      feature: "Pocket Agents",
-      configured: true,
-    };
-  }
-  return {
-    key: "tmux",
-    name: "tmux",
-    status: "missing",
-    hint: "Kør ./scripts/bootstrap-pocket-agents.sh eller 'brew install tmux'",
-    feature: "Pocket Agents",
-  };
-}
-
-async function detectBrrr(): Promise<Detection> {
-  const p = await hasCommand("brrr");
-  if (p) {
-    return {
-      key: "brrr",
-      name: "brrr CLI",
-      status: "ok",
-      details: p,
-      feature: "Pocket Agents · idle-notify",
-      configured: true,
-    };
-  }
-  return {
-    key: "brrr",
-    name: "brrr CLI",
-    status: "missing",
-    hint: "Kør bootstrap-scriptet eller 'brew tap simonbs/brrr-cli && brew install brrr'",
-    feature: "Pocket Agents · idle-notify",
-  };
-}
-
-async function detectZshrcAutoAttach(): Promise<Detection> {
-  const zshrc = join(homedir(), ".zshrc");
-  if (!(await fileExists(zshrc))) {
-    return {
-      key: "zshrc-tmux",
-      name: ".zshrc auto-attach",
-      status: "missing",
-      details: "~/.zshrc eksisterer ikke",
-      hint: "Kør scripts/bootstrap-pocket-agents.sh",
-      feature: "Pocket Agents · SSH auto-tmux",
-    };
-  }
-  try {
-    const content = await fs.readFile(zshrc, "utf8");
-    const patched = content.includes("skynet: auto-attach to tmux on SSH");
-    if (patched) {
-      return {
-        key: "zshrc-tmux",
-        name: ".zshrc auto-attach",
-        status: "ok",
-        details: "SSH attacher til 'agents' tmux-session",
-        feature: "Pocket Agents · SSH auto-tmux",
-        configured: true,
-      };
-    }
-    return {
-      key: "zshrc-tmux",
-      name: ".zshrc auto-attach",
-      status: "partial",
-      details: "~/.zshrc eksisterer men er ikke patchet",
-      hint: "Kør scripts/bootstrap-pocket-agents.sh",
-      feature: "Pocket Agents · SSH auto-tmux",
-    };
-  } catch {
-    return {
-      key: "zshrc-tmux",
-      name: ".zshrc auto-attach",
-      status: "missing",
-      feature: "Pocket Agents · SSH auto-tmux",
-    };
-  }
-}
 
 async function detectNzbgeek(): Promise<Detection> {
   const url = getSetting("nzbgeek_rss_url");
@@ -428,9 +344,6 @@ export async function GET(req: Request) {
     detectLmStudio(),
     detectPlex(),
     detectTailscale(),
-    detectTmux(),
-    detectBrrr(),
-    detectZshrcAutoAttach(),
     detectNzbgeek(),
     detectGitHub(),
     detectNasaApod(),
