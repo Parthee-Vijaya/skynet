@@ -6,7 +6,6 @@ export async function register(): Promise<void> {
     { autoImportPlexToken },
     { startScheduler },
     { startMeetingPrep },
-    { startTerminalServer },
     { startPoller: startImessagePoller },
     { startPoller: startTelegramPoller },
     { startSubscriber: startNtfySubscriber },
@@ -15,7 +14,6 @@ export async function register(): Promise<void> {
     import("@/jobs/plex-token-import"),
     import("@/jobs/scheduler"),
     import("@/jobs/meeting-prep"),
-    import("@/jobs/terminal-server"),
     import("@/jobs/imessage-poller"),
     import("@/jobs/telegram-poller"),
     import("@/jobs/ntfy-subscriber"),
@@ -25,8 +23,6 @@ export async function register(): Promise<void> {
   startSparklineCollector();
   startScheduler();
   startMeetingPrep();
-  // Terminal-WS — best-effort, fejler tavst hvis node-pty mangler
-  startTerminalServer().catch((e) => console.error("[terminal-ws] startup failed:", e));
   // iMessage-poller — best-effort, fejler tavst hvis FDA mangler
   try { startImessagePoller(); } catch (e) { console.warn("[imessage-poller] startup failed:", e); }
   // Telegram-poller — best-effort, kun aktiv hvis token + toggle er sat

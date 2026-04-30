@@ -133,10 +133,12 @@ export async function POST(req: NextRequest) {
     actions.push({ type: "view", label: "📜 Transcript", url: continueUrl + (continueUrl.includes("?") ? "&" : "?") + "view=transcript" });
   }
 
-  // 5) Klik-URL (forskellig fra actions — bruges til hele notif'en på iOS)
+  // 5) Klik-URL (forskellig fra actions — bruges til hele notif'en på iOS).
+  // Hvis vi har sessionId: åbn reply-form. Ellers fallback til /agents-siden
+  // (Paseo) så brugeren kan se igangværende agents.
   const clickUrl = body.sessionId
     ? `/continue/${encodeURIComponent(body.sessionId)}${body.cwd ? `?cwd=${encodeURIComponent(body.cwd)}` : ""}`
-    : `/terminal?session=${encodeURIComponent(session.split(":")[0] ?? "agents")}`;
+    : "/agents";
 
   const notifyResults = await notify({
     title: pushTitle,
