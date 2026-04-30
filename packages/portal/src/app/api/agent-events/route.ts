@@ -24,6 +24,7 @@ import { notify, type NtfyAction } from "@/lib/notify";
 import { getSessionSummary, formatSummaryForPush, type SessionSummary } from "@/lib/integrations/claude-sessions";
 import { getTelegramAllowedChatIds, getTelegramBotToken, setSetting } from "@/lib/settings";
 import { sendMessage as sendTelegramMessage } from "@/lib/integrations/telegram";
+import { truncate } from "@/lib/formatters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -209,10 +210,6 @@ async function maybeBridgeToTelegram(opts: {
 function escapeMd(s: string): string {
   // Telegram Markdown v1: escape `_*[`
   return s.replace(/([_*[\]`])/g, "\\$1");
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
 export async function GET(req: NextRequest) {

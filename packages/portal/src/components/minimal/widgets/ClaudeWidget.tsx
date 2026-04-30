@@ -1,26 +1,8 @@
 "use client";
 import { usePoll } from "@/hooks/usePoll";
 import type { ClaudeStatusData, ClaudeRateLimit, ClaudeLiveWindow } from "@/lib/types";
+import { fmtTok, timeSince } from "@/lib/formatters";
 import { Section, Dot } from "../primitives";
-
-function fmtTok(n: number): string {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + " b";
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + " m";
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + " k";
-  return String(n);
-}
-
-function timeSince(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 0) return "lige nu";
-  const mins = Math.round(diff / 60_000);
-  if (mins < 1) return "lige nu";
-  if (mins < 60) return `${mins}m siden`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours}t siden`;
-  const days = Math.round(hours / 24);
-  return `${days}d siden`;
-}
 
 /**
  * Live-window-linje. Foretrækker udledt procent fra JSONL hvis tilgængelig,
