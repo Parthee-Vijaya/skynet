@@ -11,7 +11,7 @@
 
 import { exec } from "child_process";
 import { promisify } from "util";
-import { getNotifyConfig, type NotifyConfig } from "../settings";
+import { getNotifyConfig, getSkynetPublicUrl, type NotifyConfig } from "../settings";
 
 const execAsync = promisify(exec);
 
@@ -90,10 +90,20 @@ async function sendNtfy(msg: NotifyMessage, cfg: NotifyConfig): Promise<NotifyRe
       message: msg.body,
       priority: mapPriorityNtfyJson(msg.priority),
     };
-    if (msg.tag) payload.tags = [msg.tag];
-    if (msg.url) payload.click = absoluteUrlFor(msg.url);
+    // Tilføj 'skynet-bot' til alle outgoing — bruges af subscriber til at
+    // filtrere botens egne beskeder fra brugerens manuelle replies.
+    const tags = msg.tag ? ["skynet-bot", msg.tag] : ["skynet-bot"];
+    payload.tags = tags;
+    if (msg.url) {
+      const click = absoluteUrlFor(msg.url);
+      if (click) payload.click = click;
+    }
     if (msg.actions && msg.actions.length > 0) {
-      payload.actions = msg.actions.slice(0, 3).map((a) => actionToJson(a));
+      const acts = msg.actions
+        .slice(0, 3)
+        .map((a) => actionToJson(a))
+        .filter((a): a is Record<string, unknown> => a !== null);
+      if (acts.length > 0) payload.actions = acts;
     }
 
     const res = await fetch(base, {
@@ -119,15 +129,19 @@ async function sendNtfy(msg: NotifyMessage, cfg: NotifyConfig): Promise<NotifyRe
   }
 }
 
-function actionToJson(a: NtfyAction): Record<string, unknown> {
+function actionToJson(a: NtfyAction): Record<string, unknown> | null {
   if (a.type === "view") {
-    return { action: "view", label: a.label, url: absoluteUrlFor(a.url), clear: a.clear };
+    const url = absoluteUrlFor(a.url);
+    if (!url) return null; // skip view-action hvis vi ikke har public URL
+    return { action: "view", label: a.label, url, clear: a.clear };
   }
   if (a.type === "http") {
+    const url = absoluteUrlFor(a.url);
+    if (!url) return null;
     return {
       action: "http",
       label: a.label,
-      url: absoluteUrlFor(a.url),
+      url,
       method: a.method,
       headers: a.headers,
       body: a.body,
@@ -198,12 +212,26 @@ function escapeAS(s: string): string {
 
 /**
  * ntfy Click + Action-URLs skal være absolutte (iPhone-app kan ikke åbne
- * relative paths). Vi bruger SKYNET_PUBLIC_URL hvis sat, ellers Tailscale-
- * MagicDNS-format, ellers localhost (fungerer kun på Mac selv).
+ * relative paths). Vi prøver i rækkefølge: settings.skynet_public_url →
+ * env-var SKYNET_PUBLIC_URL → null.
+ *
+ * Hvis vi ikke har en gyldig public URL: returnér null så caller ved at
+ * de skal udelade click/action-URL helt. Det får ntfy-appen på iPhone til
+ * at åbne sin egen besked-visning ved tap (i stedet for at sende brugeren
+ * til en localhost-URL der ikke virker).
  */
-function absoluteUrlFor(input: string): string {
+function publicBase(): string | null {
+  const fromSettings = getSkynetPublicUrl();
+  if (fromSettings) return fromSettings.replace(/\/+$/, "");
+  const fromEnv = process.env.SKYNET_PUBLIC_URL?.replace(/\/+$/, "");
+  if (fromEnv && !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(fromEnv)) return fromEnv;
+  return null;
+}
+
+function absoluteUrlFor(input: string): string | null {
   if (/^https?:\/\//i.test(input)) return input;
-  const base = process.env.SKYNET_PUBLIC_URL?.replace(/\/+$/, "") ?? "http://localhost:3100";
+  const base = publicBase();
+  if (!base) return null;
   if (input.startsWith("/")) return `${base}${input}`;
   return `${base}/${input}`;
 }

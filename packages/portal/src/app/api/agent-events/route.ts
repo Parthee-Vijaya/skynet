@@ -22,7 +22,7 @@ import { requireAuth } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
 import { notify, type NtfyAction } from "@/lib/notify";
 import { getSessionSummary, formatSummaryForPush, type SessionSummary } from "@/lib/integrations/claude-sessions";
-import { getTelegramAllowedChatIds, getTelegramBotToken } from "@/lib/settings";
+import { getTelegramAllowedChatIds, getTelegramBotToken, setSetting } from "@/lib/settings";
 import { sendMessage as sendTelegramMessage } from "@/lib/integrations/telegram";
 
 export const runtime = "nodejs";
@@ -93,6 +93,14 @@ export async function POST(req: NextRequest) {
     } catch {
       summary = null;
     }
+  }
+
+  // Track sidste finished session så ntfy-subscriber + Telegram-reply
+  // ved hvilken session der skal genstartes når brugeren svarer
+  if (event === "finished" && body.sessionId) {
+    setSetting("last_finished_session_id", body.sessionId);
+    if (body.cwd) setSetting("last_finished_session_cwd", body.cwd);
+    setSetting("last_finished_session_at", String(Date.now()));
   }
 
   // 2) Log til agent-log-panel

@@ -94,6 +94,23 @@ export function setNzbgeekApiKey(value: string): void {
 }
 
 /**
+ * Skynet public URL — bruges til ntfy click-URLs og action-buttons.
+ * Skal være en URL som iPhone/eksterne devices kan nå (typisk Tailscale
+ * MagicDNS, fx http://parthee-mac.tail-XXXX.ts.net:3100).
+ *
+ * Tom = vi udelader click-URL i ntfy, så tap på notif blot åbner ntfy-
+ * appen naturligt i stedet for at lande på localhost (som kun virker fra
+ * Mac selv).
+ */
+export function getSkynetPublicUrl(): string {
+  return getSetting("skynet_public_url") ?? "";
+}
+
+export function setSkynetPublicUrl(value: string): void {
+  setSetting("skynet_public_url", value.trim().replace(/\/+$/, "").slice(0, 256));
+}
+
+/**
  * Telegram bot — token fra @BotFather. Tom = poller deaktiveret.
  */
 export function getTelegramBotToken(): string {

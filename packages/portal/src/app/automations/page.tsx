@@ -31,6 +31,15 @@ interface ImessagePollerStatus {
   fdaOk: boolean;
 }
 
+interface NtfySubscriberStatus {
+  enabled: boolean;
+  ntfyTopic: string;
+  ntfyServer: string;
+  publicUrl: string;
+  lastFinishedSessionId?: string;
+  lastFinishedSessionAt?: string;
+}
+
 interface TelegramStatus {
   enabled: boolean;
   hasBotToken: boolean;
@@ -215,6 +224,9 @@ export default function AutomationsPage() {
   const [telegramTokenInput, setTelegramTokenInput] = useState("");
   const [telegramAllowedInput, setTelegramAllowedInput] = useState("");
   const telegramAllowedLoaded = useRef(false);
+  const [ntfySub, setNtfySub] = useState<NtfySubscriberStatus | null>(null);
+  const [publicUrlInput, setPublicUrlInput] = useState("");
+  const publicUrlLoaded = useRef(false);
   const [tgDiscovered, setTgDiscovered] = useState<{
     ok: boolean;
     chats?: Array<{ chatId: number; type: string; title?: string; username?: string; firstName?: string; lastMessageText: string }>;
@@ -248,13 +260,14 @@ export default function AutomationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, n, g, s, p, t] = await Promise.all([
+      const [a, n, g, s, p, t, ns] = await Promise.all([
         fetch("/api/automations", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/notify-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/automations/gmail-config", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/automations/imessage-poller", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
         fetch("/api/telegram/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/ntfy/subscriber", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       ]);
       setItems(a.automations ?? []);
       setNotifyCfg(n);
@@ -273,6 +286,13 @@ export default function AutomationsPage() {
         if (!telegramAllowedLoaded.current) {
           setTelegramAllowedInput((t.allowedChatIds ?? []).join(", "));
           telegramAllowedLoaded.current = true;
+        }
+      }
+      if (ns) {
+        setNtfySub(ns);
+        if (!publicUrlLoaded.current) {
+          setPublicUrlInput(ns.publicUrl ?? "");
+          publicUrlLoaded.current = true;
         }
       }
     } finally {
@@ -405,6 +425,25 @@ export default function AutomationsPage() {
 
   const toggleTelegram = async (enabled: boolean) => {
     await patchTelegram({ enabled });
+  };
+
+  const patchNtfySub = async (patch: { enabled?: boolean; publicUrl?: string }) => {
+    const res = await fetch("/api/ntfy/subscriber", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = (await res.json()) as NtfySubscriberStatus;
+    setNtfySub(data);
+    return data;
+  };
+
+  const savePublicUrl = async (value: string) => {
+    await patchNtfySub({ publicUrl: value.trim() });
+  };
+
+  const toggleNtfySub = async (enabled: boolean) => {
+    await patchNtfySub({ enabled });
   };
 
   const discoverTelegramChats = async () => {
@@ -579,6 +618,55 @@ export default function AutomationsPage() {
                       {testing ? "sender…" : "→ send test"}
                     </Button>
                     {testMsg && <span style={{ color: "#9bd0ff", fontSize: 11 }}>{testMsg}</span>}
+                  </div>
+
+                  {/* Public URL — bruges af ntfy click-actions */}
+                  <div style={{ borderTop: "1px dashed #262626", marginTop: 14, paddingTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <span style={{ color: "#6b6b6b", width: 90 }}>public URL</span>
+                      <input
+                        type="text"
+                        value={publicUrlInput}
+                        onChange={(e) => setPublicUrlInput(e.target.value)}
+                        onBlur={(e) => savePublicUrl(e.target.value)}
+                        placeholder="fx http://din-mac.tail-XXXX.ts.net:3100 (Tailscale)"
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                    </div>
+                    <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 100, lineHeight: 1.6 }}>
+                      Når sat: notif-tap åbner Skynet&apos;s reply-side på iPhone. Hvis tom: tap åbner ntfy-appen
+                      naturligt og du kan svare direkte i ntfy (kræver subscriber-toggle nedenfor).
+                    </div>
+                  </div>
+
+                  {/* ntfy reply-back subscriber */}
+                  <div style={{ borderTop: "1px dashed #262626", marginTop: 14, paddingTop: 12 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, cursor: notifyCfg.ntfyTopic ? "pointer" : "not-allowed" }}>
+                      <input
+                        type="checkbox"
+                        checked={ntfySub?.enabled ?? false}
+                        disabled={!notifyCfg.ntfyTopic}
+                        onChange={(e) => toggleNtfySub(e.target.checked)}
+                      />
+                      <span style={{ color: notifyCfg.ntfyTopic ? "#e5e5e5" : "#525252" }}>
+                        aktivér ntfy reply-back
+                      </span>
+                      {ntfySub?.enabled && <span style={{ color: "#7dd67d", fontSize: 11 }}>● subscriber kører</span>}
+                      {!notifyCfg.ntfyTopic && <span style={{ color: "#6b6b6b", fontSize: 11 }}>(kræver ntfy-topic)</span>}
+                    </label>
+                    <div style={{ color: "#6b6b6b", fontSize: 11, marginLeft: 24, lineHeight: 1.5 }}>
+                      Når aktiv: Skynet lytter på ntfy-topic via SSE. Skriver du en besked i ntfy-app&apos;en
+                      (publish-knappen), bliver den brugt som reply til seneste Claude Code-session →
+                      <code style={{ color: "#9bd0ff" }}> claude --resume</code>{" "}
+                      kører i baggrunden og sender ny push når den er færdig.
+                      Botens egne beskeder filtreres væk via <code style={{ color: "#9bd0ff" }}>skynet-bot</code> tag.
+                    </div>
+                    {ntfySub?.lastFinishedSessionId && (
+                      <div style={{ color: "#525252", fontSize: 10, marginLeft: 24, marginTop: 6 }}>
+                        Seneste claude-session: <code style={{ color: "#6b6b6b" }}>{ntfySub.lastFinishedSessionId.slice(0, 8)}…</code>
+                        {ntfySub.lastFinishedSessionAt && ` · ${new Date(ntfySub.lastFinishedSessionAt).toLocaleString("da-DK", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}`}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
