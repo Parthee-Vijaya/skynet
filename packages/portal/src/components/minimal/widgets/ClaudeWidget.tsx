@@ -1,6 +1,6 @@
 "use client";
 import { usePoll } from "@/hooks/usePoll";
-import type { ClaudeStatusData, ClaudeRateLimit } from "@/lib/types";
+import type { ClaudeStatusData, ClaudeRateLimit, ClaudeLiveWindow } from "@/lib/types";
 import { Section, Dot } from "../primitives";
 
 function fmtTok(n: number): string {
@@ -22,30 +22,70 @@ function timeSince(ts: number): string {
   return `${days}d siden`;
 }
 
-/** Én plan-usage linje · "5-hour limit   16% · resets 1h" */
-function PlanRow({ label, bucket, stale }: { label: string; bucket: ClaudeRateLimit | null; stale?: boolean }) {
-  if (!bucket) {
+/**
+ * Live-window-linje. Foretrækker udledt procent fra JSONL hvis tilgængelig,
+ * ellers viser kun token-antal. Falder tilbage til stale rate-limit hvis
+ * ingen plan-grænse er udledt endnu.
+ */
+function LiveRow({
+  label,
+  live,
+  fallbackBucket,
+  rateLimitsStale,
+}: {
+  label: string;
+  live: ClaudeLiveWindow | undefined;
+  fallbackBucket: ClaudeRateLimit | null | undefined;
+  rateLimitsStale: boolean | undefined;
+}) {
+  // 1) Bedste case: vi har udledt procent fra JSONL — altid live
+  if (live && live.estimatedPercent != null) {
+    const pct = Math.round(live.estimatedPercent);
+    const tone = pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
     return (
       <tr>
-        <td className="text-neutral-600 py-0.5">{label}</td>
-        <td className="text-right text-neutral-700 tabular-nums">—</td>
+        <td className="text-neutral-500 py-0.5 truncate">{label}</td>
+        <td className={`text-right ${tone} tabular-nums`}>
+          {pct}%
+          <span className="text-neutral-600 font-normal ml-1.5">· {fmtTok(live.tokens)}</span>
+        </td>
       </tr>
     );
   }
-  const pct = Math.round(bucket.usedPercent);
-  // Når stale: dæmp farverne så det er tydeligt at det IKKE er live data
-  const tone = stale
-    ? "text-neutral-600"
-    : pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
+
+  // 2) Tokens uden procent (hvis vi ikke har udledt grænse endnu)
+  if (live && live.tokens > 0) {
+    return (
+      <tr>
+        <td className="text-neutral-500 py-0.5 truncate">{label}</td>
+        <td className="text-right text-neutral-200 tabular-nums">
+          {fmtTok(live.tokens)}
+          <span className="text-neutral-700 font-normal ml-1.5">· {live.messages} msg</span>
+        </td>
+      </tr>
+    );
+  }
+
+  // 3) Fallback: vis stale rate-limit-procent (det gamle pre-live-mode display)
+  if (fallbackBucket) {
+    const pct = Math.round(fallbackBucket.usedPercent);
+    const tone = rateLimitsStale ? "text-neutral-600" : pct >= 80 ? "text-rose-400" : pct >= 50 ? "text-amber-400" : "text-neutral-200";
+    return (
+      <tr>
+        <td className={`py-0.5 truncate ${rateLimitsStale ? "text-neutral-700" : "text-neutral-500"}`}>{label}</td>
+        <td className={`text-right ${tone} tabular-nums`}>
+          {pct}%
+          {rateLimitsStale && <span className="text-neutral-700 font-normal ml-1.5">· stale</span>}
+        </td>
+      </tr>
+    );
+  }
+
+  // 4) Ingen data
   return (
     <tr>
-      <td className={`py-0.5 truncate ${stale ? "text-neutral-700" : "text-neutral-500"}`}>{label}</td>
-      <td className={`text-right ${tone} tabular-nums`}>
-        {pct}%
-        {bucket.resetsIn && (
-          <span className={`font-normal ml-1.5 ${stale ? "text-neutral-700" : "text-neutral-600"}`}>· {bucket.resetsIn}</span>
-        )}
-      </td>
+      <td className="text-neutral-600 py-0.5">{label}</td>
+      <td className="text-right text-neutral-700 tabular-nums">—</td>
     </tr>
   );
 }
@@ -89,21 +129,23 @@ export function ClaudeWidget() {
           </tbody>
         </table>
 
-        {/* ── Plan-usage sektion (vises kun hvis rate-limits-cache er udfyldt) ── */}
-        {rl && (rl.fiveHour || rl.sevenDay || rl.sevenDayOpus) && (
+        {/* ── Plan-usage / live-windows sektion ── */}
+        {(data?.liveWindows || rl) && (
           <div className="mt-3 pt-2.5 border-t border-dashed border-neutral-800">
             <div className="flex items-baseline justify-between mb-1">
-              <span className={`text-[10px] uppercase tracking-[0.2em] ${rl.stale ? "text-neutral-700" : "text-neutral-600"}`}>
-                plan usage
+              <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-600">
+                plan usage · live
               </span>
-              {rl.stale ? (
+              {data?.liveWindows ? (
                 <span
-                  className="text-[10px] text-amber-500/80"
-                  title="Værdierne er ikke live — kør 'claude' for at opdatere"
+                  className="text-[10px] text-emerald-500/70"
+                  title="Beregnet løbende fra JSONL — altid live"
                 >
-                  ⚠ ikke live · {timeSince(rl.updatedAt)}
+                  ● fra jsonl
                 </span>
-              ) : rl.updatedAt ? (
+              ) : rl?.stale ? (
+                <span className="text-[10px] text-amber-500/80">⚠ stale · {timeSince(rl.updatedAt)}</span>
+              ) : rl?.updatedAt ? (
                 <span className="text-[10px] text-neutral-700">
                   opdateret {timeSince(rl.updatedAt)}
                 </span>
@@ -111,14 +153,24 @@ export function ClaudeWidget() {
             </div>
             <table className="w-full text-[12px]">
               <tbody>
-                <PlanRow label="5-hour limit" bucket={rl.fiveHour} stale={rl.stale} />
-                <PlanRow label="weekly · all models" bucket={rl.sevenDay} stale={rl.stale} />
-                <PlanRow label="weekly · opus/sonnet" bucket={rl.sevenDayOpus} stale={rl.stale} />
+                <LiveRow
+                  label="5-hour"
+                  live={data?.liveWindows?.fiveHour}
+                  fallbackBucket={rl?.fiveHour}
+                  rateLimitsStale={rl?.stale}
+                />
+                <LiveRow
+                  label="weekly"
+                  live={data?.liveWindows?.sevenDay}
+                  fallbackBucket={rl?.sevenDay}
+                  rateLimitsStale={rl?.stale}
+                />
               </tbody>
             </table>
-            {rl.stale && (
+            {data?.liveWindows && !data.liveWindows.fiveHour.estimatedPercent && (
               <div className="text-[10px] text-neutral-700 mt-1.5 leading-snug">
-                Kør <code className="text-neutral-500">claude</code> en gang for at refreshe rate-limits via statusline-hook.
+                Procent vises efter første interaktive <code className="text-neutral-500">claude</code>-session
+                hvor vi kan udlede din plan-grænse.
               </div>
             )}
           </div>
