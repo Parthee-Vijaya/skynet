@@ -20,11 +20,13 @@
 import { ChatOpenAI } from "@langchain/openai";
 import {
   AIMessage,
+  AIMessageChunk,
   HumanMessage,
   SystemMessage,
   ToolMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
+import { concat } from "@langchain/core/utils/stream";
 import { getLLMConfig } from "@/lib/settings";
 import { TOOLS } from "./tools";
 import { dispatchTool } from "./dispatcher";
@@ -156,6 +158,158 @@ export async function runAgent(opts: LangChainAgentOptions): Promise<LangChainAg
   }
 
   return { text: finalText, toolsUsed, turns: turn + 1 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Streaming agent — async generator der yielder events tegn-for-tegn så
+// /api/chat kan pipe dem ud som NDJSON til klienten i realtid.
+// ─────────────────────────────────────────────────────────────────────────
+
+export type AgentEvent =
+  | { type: "delta"; text: string }
+  | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; id: string; name: string; ok: boolean; content: string; blocked?: boolean }
+  | { type: "usage"; usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
+  | { type: "done"; finishReason: string; toolsUsed: string[]; turns: number }
+  | { type: "error"; message: string };
+
+export interface LangChainStreamOptions extends LangChainAgentOptions {
+  /** Hvis tools er false skipper vi binding helt — bruges til simple chat-runs uden function-call */
+  useTools?: boolean;
+}
+
+/**
+ * Stream-version af runAgent. Yielder delta + tool-events som de sker, og
+ * en afsluttende done-event med usage-totals + tools-used + turns.
+ *
+ * Bruges af /api/chat for at give /chat-siden tegn-for-tegn-rendering.
+ * /api/siri og inbound-endpoints bruger stadig den simple runAgent fordi
+ * Telegram/SMS/Siri-replies sendes som hele beskeder uanset hvad.
+ */
+export async function* runAgentStream(opts: LangChainStreamOptions): AsyncGenerator<AgentEvent> {
+  const { baseUrl, apiKey, defaultModel } = getLLMConfig();
+  const maxTurns = opts.maxTurns ?? 5;
+  const timeoutMs = opts.timeoutMs ?? 120_000;
+  const forceFirstTool = opts.forceFirstTool ?? false;
+  const allowDestructive = opts.allowDestructive ?? false;
+  const useTools = opts.useTools !== false;
+
+  const model = opts.model || defaultModel || (await pickDefaultModel(baseUrl, apiKey));
+  if (!model) {
+    yield { type: "error", message: "ingen LLM-model tilgængelig" };
+    return;
+  }
+
+  const baseLLM = new ChatOpenAI({
+    apiKey,
+    model,
+    timeout: timeoutMs,
+    streamUsage: true,
+    configuration: { baseURL: baseUrl.replace(/\/+$/, "") },
+  });
+  const llm = useTools ? baseLLM.bindTools(TOOLS) : baseLLM;
+
+  const messages: BaseMessage[] = [new SystemMessage(opts.systemPrompt)];
+  if (opts.priorMessages) {
+    for (const m of opts.priorMessages) {
+      messages.push(m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content));
+    }
+  }
+  messages.push(new HumanMessage(opts.userMessage));
+
+  const toolsUsed: string[] = [];
+  let turns = 0;
+  let finalFinishReason = "stop";
+
+  try {
+    for (turns = 0; turns < maxTurns; turns++) {
+      const toolChoice = forceFirstTool && turns === 0 ? "required" : "auto";
+      const stream = await llm.stream(messages, useTools ? { tool_choice: toolChoice } : {});
+
+      // LangChain's AIMessageChunk supporterer concat — vi akkumulerer hele
+      // svaret undervejs så vi efter loop'en har et færdigt AIMessage med
+      // parsede tool_calls (uden selv at skulle stitche delta-args sammen).
+      let aggregated: AIMessageChunk | null = null;
+      for await (const chunk of stream) {
+        // Tekst-delta direkte til klienten — content kan være string eller
+        // array af content-parts (ved multi-modal). Vi tager kun ren tekst.
+        const text = extractChunkText(chunk);
+        if (text) yield { type: "delta", text };
+        aggregated = aggregated ? (concat(aggregated, chunk) as AIMessageChunk) : chunk;
+      }
+      if (!aggregated) break;
+
+      // Konvertér chunk til normal AIMessage så messages-listen er konsistent
+      // og bevar tool_calls strukturen (concat har allerede assembled dem).
+      messages.push(
+        new AIMessage({
+          content: aggregated.content,
+          tool_calls: aggregated.tool_calls,
+        }),
+      );
+
+      // Usage-totals (LangChain emitterer dem på sidste chunk)
+      if (aggregated.usage_metadata) {
+        const um = aggregated.usage_metadata;
+        yield {
+          type: "usage",
+          usage: {
+            prompt_tokens: um.input_tokens,
+            completion_tokens: um.output_tokens,
+            total_tokens: um.total_tokens,
+          },
+        };
+      }
+
+      const toolCalls = aggregated.tool_calls ?? [];
+      if (toolCalls.length === 0) {
+        // Ingen tool-calls → assistanten gav et endeligt svar
+        finalFinishReason = "stop";
+        break;
+      }
+
+      // Eksekver hver tool og emit både invocation + resultat
+      for (const tc of toolCalls) {
+        const id = tc.id ?? `tc_${turns}_${tc.name}`;
+        const args = (tc.args ?? {}) as Record<string, unknown>;
+        toolsUsed.push(tc.name);
+        if (opts.logTag) {
+          appendLog("tool", `${opts.logTag} → ${tc.name}`, { tool: tc.name });
+        }
+        yield { type: "tool_call", id, name: tc.name, args };
+        const result = await dispatchTool(
+          { id, name: tc.name, arguments: args },
+          { allowDestructive },
+        );
+        yield {
+          type: "tool_result",
+          id,
+          name: tc.name,
+          ok: result.ok,
+          content: result.content,
+          blocked: result.blocked,
+        };
+        messages.push(new ToolMessage({ content: result.content, tool_call_id: id }));
+      }
+      finalFinishReason = "tool_calls";
+    }
+
+    yield { type: "done", finishReason: finalFinishReason, toolsUsed, turns };
+  } catch (e) {
+    yield { type: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+function extractChunkText(chunk: AIMessageChunk): string {
+  const c = chunk.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    return c
+      .map((part) => (typeof part === "string" ? part : "text" in part ? part.text : ""))
+      .filter(Boolean)
+      .join("");
+  }
+  return "";
 }
 
 /** Pluk teksten ud af en AIMessage — content kan være string eller array af parts */
