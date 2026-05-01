@@ -527,6 +527,10 @@ async function execute(
       }
       try {
         const r = await sendTelegramMessage({ chatId, text: message });
+        try {
+          const { recordOutbound } = await import("@/lib/telegram-store");
+          recordOutbound({ chatId, text: message, messageId: r.message_id });
+        } catch { /* storage må aldrig blokere */ }
         return { ok: true, messageId: r.message_id, chatId };
       } catch (e) {
         if (e instanceof TelegramError) {

@@ -1,5 +1,6 @@
 /**
- * /api/siri — enkel tekst-i-tekst-ud LLM-endpoint optimeret til Apple Shortcuts.
+ * /api/siri — enkel tekst-i-tekst-ud LLM-endpoint optimeret til Apple Shortcuts
+ * og HUD's voice-command "Skynet kør X"-flow.
  *
  * Flow:
  *   Siri → "Skynet, hvad er vejret?"
@@ -10,19 +11,19 @@
  *   - POST body: JSON { "q": "..." } | { "prompt": "..." } | plain text
  *   - GET ?q=... (til hurtig test med curl/browser)
  *
- * Svaret er altid plain text, max ~300 tegn, uden Markdown — så Siri/TTS
+ * Svaret er altid plain text, max ~500 tegn, uden Markdown — så Siri/TTS
  * kan læse det direkte uden garbage.
+ *
+ * Refaktoreret til LangChain-runner (Phase 1) — ingen adfærdsændring,
+ * blot delt agent-loop med /api/telegram/inbound og /api/imessage/inbound.
  */
 
 import { NextRequest } from "next/server";
-import { getLLMConfig } from "@/lib/settings";
-import { TOOLS } from "@/lib/agent/tools";
-import { dispatchTool } from "@/lib/agent/dispatcher";
+import { runAgent } from "@/lib/agent/langchain-runner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_TURNS = 4;
 const SIRI_SYSTEM = `Du er Skynet, en kort, venlig dansk voice-assistent.
 Regler:
 1. Svar ALTID på dansk
@@ -37,87 +38,15 @@ interface SiriReq {
   model?: string;
 }
 
-async function runLLM(prompt: string, model?: string): Promise<string> {
-  const { baseUrl, apiKey } = getLLMConfig();
-  const chosen = model ?? (await pickDefaultModel(baseUrl, apiKey));
-  if (!chosen) throw new Error("ingen LLM-model tilgængelig");
-
-  type Msg =
-    | { role: "system" | "user" | "assistant"; content: string; tool_calls?: TcDef[] }
-    | { role: "tool"; content: string; tool_call_id: string };
-  type TcDef = { id: string; type: "function"; function: { name: string; arguments: string } };
-
-  const conversation: Msg[] = [
-    { role: "system", content: SIRI_SYSTEM },
-    { role: "user", content: prompt },
-  ];
-
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: chosen,
-        stream: false,
-        messages: conversation,
-        tools: TOOLS,
-        tool_choice: "auto",
-      }),
-      signal: AbortSignal.timeout(45_000),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`LM Studio HTTP ${res.status}: ${txt.slice(0, 120)}`);
-    }
-
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | null; tool_calls?: TcDef[] } }>;
-    };
-    const msg = data.choices?.[0]?.message;
-    const content = msg?.content?.trim() ?? "";
-    const toolCalls = msg?.tool_calls ?? [];
-
-    if (toolCalls.length === 0) {
-      return sanitize(content);
-    }
-
-    conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-    for (const tc of toolCalls) {
-      let args: Record<string, unknown> = {};
-      try { args = JSON.parse(tc.function.arguments); } catch { /* noop */ }
-      const result = await dispatchTool(
-        { id: tc.id, name: tc.function.name, arguments: args },
-        { allowDestructive: false },
-      );
-      conversation.push({ role: "tool", content: result.content, tool_call_id: tc.id });
-    }
-  }
-  return "Beklager, jeg kunne ikke svare inden for tidsgrænsen.";
-}
-
-async function pickDefaultModel(baseUrl: string, apiKey: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { data?: Array<{ id: string }> };
-    return data.data?.[0]?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** Strip markdown og begræns længde — Siri læser det højt. */
 function sanitize(text: string): string {
   let t = text
-    .replace(/^#{1,6}\s+/gm, "")       // overskrifter
-    .replace(/\*\*(.+?)\*\*/g, "$1")   // fed
-    .replace(/\*(.+?)\*/g, "$1")       // kursiv
-    .replace(/`([^`]+)`/g, "$1")       // inline-kode
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links
-    .replace(/^[-*]\s+/gm, "")         // punktlister
+    .replace(/^#{1,6}\s+/gm, "")              // overskrifter
+    .replace(/\*\*(.+?)\*\*/g, "$1")          // fed
+    .replace(/\*(.+?)\*/g, "$1")              // kursiv
+    .replace(/`([^`]+)`/g, "$1")              // inline-kode
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")  // links
+    .replace(/^[-*]\s+/gm, "")                // punktlister
     .replace(/\s+/g, " ")
     .trim();
   if (t.length > 500) t = t.slice(0, 497) + "…";
@@ -169,12 +98,26 @@ async function handle(req: NextRequest): Promise<Response> {
   try {
     const url = new URL(req.url);
     const model = url.searchParams.get("model") ?? undefined;
-    const answer = await runLLM(prompt, model);
+    const result = await runAgent({
+      userMessage: prompt,
+      systemPrompt: SIRI_SYSTEM,
+      // Siri-stien har historisk haft tool_choice="auto" (ikke required) fordi
+      // brugeren ofte siger "tak" eller andre helt åbne ting hvor tool er
+      // overkill. Bevarer den adfærd her.
+      forceFirstTool: false,
+      maxTurns: 4,
+      logTag: "siri",
+      model,
+    });
+    const answer = sanitize(result.text);
     return new Response(answer, {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
+        // Telemetri-headers — Apple Shortcut læser dem ikke, men cURL gør
+        "X-Tools-Used": result.toolsUsed.join(",") || "none",
+        "X-Turns": String(result.turns),
       },
     });
   } catch (e) {

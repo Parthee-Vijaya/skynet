@@ -22,6 +22,10 @@ final class VoiceCommandService {
         case qna
         case translate
         case summarize
+        /// "Skynet kør X" / "Skynet hjælp X" — sender resten af ytringen til
+        /// Skynet's portal /api/siri-endpoint, så LLM kan bruge alle Skynet's
+        /// tools (vejret, rejseplanen, dmi varsler, m.fl.) og svaret vises i HUD.
+        case skynetTools
     }
 
     var onCommand: ((Command) -> Void)?
@@ -179,6 +183,13 @@ final class VoiceCommandService {
              tail.hasPrefix("translate"):                command = .translate
         case tail.hasPrefix("opsummer"),
              tail.hasPrefix("summarize"):                command = .summarize
+        // "Skynet kør hvad er vejret" / "Skynet hjælp find tog til Hellerup"
+        // → routes til Skynet portal /api/siri så LLM kan bruge alle tools.
+        case tail.hasPrefix("kør"),
+             tail.hasPrefix("hjælp"),
+             tail.hasPrefix("sig"),
+             tail.hasPrefix("ask"),
+             tail.hasPrefix("do"):                       command = .skynetTools
         default:                                          command = nil
         }
 

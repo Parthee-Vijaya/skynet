@@ -17,9 +17,8 @@
  */
 
 import { NextRequest } from "next/server";
-import { getLLMConfig } from "@/lib/settings";
-import { TOOLS } from "@/lib/agent/tools";
 import { dispatchTool } from "@/lib/agent/dispatcher";
+import { runAgent } from "@/lib/agent/langchain-runner";
 import { requireAuth } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
 import {
@@ -31,8 +30,6 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const MAX_TURNS = 6;
 
 const SYSTEM = `Du er Skynet, en hjælpsom dansk SMS/iMessage-assistent.
 Brugeren sender dig korte beskeder; du svarer kort tilbage via samme kanal.
@@ -124,75 +121,24 @@ export async function POST(req: NextRequest): Promise<Response> {
 async function handleInbound(from: string, message: string, silent: boolean): Promise<Response> {
   appendLog("info", `inbound iMessage fra ${from}: ${message.slice(0, 80)}`, { tool: "imessage-inbound" });
 
-  const { baseUrl, apiKey, defaultModel } = getLLMConfig();
-  const model = defaultModel || (await pickDefaultModel(baseUrl, apiKey));
-  if (!model) {
-    return Response.json({ ok: false, error: "ingen LLM-model tilgængelig" } satisfies InboundResp, { status: 503 });
-  }
-
-  type Msg =
-    | { role: "system" | "user" | "assistant"; content: string; tool_calls?: TcDef[] }
-    | { role: "tool"; content: string; tool_call_id: string };
-  type TcDef = { id: string; type: "function"; function: { name: string; arguments: string } };
-
-  const conversation: Msg[] = [
-    { role: "system", content: `${SYSTEM}\n\nBrugerens iMessage-adresse er ${from} — brug den hvis du opretter reminders til brugeren.` },
-    { role: "user", content: message },
-  ];
-
-  const toolsUsed: string[] = [];
-  let finalText = "";
-
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    // Første turn: TVING modellen til at kalde et tool — så den ikke bare
-    // gætter ud fra training data. Senere turns: lad den selv vælge om
-    // den vil kalde flere tools eller svare med tekst.
-    const toolChoice = turn === 0 ? "required" : "auto";
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        messages: conversation,
-        tools: TOOLS,
-        tool_choice: toolChoice,
-      }),
-      signal: AbortSignal.timeout(60_000),
+  let finalText: string;
+  let toolsUsed: string[] = [];
+  try {
+    const result = await runAgent({
+      userMessage: message,
+      systemPrompt: `${SYSTEM}\n\nBrugerens iMessage-adresse er ${from} — brug den hvis du opretter reminders til brugeren.`,
+      forceFirstTool: true,
+      maxTurns: 6,
+      logTag: "imessage",
     });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      return Response.json({ ok: false, error: `LLM HTTP ${res.status}: ${t.slice(0, 160)}`, toolsUsed } satisfies InboundResp, { status: 502 });
-    }
-
-    const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string | null; tool_calls?: TcDef[] } }>;
-    };
-    const msg = data.choices?.[0]?.message;
-    const content = msg?.content?.trim() ?? "";
-    const toolCalls = msg?.tool_calls ?? [];
-
-    if (toolCalls.length === 0) {
-      finalText = content;
-      break;
-    }
-
-    conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-    for (const tc of toolCalls) {
-      let parsedArgs: Record<string, unknown> = {};
-      try { parsedArgs = JSON.parse(tc.function.arguments); } catch { /* noop */ }
-      toolsUsed.push(tc.function.name);
-      appendLog("tool", `inbound → ${tc.function.name}`, { tool: tc.function.name });
-      const result = await dispatchTool(
-        { id: tc.id, name: tc.function.name, arguments: parsedArgs },
-        { allowDestructive: false },
-      );
-      conversation.push({ role: "tool", content: result.content, tool_call_id: tc.id });
-    }
-  }
-
-  if (!finalText) {
-    return Response.json({ ok: false, error: "tomt LLM-svar efter MAX_TURNS", toolsUsed } satisfies InboundResp, { status: 502 });
+    finalText = result.text;
+    toolsUsed = result.toolsUsed;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return Response.json(
+      { ok: false, error: msg, toolsUsed } satisfies InboundResp,
+      { status: 502 },
+    );
   }
 
   // Trim til SMS-venlig længde
@@ -223,14 +169,3 @@ async function handleInbound(from: string, message: string, silent: boolean): Pr
   return Response.json({ ok: true, reply, replied, toolsUsed } satisfies InboundResp);
 }
 
-async function pickDefaultModel(baseUrl: string, apiKey: string): Promise<string | null> {
-  try {
-    const r = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!r.ok) return null;
-    const d = (await r.json()) as { data?: Array<{ id: string }> };
-    return d.data?.[0]?.id ?? null;
-  } catch { return null; }
-}

@@ -23,6 +23,7 @@ import {
 import { getControlToken } from "@/lib/control/auth";
 import { getUpdates, TelegramError } from "@/lib/integrations/telegram";
 import { appendLog } from "@/lib/agent/log-buffer";
+import { recordInbound } from "@/lib/telegram-store";
 
 const LAST_UPDATE_KEY = "telegram_poller_last_update_id";
 const ENABLED_KEY = "telegram_poller_enabled";
@@ -119,6 +120,19 @@ async function processUpdate(u: { update_id: number; message?: { chat: { id: num
   }
 
   appendLog("info", `Telegram modtaget fra chat ${chatId} (${m.from?.username ?? "?"}): ${m.text.slice(0, 60)}`, { tool: "telegram-poller" });
+
+  // Persistér til SQLite så cockpit-widget kan vise historik
+  try {
+    recordInbound({
+      chatId,
+      text: m.text,
+      sender: m.from?.username ?? null,
+      messageId: m.message_id,
+    });
+  } catch (e) {
+    // Storage-fejl må aldrig blokere svar-flowet
+    appendLog("warn", `Telegram store-inbound fejl: ${e instanceof Error ? e.message : "ukendt"}`, { tool: "telegram-poller" });
+  }
 
   // Forward til inbound-endpoint så samme LLM-flow + tools + loop-guard genbruges
   try {
