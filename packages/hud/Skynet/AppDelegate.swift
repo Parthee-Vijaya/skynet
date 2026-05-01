@@ -953,6 +953,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.runVoiceRecording(mode: BuiltInModes.translate)
             case .summarize:
                 self.summaryService.summarizeInteractively()
+            case .skynetTools:
+                self.runSkynetToolsQuery()
             }
         }
 
@@ -985,6 +987,63 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(500))
             self?.voiceCommandService.resume()
         }
+    }
+
+    /// Voice command "Skynet kør X" → routes hele ytringen til Skynet portal's
+    /// /api/siri-endpoint så LLM kan bruge alle Skynet's tools (rejseplanen,
+    /// vejret, dmi-varsler, get_news, m.fl.). Resultatet vises i HUD's
+    /// .result-fase som plain text.
+    ///
+    /// Genbruger den allerede-kørende SFSpeechRecognizer (latestPartial bliver
+    /// opdateret selv mens dispatch er suspended), så vi behøver ikke starte
+    /// en separat optagelse — vi venter bare på at brugeren bliver færdig med
+    /// at tale og parser tail'en der.
+    private func runSkynetToolsQuery() {
+        voiceCommandService.suspend()
+        // Vis processing-state med det samme så brugeren ved at vi lytter
+        hudController.showInfoMode()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Vent ~4 sek på at brugeren afslutter ytringen — recogniseren
+            // opdaterer latestPartial selv mens dispatch er suspended.
+            try? await Task.sleep(for: .seconds(4))
+            let utterance = self.voiceCommandService.latestPartial
+            let prompt = Self.extractSkynetPrompt(from: utterance)
+            defer {
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    self?.voiceCommandService.resume()
+                }
+            }
+            guard !prompt.isEmpty else {
+                self.hudController.showError("Ingen prompt opfanget — sig fx 'Skynet kør hvad er vejret'")
+                return
+            }
+            do {
+                let answer = try await SkynetPortalService.shared.askSiri(prompt: prompt)
+                self.hudController.showResult(answer.isEmpty ? "Tomt svar fra Skynet." : answer)
+            } catch {
+                self.hudController.showError(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Strip "skynet (kør|hjælp|sig|ask|do)" prefix og returnér selve prompten.
+    /// Eksempel: "Skynet kør hvad er vejret i Næstved" → "hvad er vejret i Næstved".
+    static func extractSkynetPrompt(from utterance: String) -> String {
+        let lowered = utterance.lowercased()
+        guard let r = lowered.range(of: "skynet", options: .backwards) else { return "" }
+        var tail = String(utterance[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let keywords = ["kør", "hjælp", "sig", "ask", "do"]
+        let lowerTail = tail.lowercased()
+        for keyword in keywords {
+            if lowerTail.hasPrefix(keyword) {
+                tail = String(tail.dropFirst(keyword.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        return tail
     }
 
     private func refreshVoiceCommands() {

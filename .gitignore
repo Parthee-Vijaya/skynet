@@ -15,3 +15,6 @@ xcuserdata/
 
 # Claude-personlige memory-pointers (lever i vidensbase/, ikke i repo)
 CLAUDE.md
+
+# Claude Preview-tool config (per-user, ikke projekt-asset)
+.claude/
