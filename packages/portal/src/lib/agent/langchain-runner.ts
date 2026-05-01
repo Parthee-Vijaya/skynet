@@ -47,6 +47,18 @@ export interface LangChainAgentOptions {
   model?: string;
   /** Hvis true må dispatcheren køre destruktive tools (stop/restart) — default false */
   allowDestructive?: boolean;
+  /**
+   * Tidligere conversation-turns der skal genindlæses som kontekst — bruges
+   * af Telegram/iMessage til at give modellen hukommelse om de sidste N
+   * exchanges. Indsættes EFTER systemPrompt og FØR den nye userMessage.
+   * Hold listen til ~10-20 turns max — token-budget vokser hurtigt.
+   */
+  priorMessages?: PriorMessage[];
+}
+
+export interface PriorMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface LangChainAgentResult {
@@ -82,10 +94,18 @@ export async function runAgent(opts: LangChainAgentOptions): Promise<LangChainAg
     configuration: { baseURL: baseUrl.replace(/\/+$/, "") },
   });
 
-  const messages: BaseMessage[] = [
-    new SystemMessage(opts.systemPrompt),
-    new HumanMessage(opts.userMessage),
-  ];
+  const messages: BaseMessage[] = [new SystemMessage(opts.systemPrompt)];
+  if (opts.priorMessages && opts.priorMessages.length > 0) {
+    for (const m of opts.priorMessages) {
+      // Bemærk: vi gen-spiller kun ren tekst-indhold — tidligere tool_calls
+      // og tool-resultater inkluderes ikke. Det holder context-vinduet rent
+      // og undgår at modellen forsøger at "fortsætte" et halvfærdigt
+      // tool-flow der allerede er afsluttet.
+      if (m.role === "user") messages.push(new HumanMessage(m.content));
+      else messages.push(new AIMessage(m.content));
+    }
+  }
+  messages.push(new HumanMessage(opts.userMessage));
 
   const toolsUsed: string[] = [];
   let finalText = "";

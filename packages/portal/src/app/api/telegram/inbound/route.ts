@@ -19,7 +19,7 @@ import { runAgent } from "@/lib/agent/langchain-runner";
 import { requireAuth } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
 import { sendMessage, sendTyping, TelegramError } from "@/lib/integrations/telegram";
-import { recordOutbound } from "@/lib/telegram-store";
+import { recordOutbound, getConversationContext, findRecentInboundId } from "@/lib/telegram-store";
 
 // Genbruger samme loop-guard som iMessage — ved at bruge en chatId-prefix er
 // der ingen risiko for cross-channel kollisioner
@@ -142,6 +142,17 @@ async function handleInbound(
   // Vis "indtaster…" mens LLM tænker (bedre UX i Telegram)
   if (!silent) sendTyping(chatId).catch(() => { /* noop */ });
 
+  // Conversation-memory: replay sidste 10 turns fra DB så modellen kan
+  // svare på follow-ups som "og hvad så i morgen?" uden at brugeren skal
+  // gentage location/kontekst. Polleren har allerede gemt current message
+  // som inbound-row, så vi finder dens id og ekskluderer for at undgå at
+  // user-prompten ender to gange i context.
+  const currentInboundId = findRecentInboundId(chatId, message);
+  const priorMessages = getConversationContext(chatId, {
+    maxTurns: 10,
+    excludeMessageId: currentInboundId,
+  });
+
   let reply: string;
   let toolsUsed: string[] = [];
   try {
@@ -151,6 +162,7 @@ async function handleInbound(
       forceFirstTool: true,
       maxTurns: 6,
       logTag: "telegram",
+      priorMessages,
     });
     reply = result.text;
     toolsUsed = result.toolsUsed;
