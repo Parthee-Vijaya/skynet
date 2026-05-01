@@ -72,6 +72,19 @@ function initSchema(d: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_automation_runs_auto ON automation_runs(automation_id, started_at DESC);
 
+    CREATE TABLE IF NOT EXISTS telegram_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      direction TEXT NOT NULL,         -- 'in' | 'out'
+      sender TEXT,                     -- username eller 'skynet'
+      text TEXT NOT NULL,
+      tools_used TEXT,                 -- JSON-array når LLM brugte tools
+      message_id INTEGER,              -- Telegrams message_id (kan være null for fejlet send)
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_telegram_messages_chat ON telegram_messages(chat_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_telegram_messages_created ON telegram_messages(created_at DESC);
+
     CREATE TABLE IF NOT EXISTS delegate_tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

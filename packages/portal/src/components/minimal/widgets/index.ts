@@ -15,6 +15,7 @@ import { PlexWidgetMinimal } from "./PlexWidgetMinimal";
 import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
+import { TelegramWidget } from "./TelegramWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -28,6 +29,8 @@ registerWidget({ id: "plex",     group: "ambient",  colSpan: 6,  Component: Plex
 // ── Row: paseo agents (left) + sabnzbd (right) ────────────────────────────
 registerWidget({ id: "paseo",    group: "ambient", colSpan: 6,  Component: PaseoAgentsWidget });
 registerWidget({ id: "sabnzbd",  group: "ambient",  colSpan: 6,  Component: SabnzbdWidgetMinimal });
+// ── Row: telegram conversation-stream (full-width) ────────────────────────
+registerWidget({ id: "telegram", group: "ambient", colSpan: 12, Component: TelegramWidget });
 // ── Row: disk (left) + github personal (right) ─────────────────────────────
 registerWidget({ id: "disk",     group: "system",   colSpan: 6,  Component: DiskWidgetMinimal });
 registerWidget({ id: "github",   group: "ambient",  colSpan: 6,  Component: GithubWidgetMinimal });

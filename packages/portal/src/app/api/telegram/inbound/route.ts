@@ -20,6 +20,7 @@ import { dispatchTool } from "@/lib/agent/dispatcher";
 import { requireAuth } from "@/lib/control/auth";
 import { appendLog } from "@/lib/agent/log-buffer";
 import { sendMessage, sendTyping, TelegramError } from "@/lib/integrations/telegram";
+import { recordOutbound } from "@/lib/telegram-store";
 
 // Genbruger samme loop-guard som iMessage — ved at bruge en chatId-prefix er
 // der ingen risiko for cross-channel kollisioner
@@ -219,8 +220,18 @@ async function handleInbound(
     // Registrér INDEN vi sender, så polleren ikke racer os
     recordSentReply(`tg:${chatId}`, reply);
     try {
-      await sendMessage({ chatId, text: reply, replyToMessageId });
+      const sent = await sendMessage({ chatId, text: reply, replyToMessageId });
       replied = true;
+      try {
+        recordOutbound({
+          chatId,
+          text: reply,
+          messageId: sent.message_id,
+          toolsUsed: toolsUsed.length > 0 ? toolsUsed : null,
+        });
+      } catch (storeErr) {
+        appendLog("warn", `Telegram store-outbound fejl: ${storeErr instanceof Error ? storeErr.message : "ukendt"}`, { tool: "telegram-inbound" });
+      }
       appendLog("ok", `Telegram reply sendt → chat=${chatId}`, { tool: "telegram-inbound" });
     } catch (e) {
       const msg = e instanceof TelegramError ? `${e.code}: ${e.message}` : (e instanceof Error ? e.message : "ukendt");
