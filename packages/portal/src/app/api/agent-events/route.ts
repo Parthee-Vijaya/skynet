@@ -24,6 +24,7 @@ import { notify, type NtfyAction } from "@/lib/notify";
 import { getSessionSummary, formatSummaryForPush, type SessionSummary } from "@/lib/integrations/claude-sessions";
 import { getTelegramAllowedChatIds, getTelegramBotToken, setSetting } from "@/lib/settings";
 import { sendMessage as sendTelegramMessage } from "@/lib/integrations/telegram";
+import { truncate } from "@/lib/formatters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,10 +134,12 @@ export async function POST(req: NextRequest) {
     actions.push({ type: "view", label: "📜 Transcript", url: continueUrl + (continueUrl.includes("?") ? "&" : "?") + "view=transcript" });
   }
 
-  // 5) Klik-URL (forskellig fra actions — bruges til hele notif'en på iOS)
+  // 5) Klik-URL (forskellig fra actions — bruges til hele notif'en på iOS).
+  // Hvis vi har sessionId: åbn reply-form. Ellers fallback til /agents-siden
+  // (Paseo) så brugeren kan se igangværende agents.
   const clickUrl = body.sessionId
     ? `/continue/${encodeURIComponent(body.sessionId)}${body.cwd ? `?cwd=${encodeURIComponent(body.cwd)}` : ""}`
-    : `/terminal?session=${encodeURIComponent(session.split(":")[0] ?? "agents")}`;
+    : "/agents";
 
   const notifyResults = await notify({
     title: pushTitle,
@@ -207,10 +210,6 @@ async function maybeBridgeToTelegram(opts: {
 function escapeMd(s: string): string {
   // Telegram Markdown v1: escape `_*[`
   return s.replace(/([_*[\]`])/g, "\\$1");
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
 export async function GET(req: NextRequest) {

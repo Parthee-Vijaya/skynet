@@ -95,13 +95,13 @@ export async function searchNzbgeek(opts: {
   let m: RegExpExecArray | null;
   while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
     const block = m[1];
-    items.push(parseItem(block, mode));
+    items.push(parseItem(block));
   }
 
   return { mode, total: total || items.length, items };
 }
 
-function parseItem(block: string, mode: NzbgeekMode): NzbItem {
+function parseItem(block: string): NzbItem {
   const title = stripCdata(pick(block, "title"));
   const pubDate = pick(block, "pubDate");
   const detailUrl = pick(block, "movie") || pick(block, "comments") || undefined;
@@ -131,12 +131,8 @@ function parseItem(block: string, mode: NzbgeekMode): NzbItem {
     sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
     category: category || attrs.category,
     description: description?.slice(0, 400),
-    // unused 'mode' parameter — kept for future per-mode-specific parsing
-    ..._unused(mode),
   };
 }
-
-function _unused(_: NzbgeekMode): Record<string, never> { return {}; }
 
 function pick(s: string, tag: string): string {
   const m = s.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));

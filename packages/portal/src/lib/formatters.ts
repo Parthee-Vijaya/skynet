@@ -81,3 +81,53 @@ export function formatRelativeTime(iso: string): string {
   const d = Math.floor(h / 24);
   return `${d}d siden`;
 }
+
+// ── Token / duration / truncate-helpers ──────────────────────────────────────
+// Tidligere duplikeret i ClaudeWidget, claude-sessions, continue-page, agent-events.
+
+/** Format token-count: "1.2 b" / "240.5 m" / "12.3 k" / "456" */
+export function fmtTok(n: number): string {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + " b";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + " m";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + " k";
+  return String(n);
+}
+
+/**
+ * Relativ tid siden et ms-timestamp på dansk: "12s siden", "3m siden",
+ * "5t siden", "2d siden", eller "lige nu" hvis < 1 minut.
+ *
+ * Bemærk: tager ms (Date.now-format), ikke ISO. Brug formatRelativeTime hvis
+ * du har en ISO-streng.
+ */
+export function timeSince(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 0) return "lige nu";
+  const mins = Math.round(diff / 60_000);
+  if (mins < 1) return "lige nu";
+  if (mins < 60) return `${mins}m siden`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours}t siden`;
+  const days = Math.round(hours / 24);
+  return `${days}d siden`;
+}
+
+/**
+ * Format duration som ms til kort dansk streng:
+ * "<1s" / "12s" / "5m" / "2t" / "2t 15m"
+ */
+export function fmtDuration(ms: number): string {
+  if (ms < 1000) return "<1s";
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${hr}t ${m}m` : `${hr}t`;
+}
+
+/** Truncate streng til max-længde, append "…" hvis afkortet. */
+export function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}

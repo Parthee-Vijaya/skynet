@@ -32,7 +32,6 @@ function rowToAutomation(r: AutomationRow): Automation {
     description: r.description ?? undefined,
     trigger,
     actions,
-    action: actions[0],
     enabled: r.enabled === 1,
     lastRunAt: r.last_run_at ?? undefined,
     lastStatus: (r.last_status as Automation["lastStatus"]) ?? undefined,

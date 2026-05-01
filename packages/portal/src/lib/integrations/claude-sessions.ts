@@ -15,6 +15,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { fmtDuration, truncate } from "@/lib/formatters";
 
 const PROJECTS_DIR = path.join(os.homedir(), ".claude/projects");
 
@@ -175,7 +176,7 @@ export async function getSessionSummary(sessionId: string, cwdHint?: string): Pr
 /** Format kort SMS-venlig sammenfatning til notifikationer (max ~500 tegn) */
 export function formatSummaryForPush(s: SessionSummary): { title: string; body: string } {
   const project = s.project ?? "session";
-  const dur = formatDuration(s.durationMs);
+  const dur = fmtDuration(s.durationMs);
   const tools = s.toolsUsed.length > 0
     ? `\nTools: ${s.toolsUsed.slice(0, 6).join(", ")}${s.toolsUsed.length > 6 ? "…" : ""}`
     : "";
@@ -189,19 +190,4 @@ export function formatSummaryForPush(s: SessionSummary): { title: string; body: 
     title: `✅ Claude Code færdig · ${project}`,
     body: `${s.messageCount} msg · ${dur}${tools}${userPreview}${assistantPreview}`,
   };
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return "<1s";
-  const sec = Math.round(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  const m = min % 60;
-  return m > 0 ? `${hr}t ${m}m` : `${hr}t`;
 }

@@ -1,7 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import type { ClaudeSessionSummary, ClaudeStatusData, ClaudeRateLimit, ClaudeRateLimits, TokenBucket } from "@/lib/types";
+import type { ClaudeSessionSummary, ClaudeStatusData, ClaudeRateLimit, ClaudeRateLimits, TokenBucket, ClaudeLiveWindows } from "@/lib/types";
+import { getSetting, setSetting } from "@/lib/settings";
 
 const PROJECTS_DIR = path.join(os.homedir(), ".claude/projects");
 const STATS_CACHE = path.join(os.homedir(), ".claude/stats-cache.json");
@@ -132,6 +133,41 @@ function emptyBucket(): TokenBucket {
   return { in: 0, out: 0, cacheRead: 0, cacheCreate: 0, total: 0, messages: 0 };
 }
 
+/**
+ * Når rate-limits.json viser fx '42% brugt af 5h' og vi i samme periode
+ * har talt X tokens i JSONL, kan vi udlede plan-grænsen: X / (42/100).
+ *
+ * Vi cacher resultatet i settings ('plan_limit_5h', 'plan_limit_7d') så
+ * vi kan beregne live procent selv når rate-limits.json er stale.
+ *
+ * Kun cross-reference når rate-limits.json IKKE er stale (< 24t gammel)
+ * og usedPercent > 0 (ellers division-by-zero / fejlagtig grænse).
+ */
+function deriveAndCacheLimit(
+  cacheKey: string,
+  windowTokens: number,
+  bucket: ClaudeRateLimit | null | undefined,
+  stale: boolean | undefined,
+): number | null {
+  // Læs cached grænse — fallback hvis vi ikke har nyt cross-reference
+  const cached = parseInt(getSetting(cacheKey) ?? "0", 10);
+  const cachedLimit = Number.isFinite(cached) && cached > 0 ? cached : null;
+
+  // Update cache hvis vi har fresh rate-limits + meaningful usedPercent
+  if (!stale && bucket && bucket.usedPercent > 1 && windowTokens > 1000) {
+    const derived = Math.round(windowTokens / (bucket.usedPercent / 100));
+    if (derived > 0 && Number.isFinite(derived)) {
+      // Smooth: behold den højere af gamle og nye estimat (limits stiger
+      // ikke ned, og vi vil hellere underestimere usage end overestimere)
+      const next = cachedLimit ? Math.max(cachedLimit, derived) : derived;
+      if (next !== cachedLimit) setSetting(cacheKey, String(next));
+      return next;
+    }
+  }
+
+  return cachedLimit;
+}
+
 function addToBucket(b: TokenBucket, u: { in: number; out: number; cR: number; cC: number }) {
   b.in += u.in;
   b.out += u.out;
@@ -181,6 +217,10 @@ export async function collect(): Promise<ClaudeStatusData> {
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfWeek = startOfDay - 6 * 24 * 60 * 60 * 1000;
   const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+  // Live-windows = ruller med "nu"
+  const nowMs = now.getTime();
+  const fiveHourWindowStart = nowMs - 5 * 60 * 60 * 1000;
+  const sevenDayWindowStart = nowMs - 7 * 24 * 60 * 60 * 1000;
 
   const [files, statsCache, rateLimits] = await Promise.all([listAllJsonl(), readStatsCache(), readRateLimits()]);
 
@@ -189,6 +229,8 @@ export async function collect(): Promise<ClaudeStatusData> {
   const today = emptyBucket();
   const week = emptyBucket();
   const ytd = emptyBucket();
+  const fiveH = emptyBucket();
+  const sevenD = emptyBucket();
   const dailyMap = new Map<string, number>();
   const sessions = new Map<string, SessionAgg>();
 
@@ -238,6 +280,9 @@ export async function collect(): Promise<ClaudeStatusData> {
           dailyMap.set(key, (dailyMap.get(key) ?? 0) + u.in + u.out + u.cR + u.cC);
         }
         if (ts >= startOfDay) addToBucket(today, u);
+        // Rullende live-vinduer fra "nu"
+        if (ts >= fiveHourWindowStart) addToBucket(fiveH, u);
+        if (ts >= sevenDayWindowStart) addToBucket(sevenD, u);
 
         const sessionId = entry.sessionId ?? fallbackSession;
         const project = entry.cwd ? path.basename(entry.cwd) : path.basename(path.dirname(filePath));
@@ -288,6 +333,29 @@ export async function collect(): Promise<ClaudeStatusData> {
     messageCount: s.messageCount,
   }));
 
+  // Beregn / opdater udledte plan-grænser ved cross-reference: hvis
+  // rate-limits.json IKKE er stale OG den har en usedPercent: vi har
+  // 'X tokens i vinduet → Y%' og kan udlede 'plan = X / (Y/100)'.
+  const fiveHourPlan = deriveAndCacheLimit("plan_limit_5h", fiveH.total, rateLimits?.fiveHour, rateLimits?.stale);
+  const sevenDayPlan = deriveAndCacheLimit("plan_limit_7d", sevenD.total, rateLimits?.sevenDay, rateLimits?.stale);
+
+  const liveWindows: ClaudeLiveWindows = {
+    fiveHour: {
+      tokens: fiveH.total,
+      messages: fiveH.messages,
+      windowMs: 5 * 60 * 60 * 1000,
+      planLimit: fiveHourPlan,
+      estimatedPercent: fiveHourPlan ? Math.min(100, Math.round((fiveH.total / fiveHourPlan) * 100 * 10) / 10) : null,
+    },
+    sevenDay: {
+      tokens: sevenD.total,
+      messages: sevenD.messages,
+      windowMs: 7 * 24 * 60 * 60 * 1000,
+      planLimit: sevenDayPlan,
+      estimatedPercent: sevenDayPlan ? Math.min(100, Math.round((sevenD.total / sevenDayPlan) * 100 * 10) / 10) : null,
+    },
+  };
+
   return {
     total,
     today,
@@ -296,6 +364,7 @@ export async function collect(): Promise<ClaudeStatusData> {
     dailyTotals,
     recent,
     rateLimits,
+    liveWindows,
     fetchedAt: new Date().toISOString(),
   };
 }

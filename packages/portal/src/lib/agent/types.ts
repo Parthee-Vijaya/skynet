@@ -105,8 +105,6 @@ export interface Automation {
   trigger: Trigger;
   /** Kæde af actions der køres sekventielt. Altid mindst 1 element. */
   actions: Action[];
-  /** @deprecated Alias for actions[0] — bevaret for backward-compat */
-  action: Action;
   enabled: boolean;
   lastRunAt?: number;
   lastStatus?: "ok" | "error" | "skipped";

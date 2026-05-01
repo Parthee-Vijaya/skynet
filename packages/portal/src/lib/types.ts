@@ -285,9 +285,34 @@ export interface ClaudeRateLimits {
   stale: boolean;
 }
 
+/**
+ * Live-beregnede token-vinduer fra JSONL-filerne. Beregnes uafhængigt af
+ * Claude Code's egen rate-limit-tracking, så de altid er friske —
+ * også når brugeren ikke har kørt claude interaktivt i et stykke tid.
+ */
+export interface ClaudeLiveWindow {
+  /** Tokens brugt i vinduet (input + output + cache) */
+  tokens: number;
+  /** Antal assistant-messages i vinduet */
+  messages: number;
+  /** Hvor mange ms fra nu til vinduet "ruller" */
+  windowMs: number;
+  /** Beregnet procent — kun sat hvis vi har udledt plan-grænse fra rate-limits.json */
+  estimatedPercent: number | null;
+  /** Vores bedste gæt på plan-grænse (sat når rate-limits.json viser samme vindue med usedPercent) */
+  planLimit: number | null;
+}
+
+export interface ClaudeLiveWindows {
+  fiveHour: ClaudeLiveWindow;
+  sevenDay: ClaudeLiveWindow;
+}
+
 export interface ClaudeStatusData {
   /** Valgfri plan-brug fra Claude Code (hvis dump-hook er aktiveret) */
   rateLimits?: ClaudeRateLimits | null;
+  /** Live-beregnede vindue-tokens fra JSONL — altid friske */
+  liveWindows?: ClaudeLiveWindows;
   total: TokenBucket;
   today: TokenBucket;
   week: TokenBucket;

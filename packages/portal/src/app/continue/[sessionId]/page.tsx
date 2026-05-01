@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
+import { fmtDuration, truncate } from "@/lib/formatters";
 
 interface SessionSummary {
   sessionId: string;
@@ -136,7 +137,7 @@ export default function ContinuePage({ params }: PageProps) {
               # context
             </div>
             <div style={{ fontSize: 12, color: "#6b6b6b", marginBottom: 4 }}>
-              {summary.messageCount} messages · {formatDuration(summary.durationMs)}
+              {summary.messageCount} messages · {fmtDuration(summary.durationMs)}
               {summary.toolsUsed.length > 0 && ` · ${summary.toolsUsed.length} tools`}
             </div>
             {summary.toolsUsed.length > 0 && (
@@ -239,17 +240,3 @@ export default function ContinuePage({ params }: PageProps) {
   );
 }
 
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return "<1s";
-  const sec = Math.round(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.floor(min / 60);
-  const m = min % 60;
-  return m > 0 ? `${hr}t ${m}m` : `${hr}t`;
-}
