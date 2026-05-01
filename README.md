@@ -18,20 +18,39 @@ Idempotent installer: Homebrew, Node 20+, klon af repo, build af alle pakker, La
 
 Starquake-minimal-stil i `#0a0a0a` med JetBrains Mono og dashed borders. Live data fra ~20 collectors: vejr, energi, system-telemetri, GitHub trending, Plex, SABnzbd, paseo-agents, månefase, fly i radius, jordskælv, nordlys-chance, plus en animeret Three.js-globus med roterende citater og live ur.
 
-### iMessage-assistent
+### Telegram bot — primær 2-vejs
 
-Send Skynet en iMessage — den slår op, svarer tilbage, og kan oprette one-off påmindelser.
+Send din egen bot (@dit-bot på Telegram) en besked — den slår op via 33+ tools, svarer tilbage, og kan oprette one-off påmindelser.
 
 ```
 Mig:    Hvornår kører næste tog fra Næstved til Hellerup?
 Skynet: IC42 spor 4 kl. 15:32, ankomst Hellerup 16:48 (1t 16m).
 
-Mig:    Send mig en sms 15 min før det kører.
-Skynet: Påmindelse oprettet — sender SMS kl. 15:17 om "Toget mod
-        Hellerup kører om 15 min — IC42 spor 4".
+Mig:    Send mig en besked 15 min før det kører.
+Skynet: Påmindelse oprettet — sender Telegram kl. 15:17:
+        "Toget mod Hellerup kører om 15 min — IC42 spor 4".
 ```
 
-LLM tvinges til at kalde et tool på første turn — ingen flere generiske "hej, hvad kan jeg hjælpe med?"-svar uden data.
+**Hvorfor Telegram frem for iMessage**: bot har sin egen identitet (@dit-bot), allowlist på chat_id (sikker default: tom = ignorer alt), ingen iCloud-sync-loops, ingen FDA-krav. iMessage-stack er stadig tilgængelig som secondary hvis du vil bruge den.
+
+LLM tvinges til at kalde et tool på første turn (`tool_choice: "required"`) — ingen flere generiske "hej, hvad kan jeg hjælpe med?"-svar uden data.
+
+### Reply tilbage til Claude Code fra iPhone
+
+Stop-hooket sender rige notifikationer når en Claude Code-session er færdig:
+
+```
+✅ Claude Code færdig · Skynet
+68 msg · 8m 12s
+Tools: Read, Edit, Bash, Write, Grep…
+Du: "Tilføj Telegram bot"
+Claude: "Done — Telegram bot fuldt funktionel med…"
+[→ Fortsæt]  [📜 Transcript]
+```
+
+Tap "Fortsæt" → åbner `/continue/<sessionId>` PWA-form på iPhone → skriv reply → spawner `claude --resume <id> -p "<prompt>"` på Mac → ny push når Claude er færdig. **Iterativt loop fra iPhone uden at åbne Mac.**
+
+Eller svar direkte i Telegram — `continue_claude_session`-tool routes svaret til samme flow.
 
 ### Automations · `/automations`
 
@@ -43,14 +62,16 @@ Tre tabs: regler / setup / logs. NL→automation-genererer regler fra fri tekst 
 
 | | |
 |---|---|
-| 💬 **iMessage-assistent** | Indkommende beskeder → LLM med 33 tools → svar tilbage. One-off reminders ("send sms 15 min før mødet") oprettes som auto-slettende automations. Anti-loop-guard mod iCloud-echo. |
-| 🤖 **Multi-provider LLM** | LM Studio (lokal, GGUF/MLX) eller Google Gemini (cloud, OpenAI-kompatibel mode). Skift med ét klik i Settings — samme tool-loop, samme prompt. |
-| 🧠 **Forced tool-use** | LLM SKAL kalde et tool på første turn → svaret er altid baseret på reel realtids-data, aldrig training-data-gæt. |
-| ⚙️ **Automation-motor** | Cron, threshold og once-triggers. Multi-step action-kæder (notify → llm_notify → tool). LLM-genererede regler via fri tekst-input. |
-| 📊 **Live dashboard** | ~20 widgets med data fra 50+ kilder. Three.js-globus, sparklines, GitHub trending, Plex now-playing, paseo-agents, vejr, energi, fly, jordskælv. |
+| 💬 **Telegram bot 2-vejs** | Indkommende beskeder → LLM med 33+ tools → svar tilbage. Allowlist på chat_id, anti-loop-guard, in-flight-semaphore. iMessage-stack stadig tilgængelig som secondary. |
+| 🔁 **Reply tilbage til Claude Code** | Rige Stop-hook-notifikationer (sidste user/assistant + tools + varighed). Tap → `/continue/<id>` PWA-form → spawner `claude --resume`. Eller svar i Telegram/ntfy → samme flow via `continue_claude_session`-tool. |
+| 🤖 **Multi-provider LLM** | LM Studio (lokal, GGUF/MLX) eller Google Gemini (cloud, OpenAI-kompatibel mode). Provider-preset i Settings — skift med ét klik. |
+| 🧠 **Forced tool-use** | LLM SKAL kalde et tool på første turn (`tool_choice: "required"`) → svaret er altid baseret på reel realtids-data, aldrig training-data-gæt. |
+| 📊 **Live JSONL plan-usage** | 5h og 7d rullende vinduer beregnet direkte fra `~/.claude/projects/*.jsonl` — altid friskt, ingen "stale data"-warnings. |
+| ⚙️ **Automation-motor** | Cron, threshold, once og manual triggers. Multi-step action-kæder. NL→regel-generator. Run-historik drawer + dry-run pr. regel. |
+| 📊 **Live dashboard** | ~20 widgets · 50+ datakilder · Three.js-globus, sparklines, GitHub trending, Plex, paseo-agents, vejr, energi, fly, jordskælv. |
 | 🤝 **Paseo agents** | Embedded multi-agent orchestrator (Claude Code/Codex/OpenCode/Pi) på `/agents`. Egen daemon på :6868. |
 | 📱 **PWA + Siri** | iPhone-installerbar via Safari "Føj til hjemmeskærm". Apple Shortcut → "Hey Siri, spørg Skynet ..." via `/api/siri?q=...`. |
-| 🔔 **Multi-backend push** | macOS Notification Center, ntfy.sh til iPhone, Pushover. Per-action-fejl logges separat. |
+| 🔔 **Multi-backend push** | macOS Notification Center, ntfy.sh (med reply-back via subscriber), Pushover, Telegram. Per-action-fejl logges separat. |
 
 ---
 
@@ -143,34 +164,38 @@ Enhver OpenAI-kompatibel base URL virker — Anthropic claude, OpenRouter, vLLM 
 
 ---
 
-## iMessage-assistent
+## Telegram-assistent (anbefalet)
 
-Aktivér i `/automations` → setup-tab → "iMessage". Kræver:
+Aktivér i `/automations` → setup-tab → "telegram bot". Setup på 5 trin:
 
-- **iMessage default-modtager** (dit eget nummer eller Apple-ID)
-- **Full Disk Access** til `/opt/homebrew/bin/node` (System Settings → Privacy & Security → Full Disk Access). UI'et viser et stort gult banner indtil det er ordnet.
-- **Toggle "aktivér inbound"** — polleren læser `~/Library/Messages/chat.db` hvert 30. sek.
+1. **Lav botten**: åbn [@BotFather](https://t.me/BotFather) i Telegram → `/newbot` → giv navn + `_bot`-suffix → kopiér token (`123456789:ABCdef...`)
+2. **Indsæt token** i Skynet — verificering via `getMe` viser `@dit-bot · navn`-grøn boks
+3. **Find chat_id** med "→ find chat_id automatisk"-knappen (kalder `/api/telegram/discover-chats` der parser nye beskeder via `getUpdates`)
+4. **Tilføj chat_id** til allowlisten — sikker default: tom = ignorer alt
+5. **Toggle "aktivér Telegram-poller"** → long-polling starter med det samme
 
-### Test uden FDA
+Skriv en besked til botten — svar inden for 1-2 sek.
 
-Setup-tab har en "test inbound LLM"-boks der curler `/api/imessage/inbound` med `silent: true` og viser LLM-svaret + tools-used direkte i UI'et. Brug det til at teste flowet før du sætter polleren op.
+### ntfy reply-back
 
-### Anti-loop
+Alternativ til Telegram: ntfy-app understøtter også 2-vejs. Aktivér "ntfy reply-back" under setup-tabbens notify-sektion. Skynet abonnerer på samme topic via SSE-stream, filtrerer botens egne beskeder via `skynet-bot`-tag, og forwarder bruger-replies til `claude --resume` på sidste afsluttede session.
 
-Når Skynet sender et svar via `send_imessage`, dukker beskeden op i chat.db igen pga. iCloud-sync. To beskyttelseslag forhindrer endeløs loop:
+### iMessage-assistent (secondary)
 
-1. **Echo-tracker**: hver afsendt reply huskes i 10 min — match → skip
-2. **In-flight semaphore pr. nummer**: returnerer 429 hvis vi allerede behandler en besked fra samme afsender
+Stadig tilgængelig hvis du vil bruge den, men ikke aktiveret som default længere — Telegram er primær. iMessage-stack:
+
+- **iMessage default-modtager** + **Full Disk Access** til `/opt/homebrew/bin/node`
+- Polleren læser `~/Library/Messages/chat.db` hvert 30. sek
+- Anti-loop-guard: echo-tracker (10 min) + in-flight semaphore pr. nummer
+- **Privacy-bemærkning**: iMessage-flowet svarer på beskeder fra ALLE afsendere — sikre at du virkelig ikke kan klare dig med Telegram før du aktiverer det
 
 ### Apple Shortcut alternativ
 
-Hvis du ikke vil give Full Disk Access:
+Hvis du ikke vil give Full Disk Access og ikke vil bruge Telegram:
 
 1. Opret iOS Shortcut: "When I receive a message" → "Get URL" → `https://<din-mac>:3100/api/imessage/inbound`
 2. Method POST, body `{ "from": "+45...", "message": <message text> }`
 3. Header `Authorization: Bearer <control_token>` (find i `/automations` setup)
-
-Samme flow uden chat.db-polling.
 
 ---
 
