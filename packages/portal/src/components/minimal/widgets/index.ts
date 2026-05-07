@@ -16,6 +16,7 @@ import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
 import { TelegramWidget } from "./TelegramWidget";
+import { FirewallWidget } from "./FirewallWidget";
 
 registerWidget({ id: "hero",     group: "hero",     colSpan: 8,  Component: HeroWidget });
 registerWidget({ id: "claude",   group: "claude",   colSpan: 4,  Component: ClaudeWidget });
@@ -37,5 +38,7 @@ registerWidget({ id: "github",   group: "ambient",  colSpan: 6,  Component: Gith
 // ── Row: services (left) + top-repos (right) — samme bredde, side om side ──
 registerWidget({ id: "services", group: "services", colSpan: 6,  Component: ServicesWidget });
 registerWidget({ id: "top-repos", group: "ambient", colSpan: 6,  Component: TopReposWidget });
+// ── Row: firewall (Fase 1: monitor-only) ──────────────────────────────────
+registerWidget({ id: "firewall", group: "system",   colSpan: 6,  Component: FirewallWidget });
 
 export { getWidgets } from "../widget-registry";
