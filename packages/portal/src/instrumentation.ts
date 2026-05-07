@@ -10,6 +10,7 @@ export async function register(): Promise<void> {
     { startPoller: startTelegramPoller },
     { startSubscriber: startNtfySubscriber },
     { startNetworkCollector },
+    { startWifiWatcher },
   ] = await Promise.all([
     import("@/jobs/sparkline-collector"),
     import("@/jobs/plex-token-import"),
@@ -19,6 +20,7 @@ export async function register(): Promise<void> {
     import("@/jobs/telegram-poller"),
     import("@/jobs/ntfy-subscriber"),
     import("@/jobs/network-collector"),
+    import("@/jobs/wifi-watcher"),
   ]);
 
   await autoImportPlexToken();
@@ -33,4 +35,6 @@ export async function register(): Promise<void> {
   try { startNtfySubscriber(); } catch (e) { console.warn("[ntfy-subscriber] startup failed:", e); }
   // Network-collector — adaptive 10s aktiv / 60s idle, lsof+nettop polling
   try { startNetworkCollector(); } catch (e) { console.warn("[network-collector] startup failed:", e); }
+  // Wi-Fi watcher — auto-skift firewall-profil ved SSID-ændring
+  try { startWifiWatcher(); } catch (e) { console.warn("[wifi-watcher] startup failed:", e); }
 }

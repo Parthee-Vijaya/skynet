@@ -183,6 +183,47 @@ async function dNasaApod(): Promise<Detection> {
   };
 }
 
+async function dLulu(): Promise<Detection> {
+  const { detectLulu } = await import("@/lib/firewall/lulu");
+  const s = await detectLulu();
+  if (!s.appInstalled) {
+    return {
+      key: "lulu",
+      name: "LuLu Firewall",
+      status: "missing",
+      hint: "Installer fra objective-see.org/products/lulu.html for at få faktisk håndhævelse. Skynet kører i monitor-mode uden.",
+      feature: "/firewall · per-app block · profil-auto-switch",
+    };
+  }
+  if (!s.cliInstalled) {
+    return {
+      key: "lulu",
+      name: "LuLu Firewall",
+      status: "partial",
+      details: "App OK, CLI mangler",
+      hint: "Kør 'brew install woop/tap/lulu-cli' så Skynet kan styre regler programmatisk.",
+      feature: "/firewall · per-app block · profil-auto-switch",
+    };
+  }
+  if (!s.sudoersOk) {
+    return {
+      key: "lulu",
+      name: "LuLu Firewall",
+      status: "partial",
+      details: `CLI ${s.cliVersion ?? "OK"}, sudoers passwordless mangler`,
+      hint: "Kør 'sudo scripts/install-lulu-sudoers.sh' for at sætte /etc/sudoers.d/skynet-lulu op (eller kør install.sh igen).",
+      feature: "/firewall-CRUD · profil-auto-switch",
+    };
+  }
+  return {
+    key: "lulu",
+    name: "LuLu Firewall",
+    status: "ok",
+    details: `App + CLI ${s.cliVersion ?? ""} + sudoers OK${s.ruleCount !== null ? ` · ${s.ruleCount} regler` : ""}`,
+    feature: "/firewall · per-app block · profil-auto-switch",
+  };
+}
+
 async function dWeather(): Promise<Detection> {
   const loc = getLocation();
   const ok = await ping(
@@ -221,17 +262,17 @@ export async function GET() {
   const [
     internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
-    plex, tailscale, ntfy,
+    plex, tailscale, ntfy, lulu,
   ] = await Promise.all([
     dInternet(), dNode(), dLaunchAgents(), dDaemon(), dPaseo(),
     dLmStudio(), dGitHub(), dWeather(), dNasaApod(),
-    dPlex(), dTailscale(), dNtfy(),
+    dPlex(), dTailscale(), dNtfy(), dLulu(),
   ]);
 
   const detections: Detection[] = [
     internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
-    plex, tailscale, ntfy,
+    plex, tailscale, ntfy, lulu,
   ];
 
   const summary = {

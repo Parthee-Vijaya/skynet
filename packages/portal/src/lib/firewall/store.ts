@@ -343,6 +343,141 @@ export function putGeo(row: Omit<NetGeoRow, "cached_at">): void {
   );
 }
 
+// ── Rules (LuLu mirror) ──────────────────────────────────────────────────────
+
+export interface NetRuleRow {
+  id: number;
+  lulu_key: string;
+  process: string | null;
+  exec_path: string | null;
+  action: string;          // 'allow' | 'block' | 'ask'
+  scope: string;           // 'all' | 'host' | 'host:port'
+  remote_host: string | null;
+  remote_port: number | null;
+  source: string;          // 'lulu' | 'skynet' | 'profile'
+  profile_id: number | null;
+  description: string | null;
+  llm_explanation: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface RuleUpsert {
+  lulu_key: string;
+  process?: string | null;
+  exec_path?: string | null;
+  action: string;
+  scope: string;
+  remote_host?: string | null;
+  remote_port?: number | null;
+  source?: string;
+  profile_id?: number | null;
+  description?: string | null;
+  llm_explanation?: string | null;
+}
+
+/** Replace all rules with `source = 'lulu'` — used after a fresh `lulu-cli list` sync. */
+export function replaceLuluRules(rows: RuleUpsert[]): void {
+  const db = getDb();
+  const tx = db.transaction((items: RuleUpsert[]) => {
+    db.prepare("DELETE FROM network_rules WHERE source = 'lulu'").run();
+    const stmt = db.prepare(`
+      INSERT INTO network_rules
+        (lulu_key, process, exec_path, action, scope, remote_host, remote_port, source, profile_id, description, llm_explanation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const r of items) {
+      stmt.run(
+        r.lulu_key,
+        r.process ?? null,
+        r.exec_path ?? null,
+        r.action,
+        r.scope,
+        r.remote_host ?? null,
+        r.remote_port ?? null,
+        r.source ?? "lulu",
+        r.profile_id ?? null,
+        r.description ?? null,
+        r.llm_explanation ?? null
+      );
+    }
+  });
+  tx(rows);
+}
+
+export function listRules(opts: { profileId?: number | null; source?: string } = {}): NetRuleRow[] {
+  const db = getDb();
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+  if (opts.source) {
+    where.push("source = ?");
+    params.push(opts.source);
+  }
+  if (opts.profileId !== undefined) {
+    if (opts.profileId === null) where.push("profile_id IS NULL");
+    else {
+      where.push("profile_id = ?");
+      params.push(opts.profileId);
+    }
+  }
+  const sql = `SELECT * FROM network_rules ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC`;
+  return db.prepare(sql).all(...params) as NetRuleRow[];
+}
+
+export function getRule(id: number): NetRuleRow | undefined {
+  return getDb().prepare("SELECT * FROM network_rules WHERE id = ?").get(id) as NetRuleRow | undefined;
+}
+
+export function insertRule(r: RuleUpsert): number {
+  const db = getDb();
+  const info = db
+    .prepare(
+      `
+      INSERT INTO network_rules
+        (lulu_key, process, exec_path, action, scope, remote_host, remote_port, source, profile_id, description, llm_explanation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+    )
+    .run(
+      r.lulu_key,
+      r.process ?? null,
+      r.exec_path ?? null,
+      r.action,
+      r.scope,
+      r.remote_host ?? null,
+      r.remote_port ?? null,
+      r.source ?? "skynet",
+      r.profile_id ?? null,
+      r.description ?? null,
+      r.llm_explanation ?? null
+    );
+  return info.lastInsertRowid as number;
+}
+
+export function updateRule(id: number, patch: Partial<RuleUpsert>): void {
+  const fields: string[] = [];
+  const params: (string | number | null)[] = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === "lulu_key" || k === "process" || k === "exec_path" || k === "action" ||
+        k === "scope" || k === "remote_host" || k === "remote_port" ||
+        k === "source" || k === "profile_id" || k === "description" || k === "llm_explanation") {
+      fields.push(`${k} = ?`);
+      params.push(v === undefined ? null : (v as string | number | null));
+    }
+  }
+  if (fields.length === 0) return;
+  fields.push("updated_at = ?");
+  params.push(Date.now());
+  params.push(id);
+  getDb()
+    .prepare(`UPDATE network_rules SET ${fields.join(", ")} WHERE id = ?`)
+    .run(...params);
+}
+
+export function deleteRuleRow(id: number): void {
+  getDb().prepare("DELETE FROM network_rules WHERE id = ?").run(id);
+}
+
 // ── Retention ────────────────────────────────────────────────────────────────
 
 const CONN_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
