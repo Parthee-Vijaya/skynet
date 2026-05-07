@@ -7,7 +7,8 @@
     "packages/relay",
     "packages/daemon",
     "packages/cli",
-    "packages/portal"
+    "packages/portal",
+    "packages/mcp"
   ],
   "scripts": {
     "dev": "./scripts/dev.sh",
