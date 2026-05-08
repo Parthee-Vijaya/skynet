@@ -110,10 +110,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             setupWakeWord()
             setupVoiceCommands()
             setupMorningBriefing()
-            // Menubar status-items (claude/cpu/ram/net/disk/firewall/jellyfin/paseo).
-            // Hver kan toggles ON/OFF i Settings → Menubar-tab. Default: alle ON
-            // undtagen Net (Stats.app dækker det).
-            MenubarStatsController.shared.start()
             checkFirstLaunch()
             migrateClaudeBudgetLimits()
             // v1.1.7: spawn any MCP servers the user declared in ~/.skynet/mcp.json
