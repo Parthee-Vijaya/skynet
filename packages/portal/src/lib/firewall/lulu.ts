@@ -174,35 +174,75 @@ export function parseLuluList(stdout: string): LuluRule[] {
   let currentPath = "";
 
   for (const raw of stdout.split("\n")) {
-    const line = raw.trim();
-    if (!line || line.startsWith("==") || line.startsWith("#")) continue;
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith("==") || trimmed.startsWith("#")) continue;
 
-    // Pattern A: header-with-rules format
-    // "key=foo path=/bar"
-    const hdr = line.match(/^key=(\S+)\s+path=(.+?)(?:\s+(?:action=|\[))?$/);
-    if (hdr && !line.includes("[")) {
-      currentKey = hdr[1];
-      currentPath = hdr[2].trim();
+    // Pattern A1 (lulu-cli 0.2.0): header `[<path-or-signing-id>]`
+    //   Eksempler:
+    //     [/opt/homebrew/Cellar/gh/2.85.0/bin/gh]
+    //     [ch.protonvpn.mac:Developer ID Application: ProtonVPN AG (J6S6Q257EK)]
+    const headerA = trimmed.match(/^\[(.+)\]$/);
+    if (headerA) {
+      const inner = headerA[1];
+      currentKey = inner;
+      currentPath = inner.startsWith("/") ? inner : ""; // signing-id → path udfyldes via path=… linjen
       continue;
     }
 
-    // Pattern B: child-rule line "[allow] addr=X port=Y uuid=Z"
-    const child = line.match(/^\[(allow|block|ask)\]\s+addr=(\S+)\s+port=(\S+)(?:\s+uuid=([0-9a-fA-F-]+))?/);
-    if (child && currentKey) {
+    // Pattern A2: optional path-overskrivelse "    path=/Applications/ProtonVPN.app"
+    if (currentKey && /^path=/.test(trimmed)) {
+      currentPath = trimmed.slice(5).trim();
+      const last = rules[rules.length - 1];
+      if (last && last.key === currentKey && (last.path === "*" || !last.path)) {
+        last.path = currentPath;
+      }
+      continue;
+    }
+
+    // Pattern A3 (0.2.0 child): "21DE3525-... | Allow | addr=* port=* | type=baseline"
+    const childA = trimmed.match(
+      /^([0-9A-Fa-f-]{8,})\s*\|\s*(Allow|Block|Ask)\s*\|\s*addr=(\S+)\s+port=(\S+)(?:\s*\|\s*type=(\S+))?/i
+    );
+    if (childA && currentKey) {
       rules.push({
         key: currentKey,
         path: currentPath || "*",
-        action: child[1] as "allow" | "block" | "ask",
-        addr: child[2],
-        port: child[3],
-        uuid: child[4],
+        action: childA[2].toLowerCase() as "allow" | "block" | "ask",
+        addr: childA[3],
+        port: childA[4],
+        uuid: childA[1],
         enabled: true,
       });
       continue;
     }
 
-    // Pattern C: full-flat line "key=K path=P action=A addr=X port=Y uuid=U"
-    const flat = parseKVLine(line);
+    // Pattern B (tidligere version): "key=foo path=/bar" header
+    const headerB = trimmed.match(/^key=(\S+)\s+path=(.+?)(?:\s+(?:action=|\[))?$/);
+    if (headerB && !trimmed.includes("[")) {
+      currentKey = headerB[1];
+      currentPath = headerB[2].trim();
+      continue;
+    }
+
+    // Pattern B child: "[allow] addr=X port=Y uuid=Z"
+    const childB = trimmed.match(
+      /^\[(allow|block|ask)\]\s+addr=(\S+)\s+port=(\S+)(?:\s+uuid=([0-9a-fA-F-]+))?/
+    );
+    if (childB && currentKey) {
+      rules.push({
+        key: currentKey,
+        path: currentPath || "*",
+        action: childB[1] as "allow" | "block" | "ask",
+        addr: childB[2],
+        port: childB[3],
+        uuid: childB[4],
+        enabled: true,
+      });
+      continue;
+    }
+
+    // Pattern C: flat key=value linje
+    const flat = parseKVLine(trimmed);
     if (flat.key && flat.action) {
       rules.push({
         key: flat.key,
