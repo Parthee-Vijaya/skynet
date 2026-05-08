@@ -98,40 +98,40 @@ async function detectLmStudio(): Promise<Detection> {
   };
 }
 
-async function detectPlex(): Promise<Detection> {
-  const token = getSetting("plex_token");
-  const url = getSetting("plex_url") || "http://localhost:32400";
+async function detectJellyfin(): Promise<Detection> {
+  const apiKey = getSetting("jellyfin_api_key");
+  const url = getSetting("jellyfin_url") || "http://localhost:8096";
 
-  // Tjek om Plex Media Server kører lokalt (port 32400)
-  const serverUp = await ping(`${url}/identity`);
+  // /System/Info/Public kræver ikke auth — perfekt til ping
+  const serverUp = await ping(`${url}/System/Info/Public`);
 
   if (!serverUp) {
     return {
-      key: "plex",
-      name: "Plex Media Server",
+      key: "jellyfin",
+      name: "Jellyfin Media Server",
       status: "missing",
-      hint: "Plex-serveren er ikke tilgængelig på " + url + ". Start Plex Media Server på denne Mac, eller sæt plex_url til en ekstern Plex.",
-      feature: "PlexWidget",
+      hint: "Jellyfin svarer ikke på " + url + ". Start Jellyfin (default :8096), eller sæt jellyfin_url til en ekstern instans.",
+      feature: "JellyfinWidget",
     };
   }
 
-  if (!token) {
+  if (!apiKey) {
     return {
-      key: "plex",
-      name: "Plex Media Server",
+      key: "jellyfin",
+      name: "Jellyfin Media Server",
       status: "partial",
-      details: "Plex kører på " + url + ", men plex_token mangler",
-      hint: "Gå til https://plex.tv/claim, hent token, gem som plex_token i settings.",
-      feature: "PlexWidget",
+      details: "Jellyfin kører på " + url + ", men jellyfin_api_key mangler",
+      hint: "Generér en API-key i Jellyfin → Dashboard → API Keys, og gem som jellyfin_api_key i settings.",
+      feature: "JellyfinWidget",
     };
   }
 
   return {
-    key: "plex",
-    name: "Plex Media Server",
+    key: "jellyfin",
+    name: "Jellyfin Media Server",
     status: "ok",
-    details: "Kører på " + url + " med token",
-    feature: "PlexWidget",
+    details: "Kører på " + url + " med API-key",
+    feature: "JellyfinWidget",
     configured: true,
   };
 }
@@ -342,7 +342,7 @@ export async function GET(req: Request) {
     detectOutboundInternet(),
     detectLocation(),
     detectLmStudio(),
-    detectPlex(),
+    detectJellyfin(),
     detectTailscale(),
     detectNzbgeek(),
     detectGitHub(),

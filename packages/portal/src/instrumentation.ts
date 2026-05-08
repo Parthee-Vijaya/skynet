@@ -3,7 +3,6 @@ export async function register(): Promise<void> {
 
   const [
     { startSparklineCollector },
-    { autoImportPlexToken },
     { startScheduler },
     { startMeetingPrep },
     { startPoller: startImessagePoller },
@@ -11,7 +10,6 @@ export async function register(): Promise<void> {
     { startSubscriber: startNtfySubscriber },
   ] = await Promise.all([
     import("@/jobs/sparkline-collector"),
-    import("@/jobs/plex-token-import"),
     import("@/jobs/scheduler"),
     import("@/jobs/meeting-prep"),
     import("@/jobs/imessage-poller"),
@@ -19,7 +17,6 @@ export async function register(): Promise<void> {
     import("@/jobs/ntfy-subscriber"),
   ]);
 
-  await autoImportPlexToken();
   startSparklineCollector();
   startScheduler();
   startMeetingPrep();
