@@ -123,7 +123,9 @@ export function TopReposWidget() {
   const ageTick = useAgeTicker(); // triggers re-render for "refreshed X ago"
   void ageTick;
 
-  const repos = data?.repos ?? [];
+  // Cockpit-trim: vis kun 8 hotteste så widget ikke bliver 1200+px tall
+  // og skubber row-layoutet ud af form. Bruger ser fulde liste på github.com/trending.
+  const repos = (data?.repos ?? []).slice(0, 8);
   const age = data?.fetchedAt ? ageLabel(data.fetchedAt) : "—";
 
   return (
