@@ -85,24 +85,40 @@ export async function detectLulu(): Promise<LuluStatus> {
   let error: string | null = null;
 
   if (cliPath) {
+    // lulu-cli 0.2.0 har ikke --version. I stedet bruger vi `brew list --versions`
+    // hvis tilgængelig, ellers parser vi help-outputtet, ellers viser vi bare "installed".
     try {
-      const { stdout } = await exec(`${shellEscape(cliPath)} --version`, { timeout: 2000 });
-      cliVersion = stdout.trim();
-    } catch (e) {
-      error = `lulu-cli --version failed: ${e instanceof Error ? e.message : String(e)}`;
+      const { stdout } = await exec("brew list --versions lulu-cli 2>/dev/null", { timeout: 2000 });
+      const m = stdout.trim().match(/lulu-cli\s+(\S+)/);
+      if (m) cliVersion = `lulu-cli ${m[1]}`;
+    } catch { /* brew not available — try help */ }
+
+    if (!cliVersion) {
+      try {
+        // CLI uden args printer help; vi bruger det som "exists & runnable" probe.
+        await exec(`${shellEscape(cliPath)} 2>&1`, { timeout: 2000 });
+        cliVersion = "lulu-cli (installed)";
+      } catch (e) {
+        error = `lulu-cli probe failed: ${e instanceof Error ? e.message : String(e)}`;
+      }
     }
 
-    // Probe sudoers — `sudo -n` returns immediately if NOPASSWD is set up
+    // Probe sudoers — `sudo -n -l <cli>` viser om NOPASSWD entry findes for binary'en.
+    // Falder tilbage til `sudo -n <cli> reload` med kort timeout (vi terminerer hurtigt
+    // før reload faktisk når noget destruktivt — exit-code afslører om sudoers var ok).
     try {
-      await exec(`sudo -n ${shellEscape(cliPath)} --version`, { timeout: 1500 });
-      sudoersOk = true;
-    } catch { /* expected when sudoers is not configured */ }
+      const { stdout } = await exec(`sudo -n -l ${shellEscape(cliPath)} 2>&1`, { timeout: 1500 });
+      // Hvis sudoers entry findes, output indeholder fx "/opt/homebrew/bin/lulu-cli"
+      if (stdout.includes(cliPath)) sudoersOk = true;
+    } catch { /* sudo -n -l fejler hvis sudoers entry ikke er sat op */ }
 
-    // Try to count rules (read-only, no sudo needed)
-    try {
-      const rules = await listRules({ silent: true });
-      ruleCount = rules.length;
-    } catch { /* ignore — first install often has empty/non-readable rules */ }
+    // Try to count rules (read-only, no sudo needed) — but only if rules.plist exists
+    if (rulesOk) {
+      try {
+        const rules = await listRules({ silent: true });
+        ruleCount = rules.length;
+      } catch { /* ignore — first install often has empty/non-readable rules */ }
+    }
   }
 
   return {

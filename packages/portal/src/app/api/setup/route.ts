@@ -186,15 +186,34 @@ async function dNasaApod(): Promise<Detection> {
 async function dLulu(): Promise<Detection> {
   const { detectLulu } = await import("@/lib/firewall/lulu");
   const s = await detectLulu();
+
+  // Vigtigst case: CLI'en alene gør INTET — uden LuLu.app er der ingen System Extension
+  // til at læse rules.plist og håndhæve regler. Vi advarer specifikt om denne situation.
+  if (s.cliInstalled && !s.appInstalled) {
+    return {
+      key: "lulu",
+      name: "LuLu Firewall",
+      status: "partial",
+      details: `CLI ${s.cliVersion ?? "installed"}, men LuLu.app mangler — CLI'en kan ikke håndhæve regler alene`,
+      hint:
+        "Installer LuLu.app: 'brew install --cask lulu' eller hent fra objective-see.org/products/lulu.html · " +
+        "Du skal også godkende System Extension i Systemindstillinger → Privatliv & Sikkerhed → 'Tillad' og igen i 'Network Filter'-prompt.",
+      feature: "/firewall · per-app block · profil-auto-switch",
+    };
+  }
+
   if (!s.appInstalled) {
     return {
       key: "lulu",
       name: "LuLu Firewall",
       status: "missing",
-      hint: "Installer fra objective-see.org/products/lulu.html for at få faktisk håndhævelse. Skynet kører i monitor-mode uden.",
+      hint:
+        "Installer LuLu: 'brew install --cask lulu' (godkend System Extension i Systemindstillinger). " +
+        "Skynet kører fint i monitor-only mode uden, men kan ikke blokere.",
       feature: "/firewall · per-app block · profil-auto-switch",
     };
   }
+
   if (!s.cliInstalled) {
     return {
       key: "lulu",
@@ -205,16 +224,31 @@ async function dLulu(): Promise<Detection> {
       feature: "/firewall · per-app block · profil-auto-switch",
     };
   }
+
+  if (!s.rulesPathExists) {
+    return {
+      key: "lulu",
+      name: "LuLu Firewall",
+      status: "partial",
+      details: "App + CLI OK, men rules.plist findes ikke endnu",
+      hint:
+        "Åbn LuLu.app for at fuldføre System Extension-aktivering — den opretter rules.plist ved første start.",
+      feature: "/firewall · per-app block · profil-auto-switch",
+    };
+  }
+
   if (!s.sudoersOk) {
     return {
       key: "lulu",
       name: "LuLu Firewall",
       status: "partial",
-      details: `CLI ${s.cliVersion ?? "OK"}, sudoers passwordless mangler`,
-      hint: "Kør 'sudo scripts/install-lulu-sudoers.sh' for at sætte /etc/sudoers.d/skynet-lulu op (eller kør install.sh igen).",
+      details: `App + CLI ${s.cliVersion ?? ""} OK, sudoers passwordless mangler`,
+      hint:
+        "Kør 'sudo /Users/parthee/Desktop/Claude/projekter/skynet/scripts/install-lulu-sudoers.sh' for passwordless block/allow/reload fra Skynet.",
       feature: "/firewall-CRUD · profil-auto-switch",
     };
   }
+
   return {
     key: "lulu",
     name: "LuLu Firewall",
