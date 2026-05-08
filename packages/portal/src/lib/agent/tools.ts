@@ -733,6 +733,189 @@ export const TOOLS: ToolSchema[] = [
     },
   },
 
+  // ── Firewall / Network Monitor ──────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "list_active_connections",
+      description:
+        "List aktive netværksforbindelser med proces, remote host, port og country. Brug når brugeren spørger 'hvad er online?', 'hvem snakker vi med?' eller vil se firewall-aktivitet.",
+      parameters: {
+        type: "object",
+        properties: {
+          since: {
+            type: "string",
+            description: "Relativt tidsvindue: 'now-5min', 'now-1h', eller ISO-timestamp. Default: sidste 1 minut.",
+          },
+          process: {
+            type: "string",
+            description: "Filtrer på proces-navn (substring-match)",
+          },
+          country: {
+            type: "string",
+            description: "ISO 3166-1 alpha-2 country-code, fx 'CN' eller 'US'",
+          },
+          limit: {
+            type: "number",
+            description: "Max antal rækker (default 30)",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "explain_connection",
+      description:
+        "Forklar hvad en remote host gør og om det er safe. Returnerer category, trust_score (0-10) og dansk summary. Bruger web-search internt + 24h cache.",
+      parameters: {
+        type: "object",
+        properties: {
+          host: {
+            type: "string",
+            description: "Domæne eller IP, fx 'tracker.spotify.com' eller '142.250.74.142'",
+          },
+          app: {
+            type: "string",
+            description: "Optional: hvilken app der kontakter host'en, fx 'Spotify'",
+          },
+        },
+        required: ["host"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "block_app",
+      description:
+        "Tilføj LuLu-regel der blokerer en app's outbound trafik. Kræver lulu-cli installeret + sudoers-setup. DESTRUKTIV — kræver brugerens bekræftelse.",
+      parameters: {
+        type: "object",
+        properties: {
+          bundle_id: {
+            type: "string",
+            description: "App bundle-id eller code-signing-key, fx 'com.spotify.client'",
+          },
+          exec_path: {
+            type: "string",
+            description: "Optional eksekverbar sti, eller '*' (default).",
+          },
+          process: {
+            type: "string",
+            description: "Optional human-readable proces-navn til logging.",
+          },
+          scope: {
+            type: "string",
+            enum: ["all", "host", "host:port"],
+            description: "all = bloker alt, host = bloker kun givet host, host:port = også port",
+          },
+          remote_host: {
+            type: "string",
+            description: "Påkrævet hvis scope er 'host' eller 'host:port'",
+          },
+          remote_port: {
+            type: "number",
+            description: "Påkrævet hvis scope er 'host:port'",
+          },
+        },
+        required: ["bundle_id", "scope"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "allow_app",
+      description:
+        "Tilføj LuLu-regel der eksplicit tillader en app. Bruges fx hvis du har blokeret en app generelt men vil tillade én bestemt host. DESTRUKTIV.",
+      parameters: {
+        type: "object",
+        properties: {
+          bundle_id: { type: "string" },
+          exec_path: { type: "string" },
+          process: { type: "string" },
+          scope: { type: "string", enum: ["all", "host", "host:port"] },
+          remote_host: { type: "string" },
+          remote_port: { type: "number" },
+        },
+        required: ["bundle_id", "scope"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_network_profiles",
+      description:
+        "List alle definerede firewall-profiler (fx 'Hjemme', 'Café', 'Lufthavn') med trust-level og hvilken der er aktiv lige nu.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "current_network_profile",
+      description:
+        "Hvilken firewall-profil er aktiv lige nu? Returnerer profilnavn, trust-level og hvor længe den har været aktiv.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "switch_network_profile",
+      description:
+        "Skift til en anden firewall-profil. Aktiverer profilens regler via lulu-cli. DESTRUKTIV — kræver bekræftelse.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "number",
+            description: "Profile id (brug list_network_profiles for at se id'er)",
+          },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "suggest_profile_for_network",
+      description:
+        "Generer LLM-baseret profile-forslag baseret på SSID + 24h connection-historik. Bruges når man kommer på et nyt netværk og vil have et auto-forslag.",
+      parameters: {
+        type: "object",
+        properties: {
+          ssid: {
+            type: "string",
+            description: "Wi-Fi-netværkets SSID, fx 'Cafe-Free-WiFi'",
+          },
+        },
+        required: ["ssid"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "suspicious_traffic_today",
+      description:
+        "LLM-curated rapport over dagens usædvanlige firewall-aktivitet: nye apps, ukendte ISPs, high-risk countries, mange unique destinations på kort tid.",
+      parameters: {
+        type: "object",
+        properties: {
+          hours: {
+            type: "number",
+            description: "Tidsvindue i timer (default 24)",
+          },
+        },
+      },
+    },
+  },
+
   // ── Web: Fetch + Search ─────────────────────────────────────────────────
   {
     type: "function",
@@ -779,7 +962,15 @@ export const DESTRUCTIVE_TOOL_ACTIONS: Record<string, string[]> = {
   control_app: ["quit"],
 };
 
+/** Tools der ALTID er destruktive (uanset args) — fx alt der ændrer firewall-regler. */
+export const DESTRUCTIVE_TOOLS = new Set<string>([
+  "block_app",
+  "allow_app",
+  "switch_network_profile",
+]);
+
 export function isDestructive(toolName: string, args: Record<string, unknown>): boolean {
+  if (DESTRUCTIVE_TOOLS.has(toolName)) return true;
   const destructive = DESTRUCTIVE_TOOL_ACTIONS[toolName];
   if (!destructive) return false;
   const action = typeof args.action === "string" ? args.action : "";

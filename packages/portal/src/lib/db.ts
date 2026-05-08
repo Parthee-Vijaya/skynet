@@ -101,6 +101,103 @@ function initSchema(d: Database.Database) {
       last_message TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_delegate_started ON delegate_tasks(started_at DESC);
+
+    -- ── Firewall / Network Monitor (Fase 1+) ──────────────────────────────
+    CREATE TABLE IF NOT EXISTS network_connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      pid INTEGER,
+      process TEXT NOT NULL,
+      bundle_id TEXT,
+      exec_path TEXT,
+      proto TEXT NOT NULL,             -- 'tcp4' | 'tcp6' | 'udp4' | 'udp6'
+      laddr TEXT,
+      lport INTEGER,
+      raddr TEXT,
+      rport INTEGER,
+      rhost TEXT,
+      state TEXT,
+      bytes_in INTEGER NOT NULL DEFAULT 0,
+      bytes_out INTEGER NOT NULL DEFAULT 0,
+      is_new INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_netconn_ts ON network_connections(ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_netconn_proc ON network_connections(process, ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_netconn_raddr ON network_connections(raddr);
+    CREATE INDEX IF NOT EXISTS idx_netconn_new ON network_connections(is_new, ts DESC);
+
+    CREATE TABLE IF NOT EXISTS network_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lulu_key TEXT NOT NULL,
+      process TEXT,
+      exec_path TEXT,
+      action TEXT NOT NULL,            -- 'allow' | 'block' | 'ask'
+      scope TEXT NOT NULL,             -- 'all' | 'host' | 'host:port'
+      remote_host TEXT,
+      remote_port INTEGER,
+      source TEXT NOT NULL DEFAULT 'lulu',  -- 'lulu' | 'skynet' | 'profile'
+      profile_id INTEGER,
+      description TEXT,
+      llm_explanation TEXT,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_netrules_key ON network_rules(lulu_key);
+    CREATE INDEX IF NOT EXISTS idx_netrules_profile ON network_rules(profile_id);
+
+    CREATE TABLE IF NOT EXISTS network_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      ssid_pattern TEXT,               -- glob: 'TDC-*' | exact: 'parti-home'
+      trust_level TEXT NOT NULL DEFAULT 'normal',  -- 'high' | 'normal' | 'low'
+      llm_summary TEXT,
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_netprofiles_ssid ON network_profiles(ssid_pattern);
+
+    CREATE TABLE IF NOT EXISTS network_blocklists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      source_url TEXT,
+      domain_count INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      fetched_at INTEGER,
+      cached_path TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS network_geo_cache (
+      ip TEXT PRIMARY KEY,
+      country TEXT,
+      country_code TEXT,
+      region TEXT,
+      city TEXT,
+      lat REAL,
+      lng REAL,
+      isp TEXT,
+      asn TEXT,
+      asn_org TEXT,
+      cached_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_netgeo_expires ON network_geo_cache(expires_at);
+
+    CREATE TABLE IF NOT EXISTS network_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,              -- 'new_app' | 'blocked' | 'allowed' | 'profile_switch' | 'suspicious'
+      process TEXT,
+      bundle_id TEXT,
+      raddr TEXT,
+      rhost TEXT,
+      detail TEXT,                     -- JSON
+      llm_explanation TEXT,
+      acknowledged INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_netevents_ts ON network_events(ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_netevents_kind ON network_events(kind, ts DESC);
   `);
 }
 
