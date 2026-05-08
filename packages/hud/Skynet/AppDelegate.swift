@@ -1,4 +1,5 @@
 import AppKit
+import AVFAudio
 import CoreSpotlight
 import SwiftUI
 

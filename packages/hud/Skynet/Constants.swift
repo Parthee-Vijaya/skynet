@@ -142,6 +142,14 @@ enum Constants {
         /// String — ISO-dato (YYYY-MM-DD) for sidste briefing-kørsel. Bruges
         /// til at sikre kun én briefing pr. dag.
         static let morningBriefingLastRun = "morningBriefingLastRun"
+
+        // ── Wake word + VAD (refereret af AppDelegate + WakeWordDetector) ───
+        /// String — `WakeWordAction.rawValue` der bestemmer hvad der sker når
+        /// wake-word fyrer (qna / push-to-talk / live-voice / …). Default: "qna".
+        static let wakeWordAction = "wakeWordAction"
+        /// Double — RMS-floor (lineær 0…1) for SimpleVAD: under denne værdi
+        /// betragtes audio-buffer som stilhed. Default 0.012.
+        static let vadSilenceThreshold = "vadSilenceThreshold"
     }
 
     // MARK: - Gemini Live Voice
