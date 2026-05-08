@@ -4,15 +4,14 @@ import { getWidgets } from "./widgets/index";
 import { Pulse, Sep } from "./primitives";
 import { MobileNav } from "./MobileNav";
 
-const SPAN: Record<number, string> = {
-  3: "col-span-12 md:col-span-6 lg:col-span-3",
-  4: "col-span-12 md:col-span-6 lg:col-span-4",
-  5: "col-span-12 lg:col-span-5",
-  6: "col-span-12 lg:col-span-6",
-  7: "col-span-12 lg:col-span-7",
-  8: "col-span-12 lg:col-span-8",
-  9: "col-span-12 lg:col-span-9",
-  12: "col-span-12",
+// Bento-grid: 4 cols på desktop, 2 cols på tablet, 1 col på mobil.
+// Widgets specifierer cols (1-4) + optional rows (1-2). Auto-rows holder
+// minimumshøjden ensartet så grid'et ser organiseret ud uanset indhold.
+const COL_CLASS: Record<number, string> = {
+  1: "col-span-1 sm:col-span-1 lg:col-span-1",
+  2: "col-span-1 sm:col-span-2 lg:col-span-2",
+  3: "col-span-1 sm:col-span-2 lg:col-span-3",
+  4: "col-span-1 sm:col-span-2 lg:col-span-4",
 };
 
 export function MinimalDashboard() {
@@ -36,10 +35,9 @@ export function MinimalDashboard() {
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      {/* Top nav / status bar — MobileNav håndterer desktop + mobil */}
       <MobileNav
         active="cockpit"
-        subtitle="cockpit · minimal"
+        subtitle="cockpit · bento"
         rightSlot={
           <div className="flex items-center text-neutral-500">
             <Pulse />
@@ -49,31 +47,59 @@ export function MinimalDashboard() {
         }
       />
 
-      {/* Main grid — responsive gaps + padding (tættere top på mobil) */}
+      {/* Bento grid: 1 col mobil → 2 col tablet → 4 col desktop.
+          Hver 1-col widget har min-height 360px + stretch så naboer i samme
+          række får uniform højde. Tall content scroller inde i sit card;
+          short content får intentionelt luft (bento-æstetik). Hero + ribbon
+          + services (cols=4) udelader min-height og vokser organisk. */}
       <main
-        className="mx-auto grid gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-6 lg:gap-x-8 lg:gap-y-7 px-4 pt-3 pb-10 sm:px-6 sm:py-6 lg:px-6 lg:py-7"
-        style={{
-          maxWidth: 1400,
-          gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-        }}
+        className="mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 px-3 pt-3 pb-10 sm:px-5 sm:py-5 lg:px-6 lg:py-6"
+        style={{ maxWidth: 1400 }}
       >
-        {widgets.map((w) => (
-          <div
-            key={w.id}
-            className={SPAN[w.colSpan] ?? "col-span-12"}
-            style={w.rowSpan && w.rowSpan > 1 ? { gridRow: `span ${w.rowSpan}` } : undefined}
-          >
-            <w.Component />
-          </div>
-        ))}
+        {widgets.map((w) => {
+          const cat = w.category ?? "system";
+          const tintBg = `rgba(var(--cat-${cat}-rgb), 0.025)`;
+          const tintBorder = `rgba(var(--cat-${cat}-rgb), 0.18)`;
+          const tintBorderHover = `rgba(var(--cat-${cat}-rgb), 0.40)`;
+          // HeroWidget opter ud af card-chrome — har sit eget visual treatment
+          const isHero = w.category === "hero" || w.id === "hero";
+          // Full-width widgets (cols=4) vokser organisk; 1-col widgets får
+          // uniform min-height 360px så bento-rytmen er ensartet på tværs
+          // af rækker (kort content centerer naturligt, langt scroller).
+          const isFullWidth = w.cols >= 4;
+          const cardCls = isHero
+            ? ""
+            : "group relative rounded-2xl border p-3 sm:p-4 transition-all duration-250 hover:border-[color:var(--card-hover-border)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.32)] overflow-y-auto";
+          const cardStyle: React.CSSProperties = isHero
+            ? {}
+            : {
+                backgroundColor: tintBg,
+                borderColor: tintBorder,
+                ["--card-hover-border" as string]: tintBorderHover,
+                ...(isFullWidth ? {} : { minHeight: 360, maxHeight: 440 }),
+              };
+          return (
+            <div
+              key={w.id}
+              className={`${COL_CLASS[w.cols] ?? COL_CLASS[1]} ${cardCls}`}
+              style={{
+                ...cardStyle,
+                ...(w.rows && w.rows > 1 ? { gridRow: `span ${w.rows}` } : {}),
+              }}
+              data-widget-cat={cat}
+            >
+              <w.Component />
+            </div>
+          );
+        })}
 
         <footer
-          className="col-span-12 mt-5 pt-4 flex justify-between text-[11px] flex-wrap gap-2"
+          className="col-span-1 sm:col-span-2 lg:col-span-4 mt-2 pt-4 flex justify-between text-[11px] flex-wrap gap-2"
           style={{ borderTop: "1px solid #1c1c1c", color: "#6b6b6b" }}
         >
           <span>skynet · mac server · dashboard · mobile pwa · ntfy</span>
           <span>
-            v0.4.0<Sep />running 24/7 via launchd
+            v0.5.0 · bento<Sep />running 24/7 via launchd
             <Sep />add widgets in{" "}
             <code className="text-neutral-400">components/minimal/widgets/</code>
           </span>

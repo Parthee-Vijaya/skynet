@@ -28,6 +28,23 @@
 :root {
   --j-acc: #38bdf8;
   --j-acc-rgb: 56, 189, 248;
+
+  /* ─── Bento category accents ─────────────────────────────────────────
+     Hver widget får en kategori (system/code/media/ambient) der bestemmer
+     accent-farve. Bruges af Card-primitive til subtil 3 % bg-tint, border
+     og ikon-farve. Defineret som hex + RGB-triplet så vi kan komponere
+     rgba()-værdier inline.
+     ──────────────────────────────────────────────────────────────────── */
+  --cat-system:      #3b82f6;       /* blue-500  — cpu, ram, net, disk, services */
+  --cat-system-rgb:  59, 130, 246;
+  --cat-code:        #10b981;       /* emerald-500 — claude, github, paseo */
+  --cat-code-rgb:    16, 185, 129;
+  --cat-media:       #8b5cf6;       /* violet-500 — jellyfin, sabnzbd */
+  --cat-media-rgb:   139, 92, 246;
+  --cat-ambient:     #f59e0b;       /* amber-500 — weather, moon, ribbon */
+  --cat-ambient-rgb: 245, 158, 11;
+  --cat-hero:        #f5f5f5;       /* near-white — kun hero/identitet */
+  --cat-hero-rgb:    245, 245, 245;
 }
 
 html, body {
