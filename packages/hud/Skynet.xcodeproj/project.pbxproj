@@ -68,6 +68,13 @@
 			);
 			target = 5FD969FD2F958FE6004D42EF /* SkynetWidgetExtensionExtension */;
 		};
+		AA200007300000000000AAAA /* Exceptions for "Skynet" folder in "Skynet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = AA200006300000000000AAAA /* Skynet */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -83,6 +90,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				5FD96A212F9590BD004D42EF /* Exceptions for "Skynet" folder in "SkynetWidgetExtensionExtension" target */,
+				AA200007300000000000AAAA /* Exceptions for "Skynet" folder in "Skynet" target */,
 			);
 			path = Skynet;
 			sourceTree = "<group>";
