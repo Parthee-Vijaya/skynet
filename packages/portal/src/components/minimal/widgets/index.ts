@@ -1,15 +1,22 @@
-// Widget barrel + registry initialisation.
-// Add new widgets by: 1) creating a file in this folder, 2) registering here.
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  COCKPIT-LAYOUT — LOCKED av brugeren 2026-05-08.                    ║
+// ║  Skift IKKE rækkefølge eller cols-værdier uden eksplicit anmodning.  ║
+// ║  Tilføj nye widgets ved at indsætte dem mellem eksisterende rows —   ║
+// ║  uden at ændre de eksisterende widgets' position eller størrelse.    ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 //
-// Cockpit-layout (4-col base):
+// Cockpit-layout (4-col base) — låst rækkefølge + bredde:
 //
 //   Row 1:  HERO (3 cols)            | CLAUDE (1 col)         <- hero + plan-usage til højre
 //   Row 2:  RIBBON (4 cols)                                   <- service-strip mellem hero og data
-//   Row 3:  CPU | RAM | NET | DISK                            <- system instruments
+//   Row 3:  CPU | RAM | NET | DISK                            <- system instruments (1 col hver)
 //   Row 4:  GITHUB (2)               | TOP-REPOS (2)          <- code primær + trending
 //   Row 5:  FIREWALL (4 cols)                                  <- network monitor full-width
-//   Row 6:  WEATHER | PASEO | JELLYFIN | SABNZBD               <- kompakte status
+//   Row 6:  WEATHER | PASEO | JELLYFIN | SABNZBD               <- kompakte status (1 col hver)
 //   Row 7:  SERVICES (4)
+//
+// Nye widgets der registreres skal IKKE ændre eksisterende cols/positioner.
+// Spørg brugeren før layout-ændringer.
 import { registerWidget } from "../widget-registry";
 import { HeroWidget } from "./HeroWidget";
 import { ClaudeWidget } from "./ClaudeWidget";
