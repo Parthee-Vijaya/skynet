@@ -11,7 +11,7 @@ import type { NetProfileRow } from "@/lib/firewall/profiles";
 import type { ExplanationResult } from "@/lib/firewall/explain";
 import type { InspectResult } from "@/lib/firewall/inspect";
 
-type Tab = "live" | "rules" | "profiles" | "stats" | "events";
+type Tab = "live" | "rules" | "profiles" | "stats" | "apps" | "events";
 
 interface ConnectionWithGeo extends NetConnRow {
   country: string | null;
@@ -37,6 +37,7 @@ export default function FirewallPage() {
           {tab === "rules" && <RulesTab />}
           {tab === "profiles" && <ProfilesTab />}
           {tab === "stats" && <StatsTab />}
+          {tab === "apps" && <AppsTab />}
           {tab === "events" && <EventsTab />}
         </div>
       </main>
@@ -96,6 +97,7 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
     { id: "rules", label: "regler" },
     { id: "profiles", label: "profiler" },
     { id: "stats", label: "stats" },
+    { id: "apps", label: "apps" },
     { id: "events", label: "events" },
   ];
   return (
@@ -705,13 +707,24 @@ function InspectPanel({
           />
         </div>
 
+        {/* Batch-block: vis hvis recommendations indeholder block_batch */}
+        {data.recommendations.some((r) => r.action === "block_batch") && canEnforce && (
+          <div className="mt-3 border border-amber-500/30 bg-amber-500/5 rounded-sm p-3">
+            <BatchBlockSection
+              conn={conn}
+              recommendations={data.recommendations.filter((r) => r.action === "block_batch")}
+              onResult={(msg) => setActionResult(msg)}
+            />
+          </div>
+        )}
+
         {data.recommendations.length > 0 && (
           <div className="mt-3">
             <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">anbefalinger</div>
             <div className="space-y-1">
               {data.recommendations.map((r, i) => (
                 <div key={i} className="text-[10px] flex items-start gap-2">
-                  <span className={r.destructive ? "text-amber-400" : "text-[#7dd67d]"} style={{ minWidth: 60 }}>
+                  <span className={r.destructive ? "text-amber-400" : "text-[#7dd67d]"} style={{ minWidth: 80 }}>
                     {r.action}
                   </span>
                   <div>
@@ -723,7 +736,104 @@ function InspectPanel({
             </div>
           </div>
         )}
+
+        {/* Blocklist-status — vis hvis host matcher en åben blocklist */}
+        {data.blocklist.blocked && (
+          <div className="mt-3 text-[10px] text-amber-400 font-mono">
+            ⚠ Match i åben blocklist: <span className="text-neutral-300">{data.blocklist.matchedDomain}</span>
+            {data.blocklist.source && <span className="text-neutral-700"> (kilde: {data.blocklist.source})</span>}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function BatchBlockSection({
+  conn,
+  recommendations,
+  onResult,
+}: {
+  conn: ConnectionWithGeo;
+  recommendations: InspectResult["recommendations"];
+  onResult: (msg: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [running, setRunning] = useState(false);
+  const rec = recommendations[0];
+  const batch = rec.batch ?? [];
+
+  const apply = async () => {
+    if (!confirm(`Bloker ${batch.length} hosts for ${conn.process}? Dette opretter ${batch.length} LuLu-regler i ét move.`)) return;
+    setRunning(true);
+    try {
+      const res = await fetch("/api/firewall/rules/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lulu_key: conn.bundle_id ?? conn.process,
+          exec_path: conn.exec_path ?? "*",
+          process: conn.process,
+          hosts: batch,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; added?: number; failed?: number; error?: string };
+      if (json.ok) {
+        onResult(`✓ ${json.added} regler tilføjet · ${json.failed ?? 0} fejlede`);
+      } else {
+        onResult(`fejl: ${json.error ?? `HTTP ${res.status}`}`);
+      }
+    } catch (e) {
+      onResult("fejl: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="text-[11px] text-amber-400 font-medium">{rec.label}</div>
+          <div className="text-[10px] text-neutral-500 mt-1">{rec.reason}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[10px] text-neutral-500 hover:text-neutral-300"
+          >
+            {expanded ? "skjul" : `vis ${batch.length} hosts`}
+          </button>
+          <button
+            onClick={apply}
+            disabled={running}
+            className="text-[11px] px-3 py-1 border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-sm disabled:opacity-50"
+          >
+            {running ? "blokerer..." : `✕ Bloker alle ${batch.length}`}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-3 max-h-64 overflow-y-auto border-t border-amber-500/20 pt-2">
+          <div className="space-y-0.5 text-[10px] font-mono">
+            {batch.map((b, i) => (
+              <div key={i} className="flex items-baseline gap-2">
+                <span
+                  className={
+                    "text-[10px] " +
+                    (b.reason === "DDG-tracker" ? "text-[#d87373]" : "text-amber-400")
+                  }
+                  style={{ minWidth: 80 }}
+                >
+                  {b.reason}
+                </span>
+                <span className="text-neutral-300 truncate">{b.host}</span>
+                <span className="text-neutral-700 text-[10px]">{b.raddr}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1396,6 +1506,295 @@ function SignalCard({ title, count, items }: { title: string; count: number; ite
         </div>
       )}
     </div>
+  );
+}
+
+// ── Apps tab — per-app health-score (DDG TDS + blocklists) ──────────────────
+
+interface AppHealthRow {
+  process: string;
+  bundle_id: string | null;
+  exec_path: string | null;
+  total_flows: number;
+  unique_hosts: number;
+  tracker_flows: number;
+  unique_trackers: number;
+  blocklist_flows: number;
+  high_risk_events: number;
+  total_bytes: number;
+  tracker_ratio: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  score: number;
+  top_trackers: Array<{ host: string; flow_count: number; owner?: string }>;
+  blocklist_examples: Array<{ host: string; flow_count: number }>;
+}
+
+interface BlocklistStatus {
+  loaded: boolean;
+  loadedAt: number | null;
+  totalDomains: number;
+  lists: Array<{ sourceId: string; name: string; count: number; loadedAt: number }>;
+  sources: Array<{ id: string; name: string; url: string; description: string }>;
+}
+
+interface AlertsStatus {
+  running: boolean;
+  enabled: boolean;
+  threshold: number;
+  lastTickAt: number | null;
+  lastNotifiedAt: number | null;
+  alertsSent: number;
+}
+
+function AppsTab() {
+  const [hours, setHours] = useState(168);
+  const { data, error } = usePoll<{ apps: AppHealthRow[] }>(`/api/firewall/app-health?hours=${hours}`, 30_000);
+  const { data: bl } = usePoll<BlocklistStatus>("/api/firewall/blocklists", 60_000);
+  const { data: alerts } = usePoll<AlertsStatus>("/api/firewall/alerts", 10_000);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [expandedApp, setExpandedApp] = useState<string | null>(null);
+
+  const refreshList = async (sourceId?: string) => {
+    setRefreshing(sourceId ?? "all");
+    setRefreshMsg(null);
+    try {
+      const res = await fetch("/api/firewall/blocklists/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sourceId ? { sourceId } : {}),
+      });
+      const json = (await res.json()) as { results?: Array<{ count: number; ok: boolean; sourceId: string }> } & { count?: number };
+      if (json.results) {
+        const total = json.results.reduce((s, r) => s + (r.ok ? r.count : 0), 0);
+        setRefreshMsg(`✓ Hentet ${total.toLocaleString("da-DK")} domæner fra ${json.results.length} kilder`);
+      } else {
+        setRefreshMsg(`✓ Hentet ${(json.count ?? 0).toLocaleString("da-DK")} domæner`);
+      }
+    } catch (e) {
+      setRefreshMsg("fejl: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setRefreshing(null);
+      setTimeout(() => setRefreshMsg(null), 6000);
+    }
+  };
+
+  const toggleAlerts = async (enabled: boolean) => {
+    await fetch("/api/firewall/alerts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+  };
+
+  const setThreshold = async (threshold: number) => {
+    await fetch("/api/firewall/alerts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threshold }),
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Alerts-toggle */}
+      <Section title="high-risk push-notifikationer" right={<span>{alerts?.alertsSent ?? 0} sendt</span>}>
+        <div className="flex flex-wrap items-baseline gap-4 text-[11px] font-mono">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!alerts?.enabled}
+              onChange={(e) => toggleAlerts(e.target.checked)}
+            />
+            <span className="text-neutral-300">aktivér push når risk ≥</span>
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={alerts?.threshold ?? 70}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            className="bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded-sm text-neutral-100 w-16"
+          />
+          <span className="text-neutral-500">/100</span>
+          {alerts?.lastNotifiedAt && (
+            <span className="text-neutral-700">· sidste alert: {timeSince(alerts.lastNotifiedAt)} siden</span>
+          )}
+        </div>
+        <div className="mt-2 text-[10px] text-neutral-700">
+          Bruger eksisterende notify-stack (macOS · ntfy · Pushover). ntfy-action-button "Bloker host" kræver
+          at <code className="text-neutral-500">skynet_public_url</code> er sat i settings (fx Tailscale-IP).
+        </div>
+      </Section>
+
+      {/* Blocklists status */}
+      <Section
+        title="domain blocklists"
+        right={
+          <span>
+            {bl?.totalDomains.toLocaleString("da-DK") ?? 0} domæner aktive
+            <span className="text-neutral-700 mx-2">·</span>
+            <button
+              onClick={() => refreshList()}
+              disabled={refreshing !== null}
+              className="text-sky-400 hover:text-sky-300 disabled:opacity-50"
+            >
+              {refreshing === "all" ? "henter..." : "↻ refresh alle"}
+            </button>
+          </span>
+        }
+      >
+        {refreshMsg && <div className="text-[11px] text-amber-400 mb-2 font-mono">{refreshMsg}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {bl?.sources?.map((src) => {
+            const info = bl.lists?.find((l) => l.sourceId === src.id);
+            return (
+              <div key={src.id} className="border border-neutral-900 rounded-sm p-3 font-mono text-[11px]">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-neutral-200 font-medium">{src.name}</span>
+                  {info ? (
+                    <span className="text-[#7dd67d] text-[10px]">✓</span>
+                  ) : (
+                    <span className="text-neutral-700 text-[10px]">ikke loaded</span>
+                  )}
+                </div>
+                <div className="text-neutral-600 text-[10px] mt-1">{src.description}</div>
+                <div className="flex items-baseline justify-between mt-2">
+                  <span className="text-neutral-300 tabular-nums">
+                    {info ? info.count.toLocaleString("da-DK") + " domæner" : "—"}
+                  </span>
+                  <button
+                    onClick={() => refreshList(src.id)}
+                    disabled={refreshing !== null}
+                    className="text-[10px] text-sky-400 hover:text-sky-300 disabled:opacity-50"
+                  >
+                    {refreshing === src.id ? "..." : "hent"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
+      {/* Per-app health */}
+      <Section
+        title={`apps · sidste ${hours === 24 ? "24h" : hours === 168 ? "7 dage" : `${hours}h`}`}
+        right={
+          <span className="font-mono">
+            <select
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+              className="bg-neutral-900 border border-neutral-800 text-neutral-300 text-[10px] px-2 py-0.5 rounded-sm"
+            >
+              <option value={24}>24h</option>
+              <option value={168}>7 dage</option>
+              <option value={720}>30 dage</option>
+            </select>
+            <span className="text-neutral-700 mx-2">·</span>
+            <span>{data?.apps?.length ?? 0} apps</span>
+          </span>
+        }
+      >
+        {error && <div className="text-[#d87373] text-[11px] mb-2">fejl: {error.message}</div>}
+        {!data?.apps?.length ? (
+          <div className="text-neutral-700 text-[12px] text-center py-8">ingen data — vent et øjeblik mens collectoren samler flows</div>
+        ) : (
+          <div className="space-y-1">
+            {data.apps.map((app) => {
+              const expanded = expandedApp === app.process;
+              return (
+                <div
+                  key={app.process}
+                  className={
+                    "border rounded-sm font-mono text-[11px] " +
+                    (app.grade === "F" ? "border-[#d87373]/40" :
+                     app.grade === "D" ? "border-amber-500/40" :
+                     app.grade === "A" ? "border-[#7dd67d]/30" : "border-neutral-900")
+                  }
+                >
+                  <button
+                    onClick={() => setExpandedApp(expanded ? null : app.process)}
+                    className="w-full px-3 py-2 flex items-baseline gap-3 text-left hover:bg-neutral-900/40"
+                  >
+                    <span className="text-neutral-600 inline-block w-3">{expanded ? "▾" : "▸"}</span>
+                    <GradeBadge grade={app.grade} />
+                    <span className="text-neutral-100 flex-1 truncate">{app.process}</span>
+                    <span className="text-neutral-500 text-[10px] tabular-nums">{app.total_flows} flows</span>
+                    <span className="text-neutral-500 text-[10px] tabular-nums">{app.unique_hosts} hosts</span>
+                    <span className={
+                      "text-[10px] tabular-nums " +
+                      (app.unique_trackers > 0 ? "text-[#d87373]" : "text-neutral-700")
+                    }>
+                      {app.unique_trackers} trackers
+                    </span>
+                    <span className="text-neutral-700 text-[10px] tabular-nums" style={{ minWidth: 50 }}>
+                      {app.tracker_ratio > 0 ? (app.tracker_ratio * 100).toFixed(1) + "%" : "—"}
+                    </span>
+                  </button>
+                  {expanded && (
+                    <div className="px-3 pb-3 border-t border-neutral-900 space-y-2">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+                        <Stat label="total flows" value={app.total_flows.toLocaleString("da-DK")} />
+                        <Stat label="bytes" value={formatBytes(app.total_bytes)} />
+                        <Stat label="tracker-ratio" value={(app.tracker_ratio * 100).toFixed(1) + "%"} />
+                        <Stat label="high-risk events" value={app.high_risk_events.toString()} />
+                      </div>
+                      {app.bundle_id && (
+                        <div className="text-[10px] text-neutral-600 truncate">
+                          bundle: <span className="text-neutral-500">{app.bundle_id}</span>
+                        </div>
+                      )}
+                      {app.top_trackers.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">top trackers kontaktet</div>
+                          <div className="space-y-0.5">
+                            {app.top_trackers.map((t) => (
+                              <div key={t.host} className="flex items-baseline gap-2">
+                                <span className="text-[#d87373] tabular-nums" style={{ minWidth: 30 }}>{t.flow_count}×</span>
+                                <span className="text-neutral-300 truncate flex-1">{t.host}</span>
+                                {t.owner && <span className="text-neutral-700 text-[10px] truncate">{t.owner}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {app.blocklist_examples.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">på blocklist</div>
+                          <div className="space-y-0.5">
+                            {app.blocklist_examples.map((b) => (
+                              <div key={b.host} className="flex items-baseline gap-2">
+                                <span className="text-amber-400 tabular-nums" style={{ minWidth: 30 }}>{b.flow_count}×</span>
+                                <span className="text-neutral-300 truncate">{b.host}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function GradeBadge({ grade }: { grade: "A" | "B" | "C" | "D" | "F" }) {
+  const tone =
+    grade === "A" ? "text-[#7dd67d] bg-[#7dd67d]/10 border-[#7dd67d]/30" :
+    grade === "B" ? "text-[#7dd67d]/80 bg-neutral-900 border-neutral-800" :
+    grade === "C" ? "text-amber-400 bg-amber-500/10 border-amber-500/30" :
+    grade === "D" ? "text-orange-400 bg-orange-500/10 border-orange-500/30" :
+    "text-[#d87373] bg-[#d87373]/10 border-[#d87373]/30";
+  return (
+    <span className={"inline-block border px-1.5 py-0.5 rounded-sm text-[10px] font-bold tabular-nums w-5 text-center " + tone}>
+      {grade}
+    </span>
   );
 }
 

@@ -15,6 +15,7 @@ import { getGeoMany } from "./store";
 import { ensureLoaded as ensureTdsLoaded, lookupHost, getTdsStatus } from "./tracker-db";
 import { detectVpn, classifyPort, type VpnDetection } from "./vpn-detect";
 import { explainConnection, type ExplanationResult } from "./explain";
+import { ensureLoaded as ensureBlocklistsLoaded, lookup as lookupBlocklist, getStatus as getBlocklistStatus } from "./blocklists";
 
 export interface InspectQuery {
   raddr?: string | null;
@@ -60,12 +61,25 @@ export interface InspectResult {
     service: string | null;
     secure: boolean | null;
   };
+  blocklist: {
+    blocked: boolean;
+    matchedDomain?: string;
+    source?: string;
+  };
   recent: {
     flow_count_24h: number;
     bytes_24h: number;
     first_seen: number | null;
     last_seen: number | null;
     other_processes: string[];
+    /** Andre hosts samme proces har talt med i sidste 24h, allerede klassificeret */
+    related_hosts: Array<{
+      host: string;
+      raddr: string;
+      flow_count: number;
+      is_tracker: boolean;
+      is_blocklisted: boolean;
+    }>;
   };
   llm: ExplanationResult | null;
   risk: {
@@ -74,10 +88,12 @@ export interface InspectResult {
     band: "low" | "medium" | "high";
   };
   recommendations: Array<{
-    action: "block_app" | "block_host" | "kill_process" | "monitor" | "investigate";
+    action: "block_app" | "block_host" | "kill_process" | "monitor" | "investigate" | "block_batch";
     label: string;
     reason: string;
     destructive: boolean;
+    /** For block_batch: liste af hosts der skal blokeres i ét move */
+    batch?: Array<{ host: string; raddr: string; reason: string }>;
   }>;
 }
 
@@ -85,8 +101,11 @@ const HIGH_RISK_COUNTRIES = new Set(["RU", "CN", "KP", "IR", "BY"]);
 const KNOWN_LEGIT_OWNERS = ["Apple", "Microsoft", "Cloudflare", "Akamai", "Tailscale", "Proton AG", "Mullvad"];
 
 export async function inspectConnection(q: InspectQuery): Promise<InspectResult> {
-  // Ensure TDS er loaded (best-effort — graceful hvis offline)
-  await ensureTdsLoaded().catch(() => undefined);
+  // Ensure databases er loaded (best-effort — graceful hvis offline)
+  await Promise.all([
+    ensureTdsLoaded().catch(() => undefined),
+    ensureBlocklistsLoaded().catch(() => undefined),
+  ]);
 
   // 1) Geo lookup
   const ipKey = q.raddr ?? "";
@@ -139,10 +158,13 @@ export async function inspectConnection(q: InspectQuery): Promise<InspectResult>
     secure: portInfo.secure,
   };
 
-  // 5) Recent traffic for (process, raddr)
+  // 5) Blocklist lookup (OISD/StevenBlack/EasyPrivacy)
+  const blocklist = q.rhost ? lookupBlocklist(q.rhost) : { blocked: false };
+
+  // 6) Recent traffic for (process, raddr) + relaterede hosts
   const recent = computeRecent(q.process ?? null, q.raddr ?? null);
 
-  // 6) LLM (kun hvis explicit requested)
+  // 7) LLM (kun hvis explicit requested)
   let llm: ExplanationResult | null = null;
   if (q.runLLM && q.rhost) {
     try {
@@ -152,20 +174,20 @@ export async function inspectConnection(q: InspectQuery): Promise<InspectResult>
     }
   }
 
-  // 7) Risk-score
-  const risk = computeRisk({ tracker, vpn, geo, port, llm, recent });
+  // 8) Risk-score
+  const risk = computeRisk({ tracker, vpn, geo, port, llm, recent, blocklist });
 
-  // 8) Recommendations
-  const recommendations = buildRecommendations({ tracker, vpn, geo, risk, q });
+  // 9) Recommendations (incl. batch-block hvis flere relaterede trackers)
+  const recommendations = buildRecommendations({ tracker, vpn, geo, risk, q, recent, blocklist });
 
-  return { query: q, geo, tracker, vpn, port, recent, llm, risk, recommendations };
+  return { query: q, geo, tracker, vpn, port, blocklist, recent, llm, risk, recommendations };
 }
 
 // ── Recent ───────────────────────────────────────────────────────────────────
 
 function computeRecent(process: string | null, raddr: string | null): InspectResult["recent"] {
   if (!process || !raddr) {
-    return { flow_count_24h: 0, bytes_24h: 0, first_seen: null, last_seen: null, other_processes: [] };
+    return { flow_count_24h: 0, bytes_24h: 0, first_seen: null, last_seen: null, other_processes: [], related_hosts: [] };
   }
   const since = Date.now() - 24 * 3_600_000;
   const db = getDb();
@@ -184,12 +206,34 @@ function computeRecent(process: string | null, raddr: string | null): InspectRes
     )
     .all(raddr, since, process) as Array<{ process: string }>;
 
+  // Andre hosts samme proces har talt med — nøgle til batch-block
+  const relatedRaw = db
+    .prepare(
+      `SELECT raddr, rhost, COUNT(*) cnt FROM network_connections
+       WHERE process = ? AND ts >= ? AND raddr IS NOT NULL AND raddr != ?
+       GROUP BY raddr ORDER BY cnt DESC LIMIT 50`
+    )
+    .all(process, since, raddr) as Array<{ raddr: string; rhost: string | null; cnt: number }>;
+
+  const related_hosts = relatedRaw.map((r) => {
+    const tdsHit = r.rhost ? lookupHost(r.rhost) : null;
+    const blHit = r.rhost ? lookupBlocklist(r.rhost) : { blocked: false };
+    return {
+      host: r.rhost ?? r.raddr,
+      raddr: r.raddr,
+      flow_count: r.cnt,
+      is_tracker: !!tdsHit?.isTracker,
+      is_blocklisted: blHit.blocked,
+    };
+  });
+
   return {
     flow_count_24h: stats.cnt ?? 0,
     bytes_24h: stats.bytes ?? 0,
     first_seen: stats.first,
     last_seen: stats.last,
     other_processes: otherProcs.map((r) => r.process),
+    related_hosts,
   };
 }
 
@@ -202,6 +246,7 @@ interface RiskInput {
   port: InspectResult["port"];
   llm: ExplanationResult | null;
   recent: InspectResult["recent"];
+  blocklist: InspectResult["blocklist"];
 }
 
 function computeRisk(r: RiskInput): InspectResult["risk"] {
@@ -223,6 +268,19 @@ function computeRisk(r: RiskInput): InspectResult["risk"] {
       factor: "tracker-relateret",
       weight: 20,
       reason: `Klassificeret som tracker, men default-action = ${r.tracker.defaultAction ?? "ignore"}`,
+    });
+  }
+
+  // Blocklist match — high-confidence signal (kuratereret af 3rd-party communities)
+  if (r.blocklist.blocked) {
+    // Hvis vi allerede har tracker-faktor, undgå dobbelt-vægtning
+    const hasTracker = factors.some((f) => f.factor.includes("tracker"));
+    const w = hasTracker ? 10 : 30;
+    score += w;
+    factors.push({
+      factor: "blocklist-match",
+      weight: w,
+      reason: `Matcher åben blocklist (${r.blocklist.matchedDomain})`,
     });
   }
 
@@ -311,6 +369,8 @@ interface RecInput {
   geo: InspectResult["geo"];
   risk: InspectResult["risk"];
   q: InspectQuery;
+  recent: InspectResult["recent"];
+  blocklist: InspectResult["blocklist"];
 }
 
 function buildRecommendations(r: RecInput): InspectResult["recommendations"] {
@@ -331,6 +391,23 @@ function buildRecommendations(r: RecInput): InspectResult["recommendations"] {
       label: `Bloker ${r.tracker.domain ?? r.q.rhost} (kendt ${r.tracker.categories?.[0] ?? "tracker"})`,
       reason: `DDG default = block. Owner: ${r.tracker.ownerDisplay ?? r.tracker.owner ?? "?"}.`,
       destructive: true,
+    });
+  }
+
+  // Batch-block: hvis denne app har talt med ≥3 andre tracker/blocklisted hosts,
+  // tilbyd en samlet blok i ét move
+  const trackersInBatch = r.recent.related_hosts.filter((h) => h.is_tracker || h.is_blocklisted);
+  if (trackersInBatch.length >= 3 && r.q.bundle_id) {
+    recs.push({
+      action: "block_batch",
+      label: `Bloker også ${trackersInBatch.length} andre tracker-hosts som ${r.q.process ?? r.q.bundle_id} har talt med (24h)`,
+      reason: `Appen kontakter mange trackers — én batch-regel er mere effektiv end at klikke gennem dem enkeltvis.`,
+      destructive: true,
+      batch: trackersInBatch.slice(0, 30).map((h) => ({
+        host: h.host,
+        raddr: h.raddr,
+        reason: h.is_tracker ? "DDG-tracker" : "blocklist-match",
+      })),
     });
   }
 
@@ -365,5 +442,8 @@ function buildRecommendations(r: RecInput): InspectResult["recommendations"] {
 }
 
 export function getInspectorHealth() {
-  return { tracker_db: getTdsStatus() };
+  return {
+    tracker_db: getTdsStatus(),
+    blocklists: getBlocklistStatus(),
+  };
 }

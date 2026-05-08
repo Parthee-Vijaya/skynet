@@ -10,6 +10,7 @@ export async function register(): Promise<void> {
     { startSubscriber: startNtfySubscriber },
     { startNetworkCollector },
     { startWifiWatcher },
+    { startFirewallAlerts },
   ] = await Promise.all([
     import("@/jobs/sparkline-collector"),
     import("@/jobs/scheduler"),
@@ -19,6 +20,7 @@ export async function register(): Promise<void> {
     import("@/jobs/ntfy-subscriber"),
     import("@/jobs/network-collector"),
     import("@/jobs/wifi-watcher"),
+    import("@/jobs/firewall-alerts"),
   ]);
 
   startSparklineCollector();
@@ -34,4 +36,6 @@ export async function register(): Promise<void> {
   try { startNetworkCollector(); } catch (e) { console.warn("[network-collector] startup failed:", e); }
   // Wi-Fi watcher — auto-skift firewall-profil ved SSID-ændring
   try { startWifiWatcher(); } catch (e) { console.warn("[wifi-watcher] startup failed:", e); }
+  // Firewall alerts — push when high-risk connection detected (only if toggle on)
+  try { startFirewallAlerts(); } catch (e) { console.warn("[firewall-alerts] startup failed:", e); }
 }
