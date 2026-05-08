@@ -131,6 +131,17 @@ enum Constants {
         // ── Live voice (refereret af GeminiLiveSession + LiveVoiceService) ───
         /// String — Gemini Live-voice model-id (default sat i Constants.LiveVoice).
         static let liveVoiceModel = "liveVoiceModel"
+        /// Bool — om realtids voice-mode er slået til (push-to-talk + LLM stream).
+        static let liveVoiceEnabled = "liveVoiceEnabled"
+
+        // ── Morning briefing (refereret af MorningBriefingService) ──────────
+        /// Bool — kører Skynet automatisk en kort morgenbriefing kl. `morningBriefingTime`.
+        static let morningBriefingEnabled = "morningBriefingEnabled"
+        /// String — tidspunkt på formen "HH:mm" (24h, lokal tid). Default "07:30".
+        static let morningBriefingTime = "morningBriefingTime"
+        /// String — ISO-dato (YYYY-MM-DD) for sidste briefing-kørsel. Bruges
+        /// til at sikre kun én briefing pr. dag.
+        static let morningBriefingLastRun = "morningBriefingLastRun"
     }
 
     // MARK: - Gemini Live Voice

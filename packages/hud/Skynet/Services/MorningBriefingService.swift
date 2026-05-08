@@ -28,14 +28,17 @@ final class MorningBriefingService {
         locationService: LocationService,
         updatesService: UpdatesService,
         tts: TTSService,
-        weatherService: WeatherService = WeatherService(),
-        calendarService: CalendarService = CalendarService()
+        weatherService: WeatherService? = nil,
+        calendarService: CalendarService? = nil
     ) {
         self.locationService = locationService
         self.updatesService = updatesService
         self.tts = tts
-        self.weatherService = weatherService
-        self.calendarService = calendarService
+        // Defaults konstrueres herinde — init er @MainActor, så det er OK at
+        // kalde main-actor-isolerede initializere herfra. (Inline-defaults i
+        // parameter-listen evalueres i nonisolated-kontekst og fejler i Swift 6.)
+        self.weatherService = weatherService ?? WeatherService()
+        self.calendarService = calendarService ?? CalendarService()
     }
 
     // MARK: - Scheduler
