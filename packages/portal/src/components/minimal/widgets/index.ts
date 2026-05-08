@@ -1,16 +1,15 @@
 // Widget barrel + registry initialisation.
 // Add new widgets by: 1) creating a file in this folder, 2) registering here.
 //
-// Adaptive grid (4-col base) — system-info først, derefter content der
-// kræver mere bredde, og kompakte status-widgets sammen i bunden:
+// Cockpit-layout (4-col base):
 //
-//   Row 1:  HERO (4 cols)
-//   Row 2:  CPU | RAM | NET | DISK                       <- system instruments under hero
-//   Row 3:  CLAUDE (2 cols) | GITHUB (2 cols)            <- code primær
-//   Row 4:  FIREWALL (2 cols) | TOP-REPOS (2 cols)       <- begge har lister/tabeller, kræver bredde
-//   Row 5:  WEATHER | PASEO | JELLYFIN | SABNZBD         <- små status-widgets sammen
-//   Row 6:  RIBBON (4 cols)
-//   Row 7:  SERVICES (4 cols)
+//   Row 1:  HERO (3 cols)            | CLAUDE (1 col)         <- hero + plan-usage til højre
+//   Row 2:  CPU | RAM | NET | DISK                            <- system instruments
+//   Row 3:  GITHUB (2)               | TOP-REPOS (2)          <- code primær + trending
+//   Row 4:  FIREWALL (4 cols)                                  <- network monitor full-width
+//   Row 5:  WEATHER | PASEO | JELLYFIN | SABNZBD               <- kompakte status
+//   Row 6:  RIBBON (4)
+//   Row 7:  SERVICES (4)
 import { registerWidget } from "../widget-registry";
 import { HeroWidget } from "./HeroWidget";
 import { ClaudeWidget } from "./ClaudeWidget";
@@ -28,27 +27,25 @@ import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
 import { FirewallWidget } from "./FirewallWidget";
 
-// Row 1 — Hero (full-width)
-registerWidget({ id: "hero",      group: "hero",     cols: 4, category: "hero",    Component: HeroWidget });
+// Row 1 — Hero + Claude side-by-side (claude 1564 beskeder/plan-usage er
+// brugerens primære "current state"-indikator; hører hjemme ved klokken)
+registerWidget({ id: "hero",      group: "hero",     cols: 3, category: "hero",    Component: HeroWidget });
+registerWidget({ id: "claude",    group: "claude",   cols: 1, category: "code",    Component: ClaudeWidget });
 
-// Row 2 — System instruments direkte under hero (cockpit-feel: system-stats er
-// det første øjet skal scanne, ikke claude/github tal)
+// Row 2 — System instruments
 registerWidget({ id: "cpu",       group: "system",   cols: 1, category: "system",  Component: CpuWidgetMinimal });
 registerWidget({ id: "ram",       group: "system",   cols: 1, category: "system",  Component: RamWidgetMinimal });
 registerWidget({ id: "net",       group: "system",   cols: 1, category: "system",  Component: NetWidgetMinimal });
 registerWidget({ id: "disk",      group: "system",   cols: 1, category: "system",  Component: DiskWidgetMinimal });
 
-// Row 3 — Code primary (claude + github har begge meget data)
-registerWidget({ id: "claude",    group: "claude",   cols: 2, category: "code",    Component: ClaudeWidget });
+// Row 3 — Code: github personal + trending (begge har lister, 2 cols hver)
 registerWidget({ id: "github",    group: "ambient",  cols: 2, category: "code",    Component: GithubWidgetMinimal });
-
-// Row 4 — Lister/tabeller der kræver bredde (firewall: top-talkers + alerts;
-// trending: 8 repo-rows). Begge crampede ved 1 col, gives 2 cols her
-registerWidget({ id: "firewall",  group: "system",   cols: 2, category: "system",  Component: FirewallWidget });
 registerWidget({ id: "top-repos", group: "ambient",  cols: 2, category: "code",    Component: TopReposWidget });
 
-// Row 5 — Små status-widgets samlet (vejr, paseo idle, jellyfin offline,
-// sabnzbd idle — alle viser kompakt 1-linjes status, ingen lange lister)
+// Row 4 — Firewall full-width (top-talkers + alerts + flow-stats kræver bredde)
+registerWidget({ id: "firewall",  group: "system",   cols: 4, category: "system",  Component: FirewallWidget });
+
+// Row 5 — Kompakte status-widgets samlet
 registerWidget({ id: "weather",   group: "ambient",  cols: 1, category: "ambient", Component: WeatherWidgetMinimal });
 registerWidget({ id: "paseo",     group: "ambient",  cols: 1, category: "code",    Component: PaseoAgentsWidget });
 registerWidget({ id: "jellyfin",  group: "ambient",  cols: 1, category: "media",   Component: JellyfinWidgetMinimal });
