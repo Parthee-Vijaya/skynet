@@ -116,6 +116,17 @@ enum Constants {
         /// while the system reports itself as quiet (screen locked or display
         /// asleep). Push-to-talk + user-opened panels always bypass this.
         static let respectFocusMode = "respectFocusMode"
+
+        // ── Persona service (refereret af PersonaService.swift) ──────────────
+        /// Bool — om Skynet skal anvende sin "tør britisk humor"-persona ved
+        /// LLM-svar. Default false; toggle i Settings → Skynet.
+        static let personaEnabled = "personaEnabled"
+        /// Bool — injicér brugerens vedvarende memory-noter ind i system-prompt
+        /// ved hver LLM-tur. Kræver personaEnabled. Default false.
+        static let memoryInjectionEnabled = "memoryInjectionEnabled"
+        /// String — komma-separeret liste af brugerens "personlige adresser"
+        /// (fx hjem, arbejde) der bruges i kontekst når relevant.
+        static let personaAddress = "personaAddress"
     }
 
     // MARK: - Claude Code defaults
