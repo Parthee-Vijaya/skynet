@@ -7,18 +7,11 @@ struct SettingsMenubarPane: View {
     @State private var enabledStates: [StatItemID: Bool] = [:]
 
     var body: some View {
-        SettingsScrollScaffold {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Menubar status-items")
-                    .font(.title3.weight(.semibold))
-
-                Text("Vælg hvilke Skynet-stats der skal vises i menubaren. Klik på et item i menubaren viser detail-menu med direkte link til /minimal cockpit.")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Divider()
-
+        SettingsPane(
+            title: "Menubar",
+            subtitle: "Vælg hvilke Skynet-stats der skal vises i menubaren. Klik på et item viser detail-menu med direkte link til cockpit."
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(StatItemID.allCases, id: \.self) { id in
                     Toggle(isOn: binding(for: id)) {
                         HStack {
@@ -36,12 +29,13 @@ struct SettingsMenubarPane: View {
                 }
 
                 Divider()
+                    .padding(.vertical, 4)
 
                 Text("Tip: Hvis du vil have endnu flere Skynet-stats senere — fx mailtriage-status eller en af dine egne automations — kan de tilføjes i `packages/hud/Skynet/Menubar/`.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 8)
         }
         .onAppear { refreshState() }
     }
