@@ -127,6 +127,21 @@ enum Constants {
         /// String — komma-separeret liste af brugerens "personlige adresser"
         /// (fx hjem, arbejde) der bruges i kontekst når relevant.
         static let personaAddress = "personaAddress"
+
+        // ── Live voice (refereret af GeminiLiveSession + LiveVoiceService) ───
+        /// String — Gemini Live-voice model-id (default sat i Constants.LiveVoice).
+        static let liveVoiceModel = "liveVoiceModel"
+    }
+
+    // MARK: - Gemini Live Voice
+    /// Konstanter til realtids-voice-session via Gemini Live API.
+    /// Refereret af GeminiLiveSession + LiveVoiceService + SettingsView.
+    enum LiveVoice {
+        /// Default model — "native audio" varianter har lavere latency end
+        /// "preview-tts". Kan overrides via Settings → Stemme → liveVoiceModel.
+        static let defaultModel = "gemini-2.5-flash-preview-native-audio-dialog"
+        /// PCM sample rate i Hz som Gemini Live forventer fra clienten.
+        static let sampleRate = 16_000
     }
 
     // MARK: - Claude Code defaults
