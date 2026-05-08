@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { usePoll } from "@/hooks/usePoll";
 import { MinimalPageLayout } from "@/components/minimal/MinimalPageLayout";
 import { Section, Dot, OkLabel, WarnLabel, BadLabel } from "@/components/minimal/primitives";
@@ -9,6 +9,7 @@ import type { NetConnRow, NetEventRow, NetRuleRow } from "@/lib/firewall/store";
 import type { LuluStatus } from "@/lib/firewall/lulu";
 import type { NetProfileRow } from "@/lib/firewall/profiles";
 import type { ExplanationResult } from "@/lib/firewall/explain";
+import type { InspectResult } from "@/lib/firewall/inspect";
 
 type Tab = "live" | "rules" | "profiles" | "stats" | "events";
 
@@ -132,6 +133,7 @@ function LiveTab() {
   const canEnforce = !!lulu?.cliInstalled && !!lulu?.sudoersOk;
   const [pendingBlock, setPendingBlock] = useState<string | null>(null);
   const [blockError, setBlockError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const blockApp = async (c: ConnectionWithGeo) => {
     setBlockError(null);
@@ -255,14 +257,22 @@ function LiveTab() {
               </tr>
             )}
             {sorted.map((c) => (
+              <Fragment key={c.id}>
               <tr
-                key={c.id}
                 className={
-                  "border-t border-neutral-900 " +
-                  (c.is_new === 1 ? "bg-amber-500/5" : "hover:bg-neutral-900/40")
+                  "border-t border-neutral-900 cursor-pointer " +
+                  (expandedId === c.id ? "bg-sky-500/10" :
+                   c.is_new === 1 ? "bg-amber-500/5" : "hover:bg-neutral-900/40")
                 }
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  setExpandedId(expandedId === c.id ? null : c.id);
+                }}
               >
                 <td className="py-1.5 pr-3 text-neutral-100">
+                  <span className="text-neutral-600 mr-1 inline-block w-3">
+                    {expandedId === c.id ? "▾" : "▸"}
+                  </span>
                   {c.is_new === 1 && <span className="text-amber-400 mr-1">●</span>}
                   {truncate(c.process, 22)}
                 </td>
@@ -288,14 +298,11 @@ function LiveTab() {
                 </td>
                 <td className="py-1.5 pr-3 text-right text-neutral-600">{timeSince(c.ts)}</td>
                 <td className="py-1.5 pr-1 text-right whitespace-nowrap">
-                  {c.raddr && c.state !== "LISTEN" && (
-                    <ExplainButton host={c.rhost ?? c.raddr} app={c.process} />
-                  )}
                   {canEnforce && c.raddr && c.state !== "LISTEN" ? (
                     <button
                       disabled={pendingBlock === c.process}
                       onClick={() => blockApp(c)}
-                      className="text-[10px] text-[#d87373] hover:text-[#e69090] disabled:opacity-50 ml-2"
+                      className="text-[10px] text-[#d87373] hover:text-[#e69090] disabled:opacity-50"
                       title={`Bloker ${c.process} → ${c.rhost ?? c.raddr}`}
                     >
                       {pendingBlock === c.process ? "…" : "✕ block"}
@@ -303,6 +310,14 @@ function LiveTab() {
                   ) : null}
                 </td>
               </tr>
+              {expandedId === c.id && (
+                <tr className="border-t border-sky-900/30 bg-neutral-950">
+                  <td colSpan={9} className="p-0">
+                    <InspectPanel conn={c} canEnforce={canEnforce} onClose={() => setExpandedId(null)} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -347,6 +362,418 @@ function Th({
     >
       <span className={active ? "text-neutral-300" : ""}>{label} {arrow}</span>
     </th>
+  );
+}
+
+// ── InspectPanel — udvidet detalje-visning pr. row ───────────────────────────
+
+function InspectPanel({
+  conn,
+  canEnforce,
+  onClose,
+}: {
+  conn: ConnectionWithGeo;
+  canEnforce: boolean;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<InspectResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [llmRunning, setLlmRunning] = useState(false);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
+
+  const runInspect = async (withLLM = false) => {
+    if (!withLLM) setLoading(true);
+    if (withLLM) setLlmRunning(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/firewall/inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raddr: conn.raddr,
+          rhost: conn.rhost,
+          laddr: conn.laddr,
+          rport: conn.rport,
+          proto: conn.proto,
+          process: conn.process,
+          bundle_id: conn.bundle_id,
+          pid: conn.pid,
+          runLLM: withLLM,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as InspectResult;
+      setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "ukendt fejl");
+    } finally {
+      setLoading(false);
+      setLlmRunning(false);
+    }
+  };
+
+  useEffect(() => {
+    void runInspect(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conn.id]);
+
+  const blockHost = async () => {
+    if (!conn.raddr && !conn.rhost) return;
+    setActionPending("block_host");
+    setActionResult(null);
+    try {
+      const res = await fetch("/api/firewall/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lulu_key: conn.bundle_id ?? conn.process,
+          exec_path: conn.exec_path ?? "*",
+          process: conn.process,
+          action: "block",
+          scope: conn.rport ? "host:port" : "host",
+          remote_host: conn.rhost ?? conn.raddr,
+          remote_port: conn.rport ?? undefined,
+          description: `Skynet inspect-block: ${conn.process} → ${conn.rhost ?? conn.raddr}${conn.rport ? `:${conn.rport}` : ""}`,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      setActionResult(json.ok ? "✓ regel oprettet — LuLu reload'et" : `fejl: ${json.error ?? `HTTP ${res.status}`}`);
+    } catch (e) {
+      setActionResult("fejl: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const killProcess = async (signal: "term" | "kill") => {
+    if (!conn.pid) return;
+    if (!confirm(`Send SIG${signal.toUpperCase()} til ${conn.process} (pid ${conn.pid})? Appen vil afslutte.`)) return;
+    setActionPending(`kill_${signal}`);
+    setActionResult(null);
+    try {
+      const res = await fetch("/api/firewall/kill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pid: conn.pid,
+          process: conn.process,
+          signal,
+          raddr: conn.raddr,
+          rport: conn.rport,
+          reason: `inspect-panel·${data?.risk.band ?? "?"}`,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; hint?: string };
+      setActionResult(
+        json.ok
+          ? `✓ SIG${signal.toUpperCase()} sendt til pid ${conn.pid}`
+          : `fejl: ${json.error ?? `HTTP ${res.status}`}${json.hint ? ` · ${json.hint}` : ""}`
+      );
+    } catch (e) {
+      setActionResult("fejl: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  if (loading) return <div className="p-4 text-[11px] text-neutral-600 font-mono">indlæser inspect...</div>;
+  if (error) return <div className="p-4 text-[11px] text-[#d87373] font-mono">fejl: {error}</div>;
+  if (!data) return null;
+
+  const riskTone =
+    data.risk.band === "high" ? "text-[#d87373] border-[#d87373]/40 bg-[#d87373]/5" :
+    data.risk.band === "medium" ? "text-amber-400 border-amber-500/40 bg-amber-500/5" :
+    "text-[#7dd67d] border-[#7dd67d]/40 bg-[#7dd67d]/5";
+
+  return (
+    <div className="p-4 font-mono text-[11px] space-y-4">
+      <div className="flex items-baseline justify-between">
+        <div className="text-neutral-300">
+          <span className="text-neutral-500">{conn.process}</span>
+          <span className="text-neutral-700 mx-2">·</span>
+          <span>{conn.rhost ?? conn.raddr}</span>
+          {conn.rport && <span className="text-neutral-500">:{conn.rport}</span>}
+        </div>
+        <button onClick={onClose} className="text-neutral-600 hover:text-neutral-300 text-[10px]">[luk]</button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Risk panel */}
+        <div className={"border rounded-sm p-3 " + riskTone}>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[10px] uppercase tracking-wider opacity-60">risiko</span>
+            <span className="text-[18px] tabular-nums">
+              {data.risk.score}<span className="text-[10px] opacity-60">/100</span>
+            </span>
+          </div>
+          <div className="text-[10px] uppercase tracking-wider mb-2 opacity-80">{data.risk.band}</div>
+          <div className="space-y-1">
+            {data.risk.factors.length === 0 ? (
+              <div className="text-[10px] opacity-60">ingen signaler — neutral</div>
+            ) : (
+              data.risk.factors.map((f, i) => (
+                <div key={i} className="text-[10px] flex items-start gap-2">
+                  <span className={"tabular-nums " + (f.weight > 0 ? "text-[#d87373]" : "text-[#7dd67d]")} style={{ minWidth: 28 }}>
+                    {f.weight > 0 ? "+" : ""}{f.weight}
+                  </span>
+                  <span className="opacity-80">{f.reason}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Network/identitet panel */}
+        <div className="border border-neutral-900 rounded-sm p-3">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-2">netværk</div>
+          <div className="space-y-1.5 text-[11px]">
+            <Field label="server">
+              {data.geo?.country ? (
+                <>
+                  {flagEmoji(data.geo.country_code ?? "")} {data.geo.city ?? "—"}, {data.geo.country}
+                </>
+              ) : (
+                <span className="text-neutral-700">— (geo cache opdaterer)</span>
+              )}
+            </Field>
+            <Field label="isp/asn">
+              <span className="text-neutral-300">{data.geo?.isp ?? data.geo?.asn_org ?? "—"}</span>
+              {data.geo?.asn && <span className="text-neutral-700 ml-1">({data.geo.asn})</span>}
+            </Field>
+            <Field label="port">
+              <span>{data.port.number ?? "—"}</span>
+              {data.port.service && <span className="text-neutral-500 ml-2">{data.port.service}</span>}
+              {data.port.secure === false && <span className="text-amber-400 ml-2 text-[10px]">⚠ ukrypteret</span>}
+              {data.port.secure === true && <span className="text-[#7dd67d] ml-2 text-[10px]">✓ krypteret</span>}
+            </Field>
+            <Field label="vpn">
+              {data.vpn.isVpn ? (
+                <span className="text-[#7dd67d]">via {data.vpn.provider}</span>
+              ) : (
+                <span className="text-neutral-700">direkte (ingen VPN)</span>
+              )}
+            </Field>
+            {data.vpn.signals.length > 0 && (
+              <div className="text-[10px] text-neutral-600 pl-[60px]">
+                {data.vpn.signals.map((s, i) => <div key={i}>· {s}</div>)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tracker/identitet panel */}
+        <div className="border border-neutral-900 rounded-sm p-3">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-2">identitet (DDG Tracker Radar)</div>
+          {!data.tracker.isKnown ? (
+            <div className="text-[11px] text-neutral-500">
+              Ukendt host i DDG Tracker Radar.
+              <div className="text-neutral-700 text-[10px] mt-1">
+                — ny host, privat service, eller ikke-tracker server.
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5 text-[11px]">
+              <Field label="ejer">{data.tracker.ownerDisplay ?? data.tracker.owner ?? "—"}</Field>
+              {data.tracker.categories && (
+                <Field label="kategori">
+                  <span className="text-neutral-300">{data.tracker.categories.join(", ")}</span>
+                </Field>
+              )}
+              {typeof data.tracker.prevalence === "number" && (
+                <Field label="prevalence">
+                  <span className="text-neutral-300">{(data.tracker.prevalence * 100).toFixed(1)}%</span>
+                  <span className="text-neutral-700 ml-2 text-[10px]">af det åbne web</span>
+                </Field>
+              )}
+              {typeof data.tracker.fingerprinting === "number" && data.tracker.fingerprinting > 0 && (
+                <Field label="fingerprint">
+                  <span className={data.tracker.fingerprinting >= 2 ? "text-[#d87373]" : "text-amber-400"}>
+                    {data.tracker.fingerprinting}/3
+                  </span>
+                </Field>
+              )}
+              <Field label="ddg-default">
+                <span className={data.tracker.defaultAction === "block" ? "text-[#d87373]" : "text-neutral-400"}>
+                  {data.tracker.defaultAction ?? "ignore"}
+                </span>
+              </Field>
+              <Field label="klasse">
+                {data.tracker.isTracker ? (
+                  <span className="text-[#d87373]">tracker</span>
+                ) : (
+                  <span className="text-neutral-400">{data.tracker.classification}</span>
+                )}
+              </Field>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent traffic + other-procs */}
+      {(data.recent.flow_count_24h > 0 || data.recent.other_processes.length > 0) && (
+        <div className="border border-neutral-900 rounded-sm p-3">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-2">historik · sidste 24h</div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-[11px]">
+            <Stat label="flows" value={data.recent.flow_count_24h.toString()} />
+            <Stat label="bytes" value={data.recent.bytes_24h > 0 ? formatBytes(data.recent.bytes_24h) : "—"} />
+            <Stat label="første set" value={data.recent.first_seen ? timeSince(data.recent.first_seen) + " siden" : "—"} />
+            <Stat label="sidste set" value={data.recent.last_seen ? timeSince(data.recent.last_seen) + " siden" : "—"} />
+          </div>
+          {data.recent.other_processes.length > 0 && (
+            <div className="mt-3 text-[10px] text-neutral-500">
+              <span className="text-neutral-600 uppercase tracking-wider">andre procs til samme host:</span>
+              <div className="mt-1 text-neutral-300">{data.recent.other_processes.join(", ")}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* LLM-explain (lazy) */}
+      <div className="border border-neutral-900 rounded-sm p-3">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-neutral-600">llm-forklaring</span>
+          {!data.llm && (
+            <button
+              onClick={() => void runInspect(true)}
+              disabled={llmRunning}
+              className="text-sky-400 hover:text-sky-300 disabled:opacity-50 text-[10px]"
+            >
+              {llmRunning ? "henter (5-30s)..." : "↻ kør LLM-forklaring"}
+            </button>
+          )}
+          {data.llm?.cached && <span className="text-neutral-700 text-[10px]">(cached)</span>}
+        </div>
+        {data.llm ? (
+          <div className="space-y-1.5">
+            <div className="flex items-baseline gap-3 text-[10px] text-neutral-500">
+              <span>kategori: <span className="text-neutral-300">{data.llm.category}</span></span>
+              <span>·</span>
+              <span>trust: <span className={data.llm.trust_score >= 7 ? "text-[#7dd67d]" : data.llm.trust_score >= 4 ? "text-amber-400" : "text-[#d87373]"}>{data.llm.trust_score}/10</span></span>
+            </div>
+            <div className="text-neutral-200 leading-relaxed">{data.llm.summary}</div>
+            {data.llm.sources && data.llm.sources.length > 0 && (
+              <div className="text-[10px] text-neutral-600 truncate">
+                kilder: {data.llm.sources.slice(0, 3).join(" · ")}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-[10px] text-neutral-700">
+            Klik "kør LLM-forklaring" for kontekstuelt svar — bruger LM Studio + web-search.
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="border border-neutral-900 rounded-sm p-3">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-neutral-600">handlinger</span>
+          {actionResult && (
+            <span className={actionResult.startsWith("✓") ? "text-[#7dd67d] text-[10px]" : "text-[#d87373] text-[10px]"}>
+              {actionResult}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            disabled={!canEnforce || actionPending !== null}
+            tone="danger"
+            onClick={blockHost}
+            label={
+              actionPending === "block_host"
+                ? "blokerer..."
+                : `✕ Bloker ${conn.rhost ?? conn.raddr}${conn.rport ? `:${conn.rport}` : ""}`
+            }
+            hint={!canEnforce ? "kræver lulu-cli + sudoers" : `tilføj LuLu-regel for ${conn.process}`}
+          />
+          <ActionButton
+            disabled={!conn.pid || actionPending !== null}
+            tone="warn"
+            onClick={() => killProcess("term")}
+            label={actionPending === "kill_term" ? "afslutter..." : `⏻ Afslut ${conn.process} (SIGTERM)`}
+            hint="appen får chance for clean shutdown"
+          />
+          <ActionButton
+            disabled={!conn.pid || actionPending !== null}
+            tone="danger"
+            onClick={() => killProcess("kill")}
+            label={actionPending === "kill_kill" ? "afslutter..." : `⏻⏻ Force kill (SIGKILL)`}
+            hint="hård afslutning — brug kun hvis SIGTERM ikke virker"
+          />
+        </div>
+
+        {data.recommendations.length > 0 && (
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">anbefalinger</div>
+            <div className="space-y-1">
+              {data.recommendations.map((r, i) => (
+                <div key={i} className="text-[10px] flex items-start gap-2">
+                  <span className={r.destructive ? "text-amber-400" : "text-[#7dd67d]"} style={{ minWidth: 60 }}>
+                    {r.action}
+                  </span>
+                  <div>
+                    <div className="text-neutral-300">{r.label}</div>
+                    <div className="text-neutral-600">{r.reason}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <span className="text-neutral-600 text-[10px] uppercase tracking-wider" style={{ minWidth: 56 }}>{label}</span>
+      <span className="text-neutral-200 flex-1">{children}</span>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-neutral-600">{label}</div>
+      <div className="text-neutral-200 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  hint,
+  tone,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  tone: "danger" | "warn" | "safe";
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const cls =
+    tone === "danger"
+      ? "border-[#d87373]/40 text-[#d87373] hover:bg-[#d87373]/10"
+      : tone === "warn"
+      ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+      : "border-[#7dd67d]/40 text-[#7dd67d] hover:bg-[#7dd67d]/10";
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      title={hint}
+      className={"px-3 py-1.5 text-[11px] border rounded-sm disabled:opacity-30 disabled:cursor-not-allowed " + cls}
+    >
+      {label}
+    </button>
   );
 }
 
