@@ -24,6 +24,8 @@ function statusTone(status: AppHealth["status"] | undefined): "ok" | "warn" | "b
 
 function statusLabel(app: AppEntry, health: AppHealth | undefined): string {
   if (app.kind === "native-ios") return "iOS";
+  if (app.kind === "native-mac") return "native";
+  if (app.kind === "external") return "ekstern";
   if (app.kind === "daemon" && !app.healthUrl) return "daemon";
   if (!health) return "checker…";
   if (health.status === "ok") return "kører";
@@ -31,9 +33,15 @@ function statusLabel(app: AppEntry, health: AppHealth | undefined): string {
   return "ukendt";
 }
 
+function statusToneFor(app: AppEntry, health: AppHealth | undefined): "ok" | "warn" | "bad" | "dim" {
+  if (app.kind === "external") return "dim";
+  if (app.kind === "native-mac" || app.kind === "native-ios") return "dim";
+  return statusTone(health?.status);
+}
+
 function AppCard({ app, health, hostHint }: { app: AppEntry; health: AppHealth | undefined; hostHint: string }) {
   const url = pickAppUrl(app, hostHint);
-  const tone = statusTone(health?.status);
+  const tone = statusToneFor(app, health);
   const label = statusLabel(app, health);
 
   const open = async () => {
@@ -92,6 +100,9 @@ function AppCard({ app, health, hostHint }: { app: AppEntry; health: AppHealth |
       )}
       {app.kind === "daemon" && (
         <div className="font-mono text-[10px] text-neutral-700 mt-2">baggrundsservice</div>
+      )}
+      {app.kind === "external" && (
+        <div className="font-mono text-[10px] text-neutral-700 mt-2">ekstern · åbner i ny tab ↗</div>
       )}
     </button>
   );

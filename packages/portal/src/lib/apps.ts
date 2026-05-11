@@ -6,7 +6,7 @@
  * `apps.server.ts` og må kun importeres fra server-routes.
  */
 
-export type AppKind = "web" | "native-mac" | "native-ios" | "daemon";
+export type AppKind = "web" | "native-mac" | "native-ios" | "daemon" | "external";
 
 export interface AppEntry {
   id: string;
@@ -122,6 +122,100 @@ export const DEFAULT_APPS: AppEntry[] = [
     localUrl: "http://localhost:3200/",
     tailscaleUrl: `http://${TAILSCALE_IP}:3200/`,
     healthUrl: "http://localhost:3200/api/health",
+  },
+  {
+    id: "heimdall",
+    name: "Heimdall",
+    description: "Daglig cockpit · medie + system",
+    icon: "🛡",
+    kind: "web",
+    localUrl: "http://localhost:3300/",
+    tailscaleUrl: `http://${TAILSCALE_IP}:3300/`,
+    healthUrl: "http://localhost:3300/api/health",
+  },
+
+  // === Tailscale-noder (eksterne maskiner via Tailscale magicDNS) ===
+  {
+    id: "sparkhub",
+    name: "Sparkhub",
+    description: "Tailscale · homeserver",
+    icon: "⚡",
+    kind: "external",
+    localUrl: "https://homeserver.tailefb5b1.ts.net/",
+    tailscaleUrl: "https://homeserver.tailefb5b1.ts.net/",
+  },
+
+  // === Eksterne web-genveje (ingen health-check) ===
+  {
+    id: "tailscale-admin",
+    name: "Tailscale",
+    description: "Admin-konsol · nodes, ACL, MagicDNS",
+    icon: "🔗",
+    kind: "external",
+    localUrl: "https://login.tailscale.com/admin",
+    tailscaleUrl: "https://login.tailscale.com/admin",
+  },
+  {
+    id: "anthropic-console",
+    name: "Anthropic",
+    description: "Claude API · usage + keys",
+    icon: "✦",
+    kind: "external",
+    localUrl: "https://console.anthropic.com/",
+    tailscaleUrl: "https://console.anthropic.com/",
+  },
+  {
+    id: "claude-ai",
+    name: "Claude.ai",
+    description: "Claude chat-interface",
+    icon: "◐",
+    kind: "external",
+    localUrl: "https://claude.ai/",
+    tailscaleUrl: "https://claude.ai/",
+  },
+  {
+    id: "github",
+    name: "GitHub",
+    description: "Parthee-Vijaya · repos + PRs",
+    icon: "⌥",
+    kind: "external",
+    localUrl: "https://github.com/Parthee-Vijaya",
+    tailscaleUrl: "https://github.com/Parthee-Vijaya",
+  },
+  {
+    id: "nzbgeek",
+    name: "NZBgeek",
+    description: "Newsgroup-indexer · API-key i Skynet",
+    icon: "⇣",
+    kind: "external",
+    localUrl: "https://nzbgeek.info/",
+    tailscaleUrl: "https://nzbgeek.info/",
+  },
+
+  // === Native Mac-apps ===
+  {
+    id: "cursor",
+    name: "Cursor",
+    description: "AI-editor · open -a Cursor",
+    icon: "✎",
+    kind: "native-mac",
+    appName: "Cursor",
+  },
+  {
+    id: "docker",
+    name: "Docker",
+    description: "Container runtime",
+    icon: "▣",
+    kind: "native-mac",
+    appName: "Docker",
+  },
+  {
+    id: "tailscale-app",
+    name: "Tailscale.app",
+    description: "Mac menu-bar status",
+    icon: "🔗",
+    kind: "native-mac",
+    appName: "Tailscale",
   },
 ];
 

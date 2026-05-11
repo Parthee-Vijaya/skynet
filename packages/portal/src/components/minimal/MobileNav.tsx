@@ -18,6 +18,7 @@ export interface MobileNavLink {
 
 export const DEFAULT_LINKS: MobileNavLink[] = [
   { href: "/", label: "cockpit", icon: "◉" },
+  { href: "/apps", label: "apps", icon: "▦" },
   { href: "/agents", label: "agents", icon: "◆" },
   { href: "/automations", label: "automations", icon: "◈" },
   { href: "/chat", label: "chat", icon: "◇" },
