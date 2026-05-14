@@ -11,7 +11,7 @@ import type { NetProfileRow } from "@/lib/firewall/profiles";
 import type { ExplanationResult } from "@/lib/firewall/explain";
 import type { InspectResult } from "@/lib/firewall/inspect";
 
-type Tab = "live" | "rules" | "profiles" | "stats" | "apps" | "events";
+type Tab = "live" | "rules" | "profiles" | "stats" | "apps" | "alerts" | "events";
 
 interface ConnectionWithGeo extends NetConnRow {
   country: string | null;
@@ -38,6 +38,7 @@ export default function FirewallPage() {
           {tab === "profiles" && <ProfilesTab />}
           {tab === "stats" && <StatsTab />}
           {tab === "apps" && <AppsTab />}
+          {tab === "alerts" && <AlertsTab />}
           {tab === "events" && <EventsTab />}
         </div>
       </main>
@@ -98,6 +99,7 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
     { id: "profiles", label: "profiler" },
     { id: "stats", label: "stats" },
     { id: "apps", label: "apps" },
+    { id: "alerts", label: "alerts" },
     { id: "events", label: "events" },
   ];
   return (
@@ -389,6 +391,9 @@ function InspectPanel({
     if (!withLLM) setLoading(true);
     if (withLLM) setLlmRunning(true);
     setError(null);
+    // LLM kan tage 30s; ren inspect skal være lynhurtig.
+    // Timeout undgår at UI hænger evigt hvis LM Studio er nede.
+    const timeoutMs = withLLM ? 45_000 : 8_000;
     try {
       const res = await fetch("/api/firewall/inspect", {
         method: "POST",
@@ -404,12 +409,22 @@ function InspectPanel({
           pid: conn.pid,
           runLLM: withLLM,
         }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as InspectResult;
       setData(json);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ukendt fejl");
+      const msg = e instanceof Error ? e.message : "ukendt fejl";
+      // AbortSignal.timeout fejler med name='TimeoutError'
+      const isTimeout = (e instanceof Error && (e.name === "TimeoutError" || msg.includes("timeout") || msg.includes("aborted")));
+      setError(
+        isTimeout
+          ? withLLM
+            ? "LLM-forklaring timeout (45s) — er LM Studio kørende?"
+            : "Inspect timeout (8s) — portal busy"
+          : msg
+      );
     } finally {
       setLoading(false);
       setLlmRunning(false);
@@ -1745,9 +1760,11 @@ function AppsTab() {
                           bundle: <span className="text-neutral-500">{app.bundle_id}</span>
                         </div>
                       )}
-                      {app.top_trackers.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">top trackers kontaktet</div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">top trackers kontaktet</div>
+                        {app.top_trackers.length === 0 ? (
+                          <div className="text-[10px] text-[#7dd67d]">✓ Ingen kendte trackers (DDG Tracker Radar)</div>
+                        ) : (
                           <div className="space-y-0.5">
                             {app.top_trackers.map((t) => (
                               <div key={t.host} className="flex items-baseline gap-2">
@@ -1757,11 +1774,13 @@ function AppsTab() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-                      {app.blocklist_examples.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">på blocklist</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-neutral-600 mb-1">på blocklist</div>
+                        {app.blocklist_examples.length === 0 ? (
+                          <div className="text-[10px] text-[#7dd67d]">✓ Ingen hosts matchede åbne blocklists</div>
+                        ) : (
                           <div className="space-y-0.5">
                             {app.blocklist_examples.map((b) => (
                               <div key={b.host} className="flex items-baseline gap-2">
@@ -1770,8 +1789,8 @@ function AppsTab() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1795,6 +1814,142 @@ function GradeBadge({ grade }: { grade: "A" | "B" | "C" | "D" | "F" }) {
     <span className={"inline-block border px-1.5 py-0.5 rounded-sm text-[10px] font-bold tabular-nums w-5 text-center " + tone}>
       {grade}
     </span>
+  );
+}
+
+// ── Alerts tab ───────────────────────────────────────────────────────────────
+
+interface AlertsStatus {
+  running: boolean;
+  enabled: boolean;
+  threshold: number;
+  lastTickAt: number | null;
+  lastNotifiedAt: number | null;
+  alertsSent: number;
+  dedupeSize: number;
+}
+
+function AlertsTab() {
+  const { data, error } = usePoll<AlertsStatus>("/api/firewall/alerts", 5000);
+  const [pending, setPending] = useState(false);
+  const [draftThreshold, setDraftThreshold] = useState<number | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const threshold = draftThreshold ?? data?.threshold ?? 70;
+  const enabled = data?.enabled ?? false;
+
+  const patch = async (body: Partial<{ enabled: boolean; threshold: number }>) => {
+    setPending(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/firewall/alerts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      setMsg(json.ok ? "✓ gemt" : `fejl: ${json.error ?? `HTTP ${res.status}`}`);
+      setDraftThreshold(null);
+    } catch (e) {
+      setMsg("fejl: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setPending(false);
+      setTimeout(() => setMsg(null), 3000);
+    }
+  };
+
+  return (
+    <Section
+      title="firewall-alerts"
+      right={
+        <span>
+          {data?.running ? (
+            <span className="text-[#7dd67d]"><Dot tone="ok" />job kører</span>
+          ) : (
+            <span className="text-[#d87373]"><Dot tone="bad" />job stoppet</span>
+          )}
+        </span>
+      }
+    >
+      {error && <div className="text-[11px] text-[#d87373] mb-2">fejl: {error.message}</div>}
+
+      <div className="space-y-4 font-mono text-[11px]">
+        <div className="border border-neutral-900 rounded-sm p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-neutral-200">push-notifikationer ved high-risk</div>
+              <div className="text-[10px] text-neutral-500 mt-1">
+                Sender push (ntfy/Telegram/macOS) når en ny forbindelse har risk-score ≥ threshold.
+                Dedupe pr. (proces, host) i 1 time så vi ikke spammer.
+              </div>
+            </div>
+            <button
+              disabled={pending}
+              onClick={() => patch({ enabled: !enabled })}
+              className={
+                "px-4 py-1.5 text-[11px] rounded-sm border " +
+                (enabled
+                  ? "border-[#7dd67d]/40 text-[#7dd67d] hover:bg-[#7dd67d]/10"
+                  : "border-neutral-700 text-neutral-400 hover:bg-neutral-900")
+              }
+            >
+              {pending ? "..." : enabled ? "✓ aktiv" : "○ inaktiv"}
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-neutral-900 rounded-sm p-3">
+          <div className="text-neutral-200 mb-1">threshold</div>
+          <div className="text-[10px] text-neutral-500 mb-3">
+            Risk-score 0-100. Højere threshold = færre alerts (kun de mest mistænkelige).
+            Default 70 = "kendt tracker fra high-risk land" eller lignende.
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={threshold}
+              onChange={(e) => setDraftThreshold(Number(e.target.value))}
+              className="flex-1"
+            />
+            <span className="text-neutral-200 tabular-nums w-12 text-right">{threshold}</span>
+            <button
+              disabled={pending || draftThreshold === null}
+              onClick={() => patch({ threshold })}
+              className="px-3 py-1.5 text-[11px] border border-sky-500/40 text-sky-400 hover:bg-sky-500/10 rounded-sm disabled:opacity-30"
+            >
+              gem
+            </button>
+          </div>
+          <div className="mt-2 text-[10px] text-neutral-600 flex gap-4">
+            <span>30 = medium</span>
+            <span>60 = high</span>
+            <span>80 = kun de værste</span>
+          </div>
+        </div>
+
+        <div className="border border-neutral-900 rounded-sm p-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Stat label="sendt i alt" value={String(data?.alertsSent ?? 0)} />
+          <Stat label="senest tick" value={data?.lastTickAt ? timeSince(data.lastTickAt) + " siden" : "—"} />
+          <Stat label="senest alert" value={data?.lastNotifiedAt ? timeSince(data.lastNotifiedAt) + " siden" : "—"} />
+          <Stat label="dedupe-cache" value={`${data?.dedupeSize ?? 0} entries`} />
+        </div>
+
+        {msg && (
+          <div className={"text-[11px] " + (msg.startsWith("✓") ? "text-[#7dd67d]" : "text-[#d87373]")}>
+            {msg}
+          </div>
+        )}
+
+        <div className="text-[10px] text-neutral-600 leading-relaxed border border-neutral-900 rounded-sm p-3">
+          <div className="text-neutral-500 uppercase tracking-wider mb-1">sådan tester du:</div>
+          1. Tænd alerts ovenfor + sæt threshold til 30 midlertidigt<br />
+          2. Åbn en website der bruger trackers (fx en nyhedssite) — du burde få push inden for ~1 minut<br />
+          3. Push'en har en "Bloker host"-knap der kalder /api/firewall/rules direkte (kræver public URL)
+        </div>
+      </div>
+    </Section>
   );
 }
 
