@@ -1,0 +1,23 @@
+{
+  "name": "@skynet/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP stdio-bridge der eksponerer Skynet portal's 33+ tools til Claude Desktop, Cursor, ChatGPT-MCP osv.",
+  "type": "module",
+  "bin": {
+    "skynet-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
