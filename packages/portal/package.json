@@ -9,14 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.53",
-    "@ai-sdk/react": "^3.0.170",
     "@langchain/core": "^1.1.42",
     "@langchain/openai": "^1.4.5",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node-cron": "^3.0.11",
     "@types/ws": "^8.18.1",
-    "ai": "^6.0.168",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.6.2",
     "cron-parser": "^5.5.0",
