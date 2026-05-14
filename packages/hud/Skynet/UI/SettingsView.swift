@@ -3,7 +3,7 @@ import SwiftUI
 /// Sidebar items for the Settings window. Exposed so `AppDelegate` can deep-link
 /// into a specific pane via menu-bar items.
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
-    case apiKey, hud, modes, hotkeys, location, voice, claude, agent, mcp, history, usage, about
+    case apiKey, hud, modes, hotkeys, location, voice, skynet, claude, agent, mcp, history, usage, about
 
     var id: Self { self }
 

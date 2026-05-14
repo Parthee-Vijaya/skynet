@@ -1,7 +1,8 @@
 "use client";
 import { usePoll } from "@/hooks/usePoll";
 import type { JellyfinData } from "@/lib/types";
-import { Section } from "../primitives";
+import { Section, EmptyStateCard } from "../primitives";
+import { Film, Tv, Clapperboard, Pause, Server } from "lucide-react";
 
 /**
  * Jellyfin "nu afspilles" widget til det minimale cockpit.
@@ -26,16 +27,21 @@ export function JellyfinWidgetMinimal() {
       {!data ? (
         <div className="text-neutral-700 font-mono text-[12px]">indlæser…</div>
       ) : !data.online ? (
-        <div className="font-mono text-[11px] text-neutral-600">
-          Jellyfin Media Server ikke tilgængelig · sæt <code className="text-neutral-500">jellyfin_url</code> + <code className="text-neutral-500">jellyfin_api_key</code> i settings
-        </div>
+        <EmptyStateCard
+          icon={Server}
+          category="media"
+          title="Jellyfin ikke tilgængelig"
+          description="Start Jellyfin (default :8096), eller sæt jellyfin_url + jellyfin_api_key i settings."
+          ctaLabel="åbn settings"
+          ctaHref="/settings"
+        />
       ) : data.sessions.length === 0 ? (
         <div className="font-mono">
           <div className="text-neutral-600 text-[12px] mb-2">intet afspilles lige nu</div>
           <div className="flex gap-4 text-[11px] text-neutral-600">
-            <span>🎬 {data.library.movies} film</span>
-            <span>📺 {data.library.shows} serier</span>
-            <span>🎞 {data.library.episodes} episoder</span>
+            <span className="flex items-center gap-1"><Film size={12} strokeWidth={1.5} aria-hidden /> {data.library.movies} film</span>
+            <span className="flex items-center gap-1"><Tv size={12} strokeWidth={1.5} aria-hidden /> {data.library.shows} serier</span>
+            <span className="flex items-center gap-1"><Clapperboard size={12} strokeWidth={1.5} aria-hidden /> {data.library.episodes} episoder</span>
           </div>
         </div>
       ) : (
@@ -50,8 +56,12 @@ export function JellyfinWidgetMinimal() {
                 <span className="text-[10px] text-neutral-500 truncate flex-1" data-sensitive>
                   {s.user} · {s.player}
                 </span>
-                <span className="text-[10px] text-neutral-600 shrink-0 tabular-nums">
-                  {s.paused ? "⏸ pauset" : `${s.remainingMinutes} min tilbage`}
+                <span className="text-[10px] text-neutral-600 shrink-0 tabular-nums flex items-center gap-1">
+                  {s.paused ? (
+                    <><Pause size={10} strokeWidth={2} aria-hidden /> pauset</>
+                  ) : (
+                    `${s.remainingMinutes} min tilbage`
+                  )}
                 </span>
               </div>
               {/* Progress bar */}
@@ -74,9 +84,9 @@ export function JellyfinWidgetMinimal() {
             </div>
           )}
           <div className="flex gap-4 text-[10px] text-neutral-600 pt-1 border-t border-dashed border-neutral-900">
-            <span>🎬 {data.library.movies}</span>
-            <span>📺 {data.library.shows}</span>
-            <span>🎞 {data.library.episodes}</span>
+            <span className="flex items-center gap-1"><Film size={11} strokeWidth={1.5} aria-hidden /> {data.library.movies}</span>
+            <span className="flex items-center gap-1"><Tv size={11} strokeWidth={1.5} aria-hidden /> {data.library.shows}</span>
+            <span className="flex items-center gap-1"><Clapperboard size={11} strokeWidth={1.5} aria-hidden /> {data.library.episodes}</span>
           </div>
         </div>
       )}

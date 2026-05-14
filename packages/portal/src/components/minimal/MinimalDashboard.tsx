@@ -4,15 +4,16 @@ import { getWidgets } from "./widgets/index";
 import { Pulse, Sep } from "./primitives";
 import { MobileNav } from "./MobileNav";
 
-const SPAN: Record<number, string> = {
-  3: "col-span-12 md:col-span-6 lg:col-span-3",
-  4: "col-span-12 md:col-span-6 lg:col-span-4",
-  5: "col-span-12 lg:col-span-5",
-  6: "col-span-12 lg:col-span-6",
-  7: "col-span-12 lg:col-span-7",
-  8: "col-span-12 lg:col-span-8",
-  9: "col-span-12 lg:col-span-9",
-  12: "col-span-12",
+// Instrument-panel cockpit: ingen kasser, ingen rounded corners, ingen
+// baggrunds-tints. Hver widget er en "sektion" med tynd top-stripe i
+// kategori-farven (1-2px) — så øjet kan scanne grupperinger uden at hver
+// widget er isoleret i sin egen silo. Ingen indre scroll: content vokser
+// organisk, brugeren scroller kun siden selv.
+const COL_CLASS: Record<number, string> = {
+  1: "col-span-1 sm:col-span-1 lg:col-span-1",
+  2: "col-span-1 sm:col-span-2 lg:col-span-2",
+  3: "col-span-1 sm:col-span-2 lg:col-span-3",
+  4: "col-span-1 sm:col-span-2 lg:col-span-4",
 };
 
 export function MinimalDashboard() {
@@ -36,10 +37,9 @@ export function MinimalDashboard() {
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      {/* Top nav / status bar — MobileNav håndterer desktop + mobil */}
       <MobileNav
         active="cockpit"
-        subtitle="cockpit · minimal"
+        subtitle="cockpit"
         rightSlot={
           <div className="flex items-center text-neutral-500">
             <Pulse />
@@ -49,31 +49,43 @@ export function MinimalDashboard() {
         }
       />
 
-      {/* Main grid — responsive gaps + padding (tættere top på mobil) */}
+      {/* Adaptiv 4-col grid. Widget-spec'en (cols 1-4) bestemmer bredden:
+          Hero=4, Code=2, System=1, Media=2 osv. Auto-rows: ingen min/max,
+          så hver widget vokser til sit naturlige indhold uden indre scroll. */}
       <main
-        className="mx-auto grid gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-6 lg:gap-x-8 lg:gap-y-7 px-4 pt-3 pb-10 sm:px-6 sm:py-6 lg:px-6 lg:py-7"
-        style={{
-          maxWidth: 1400,
-          gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-        }}
+        className="mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-7 items-start grid-flow-row-dense px-3 pt-3 pb-10 sm:px-5 sm:py-5 lg:px-6 lg:py-6"
+        style={{ maxWidth: 1400 }}
       >
-        {widgets.map((w) => (
-          <div
-            key={w.id}
-            className={SPAN[w.colSpan] ?? "col-span-12"}
-            style={w.rowSpan && w.rowSpan > 1 ? { gridRow: `span ${w.rowSpan}` } : undefined}
-          >
-            <w.Component />
-          </div>
-        ))}
+        {widgets.map((w) => {
+          const cat = w.category ?? "system";
+          const isHero = cat === "hero" || w.id === "hero";
+          // Instrument-panel: tynd top-stripe i kategori-farve markerer
+          // gruppering. Ingen border, ingen rounded, ingen bg-tint, ingen
+          // hover-shadow. Hero udelader stripe (han er i forvejen sin egen
+          // identitet med globe + clock).
+          const stripeColor = `var(--cat-${cat})`;
+          return (
+            <div
+              key={w.id}
+              className={`${COL_CLASS[w.cols] ?? COL_CLASS[1]} ${isHero ? "" : "pt-3"}`}
+              style={{
+                ...(isHero ? {} : { borderTop: `1px solid ${stripeColor}`, opacity: 1 }),
+                ...(w.rows && w.rows > 1 ? { gridRow: `span ${w.rows}` } : {}),
+              }}
+              data-widget-cat={cat}
+            >
+              <w.Component />
+            </div>
+          );
+        })}
 
         <footer
-          className="col-span-12 mt-5 pt-4 flex justify-between text-[11px] flex-wrap gap-2"
+          className="col-span-1 sm:col-span-2 lg:col-span-4 mt-4 pt-4 flex justify-between text-[11px] flex-wrap gap-2"
           style={{ borderTop: "1px solid #1c1c1c", color: "#6b6b6b" }}
         >
           <span>skynet · mac server · dashboard · mobile pwa · ntfy</span>
           <span>
-            v0.4.0<Sep />running 24/7 via launchd
+            v0.6.0 · cockpit<Sep />running 24/7 via launchd
             <Sep />add widgets in{" "}
             <code className="text-neutral-400">components/minimal/widgets/</code>
           </span>

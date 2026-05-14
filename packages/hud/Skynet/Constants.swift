@@ -116,6 +116,51 @@ enum Constants {
         /// while the system reports itself as quiet (screen locked or display
         /// asleep). Push-to-talk + user-opened panels always bypass this.
         static let respectFocusMode = "respectFocusMode"
+
+        // ── Persona service (refereret af PersonaService.swift) ──────────────
+        /// Bool — om Skynet skal anvende sin "tør britisk humor"-persona ved
+        /// LLM-svar. Default false; toggle i Settings → Skynet.
+        static let personaEnabled = "personaEnabled"
+        /// Bool — injicér brugerens vedvarende memory-noter ind i system-prompt
+        /// ved hver LLM-tur. Kræver personaEnabled. Default false.
+        static let memoryInjectionEnabled = "memoryInjectionEnabled"
+        /// String — komma-separeret liste af brugerens "personlige adresser"
+        /// (fx hjem, arbejde) der bruges i kontekst når relevant.
+        static let personaAddress = "personaAddress"
+
+        // ── Live voice (refereret af GeminiLiveSession + LiveVoiceService) ───
+        /// String — Gemini Live-voice model-id (default sat i Constants.LiveVoice).
+        static let liveVoiceModel = "liveVoiceModel"
+        /// Bool — om realtids voice-mode er slået til (push-to-talk + LLM stream).
+        static let liveVoiceEnabled = "liveVoiceEnabled"
+
+        // ── Morning briefing (refereret af MorningBriefingService) ──────────
+        /// Bool — kører Skynet automatisk en kort morgenbriefing kl. `morningBriefingTime`.
+        static let morningBriefingEnabled = "morningBriefingEnabled"
+        /// String — tidspunkt på formen "HH:mm" (24h, lokal tid). Default "07:30".
+        static let morningBriefingTime = "morningBriefingTime"
+        /// String — ISO-dato (YYYY-MM-DD) for sidste briefing-kørsel. Bruges
+        /// til at sikre kun én briefing pr. dag.
+        static let morningBriefingLastRun = "morningBriefingLastRun"
+
+        // ── Wake word + VAD (refereret af AppDelegate + WakeWordDetector) ───
+        /// String — `WakeWordAction.rawValue` der bestemmer hvad der sker når
+        /// wake-word fyrer (qna / push-to-talk / live-voice / …). Default: "qna".
+        static let wakeWordAction = "wakeWordAction"
+        /// Double — RMS-floor (lineær 0…1) for SimpleVAD: under denne værdi
+        /// betragtes audio-buffer som stilhed. Default 0.012.
+        static let vadSilenceThreshold = "vadSilenceThreshold"
+    }
+
+    // MARK: - Gemini Live Voice
+    /// Konstanter til realtids-voice-session via Gemini Live API.
+    /// Refereret af GeminiLiveSession + LiveVoiceService + SettingsView.
+    enum LiveVoice {
+        /// Default model — "native audio" varianter har lavere latency end
+        /// "preview-tts". Kan overrides via Settings → Stemme → liveVoiceModel.
+        static let defaultModel = "gemini-2.5-flash-preview-native-audio-dialog"
+        /// PCM sample rate i Hz som Gemini Live forventer fra clienten.
+        static let sampleRate = 16_000
     }
 
     // MARK: - Claude Code defaults

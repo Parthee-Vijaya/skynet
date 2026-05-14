@@ -1,10 +1,97 @@
 "use client";
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import type { WidgetCategory } from "./widget-registry";
 
 // ──────────────────────────────────────────────────────────────────────────
-// Starquake-minimal primitives: monospace, no borders, grey/off-white palette
+// Bento-card primitives — semantic-category accents, soft shadow, hover-scale
+//
+// Card erstatter Section som vores primære widget-wrapper. Den støtter:
+//   - category-prop → bestemmer accent-farve via --cat-* CSS-vars
+//   - icon-prop → Lucide icon erstatter emoji
+//   - subtil 3 % category-tint på baggrund + 20 % border
+//   - hover: scale 1.01 + shadow-expansion (250ms)
+//
+// Section bevares for legacy-widgets der ikke er migreret endnu.
 // ──────────────────────────────────────────────────────────────────────────
 
+export function Card({
+  title,
+  right,
+  children,
+  className = "",
+  category,
+  icon: Icon,
+  href,
+}: {
+  title: string;
+  right?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** Semantic kategori — bestemmer accent + tint + ikon-farve */
+  category?: WidgetCategory;
+  /** Lucide-ikon der vises før titlen (16px) */
+  icon?: LucideIcon;
+  /** Hvis sat, hele card'et bliver en klikbar wrapper */
+  href?: string;
+}) {
+  const cat = category ?? "system";
+  const tintBg = `rgba(var(--cat-${cat}-rgb), 0.025)`;
+  const tintBorder = `rgba(var(--cat-${cat}-rgb), 0.18)`;
+  const tintBorderHover = `rgba(var(--cat-${cat}-rgb), 0.40)`;
+  const accent = `var(--cat-${cat})`;
+
+  const inner = (
+    <>
+      <h2 className="font-mono text-[11px] text-neutral-500 mb-2 lowercase tracking-wide flex justify-between items-baseline gap-2">
+        <span className="flex items-center gap-1.5 min-w-0">
+          {Icon ? (
+            <Icon
+              size={13}
+              strokeWidth={1.75}
+              style={{ color: accent }}
+              className="shrink-0"
+              aria-hidden
+            />
+          ) : (
+            <span className="mr-0.5" style={{ color: accent }}>#</span>
+          )}
+          <span className="truncate">{title}</span>
+        </span>
+        {right ? <span className="text-neutral-700 font-normal text-right truncate shrink-0">{right}</span> : null}
+      </h2>
+      {children}
+    </>
+  );
+
+  const base =
+    "group relative h-full rounded-2xl border p-3 sm:p-4 transition-all duration-250";
+  const hover =
+    "hover:border-[color:var(--card-hover-border)] hover:shadow-[0_8px_28px_rgba(0,0,0,0.32)]";
+  const style = {
+    backgroundColor: tintBg,
+    borderColor: tintBorder,
+    "--card-hover-border": tintBorderHover,
+  } as React.CSSProperties;
+
+  if (href) {
+    return (
+      <a href={href} className={`${base} ${hover} block ${className}`} style={style} data-widget-cat={cat}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <section className={`${base} ${hover} ${className}`} style={style} data-widget-cat={cat}>
+      {inner}
+    </section>
+  );
+}
+
+// Section — title-block der nu sidder INDE i en Card-wrapper (bento-grid).
+// Wrapper'en (i MinimalDashboard.tsx) håndterer baggrund, border og rounding,
+// så Section behøver kun rendere title + children. Den dashed mobile-border
+// fra v1 er fjernet — bento-cards har deres egen visuelle adskillelse.
 export function Section({
   title,
   right,
@@ -16,21 +103,67 @@ export function Section({
   children: ReactNode;
   className?: string;
 }) {
-  // Mobile: dashed bottom-border + lidt padding så sektioner er tydeligt
-  // adskilte i stack-layout. Desktop: ingen border — grid-gap gør jobbet.
   return (
-    <section
-      className={`border-b border-dashed border-neutral-900 pb-4 mb-1 lg:border-b-0 lg:pb-0 lg:mb-0 ${className}`}
-    >
-      <h2 className="font-mono text-[11px] sm:text-[11px] text-neutral-500 mb-2 lowercase tracking-wide flex justify-between items-baseline gap-2">
-        <span>
-          <span className="mr-1">#</span>
-          {title}
+    <section className={`h-full flex flex-col ${className}`}>
+      <h2 className="font-mono text-[11px] sm:text-[11px] mb-2 lowercase tracking-wide flex justify-between items-baseline gap-2">
+        <span className="flex items-center gap-1 min-w-0 text-neutral-400">
+          <span className="opacity-60">#</span>
+          <span className="truncate">{title}</span>
         </span>
-        {right ? <span className="text-neutral-700 font-normal text-right truncate">{right}</span> : null}
+        {right ? <span className="text-neutral-600 font-normal text-right truncate shrink-0">{right}</span> : null}
       </h2>
-      {children}
+      <div className="flex-1 min-w-0">{children}</div>
     </section>
+  );
+}
+
+/**
+ * EmptyStateCard — vises i widgets der mangler konfiguration. I stedet for
+ * en hvisken-tekst i bunden får brugeren et CTA-lignende kort i samme
+ * dimensioner som data-state, så layoutet ikke hopper når configurations
+ * lander.
+ */
+export function EmptyStateCard({
+  icon: Icon,
+  title,
+  description,
+  ctaLabel,
+  ctaHref,
+  category,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  description: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  category?: WidgetCategory;
+}) {
+  const cat = category ?? "system";
+  const accent = `var(--cat-${cat})`;
+  return (
+    <div className="flex flex-col items-start justify-center h-full font-mono space-y-2 py-2">
+      {Icon && (
+        <Icon
+          size={18}
+          strokeWidth={1.5}
+          style={{ color: accent }}
+          aria-hidden
+        />
+      )}
+      <div className="text-[12px] text-neutral-300">{title}</div>
+      <div className="text-[10.5px] text-neutral-600 leading-relaxed">
+        {description}
+      </div>
+      {ctaLabel && ctaHref && (
+        <a
+          href={ctaHref}
+          className="text-[10px] uppercase tracking-[0.15em] mt-1 hover:underline transition-colors"
+          style={{ color: accent }}
+        >
+          → {ctaLabel}
+        </a>
+      )}
+    </div>
   );
 }
 

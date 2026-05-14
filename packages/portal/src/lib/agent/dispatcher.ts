@@ -651,6 +651,130 @@ async function execute(
       };
     }
 
+    // ── Firewall / Network Monitor ───────────────────────────────────────
+    case "list_active_connections": {
+      const { listConnections, getGeoMany } = await import("@/lib/firewall/store");
+      const sinceParam = typeof args.since === "string" ? args.since : "now-1m";
+      const sinceMs = parseFirewallSince(sinceParam);
+      const proc = typeof args.process === "string" ? args.process : undefined;
+      const limit = typeof args.limit === "number" ? Math.round(args.limit) : 30;
+      const country = typeof args.country === "string" ? args.country.toUpperCase() : undefined;
+      const rows = listConnections({ sinceMs, process: proc, limit: Math.min(limit, 100), dedup: true });
+      const ips = Array.from(new Set(rows.map((r) => r.raddr).filter((x): x is string => !!x)));
+      const geo = getGeoMany(ips);
+      let conns = rows.map((r) => {
+        const g = r.raddr ? geo.get(r.raddr) : undefined;
+        return {
+          process: r.process,
+          host: r.rhost ?? r.raddr,
+          port: r.rport,
+          proto: r.proto,
+          country: g?.country_code ?? null,
+          isp: g?.isp ?? null,
+          state: r.state,
+          bytes: r.bytes_in + r.bytes_out,
+        };
+      });
+      if (country) conns = conns.filter((c) => c.country === country);
+      return { count: conns.length, connections: conns };
+    }
+    case "explain_connection": {
+      const { explainConnection } = await import("@/lib/firewall/explain");
+      const host = String(args.host ?? "").trim();
+      const app = typeof args.app === "string" ? args.app : null;
+      if (!host) throw new Error("host er påkrævet");
+      return await explainConnection(host, app);
+    }
+    case "block_app":
+    case "allow_app": {
+      const { addRule, reloadLulu, detectLulu } = await import("@/lib/firewall/lulu");
+      const { insertRule } = await import("@/lib/firewall/store");
+      const status = await detectLulu();
+      if (!status.cliInstalled) throw new Error("lulu-cli ikke installeret — kan ikke håndhæve regel");
+      if (!status.sudoersOk) throw new Error("Passwordless sudo for lulu-cli mangler — kør 'sudo scripts/install-lulu-sudoers.sh'");
+      const bundleId = String(args.bundle_id ?? "").trim();
+      const scope = String(args.scope ?? "all") as "all" | "host" | "host:port";
+      const action = name === "block_app" ? "block" : "allow";
+      if (!bundleId) throw new Error("bundle_id er påkrævet");
+      const remoteHost = typeof args.remote_host === "string" ? args.remote_host : undefined;
+      const remotePort = typeof args.remote_port === "number" ? args.remote_port : undefined;
+      if (scope !== "all" && !remoteHost) throw new Error("remote_host er påkrævet når scope ikke er 'all'");
+      const execPath = typeof args.exec_path === "string" ? args.exec_path : "*";
+      const process = typeof args.process === "string" ? args.process : null;
+
+      await addRule({
+        key: bundleId,
+        path: execPath,
+        action,
+        addr: scope === "all" ? "*" : remoteHost,
+        port: scope === "host:port" && remotePort ? String(remotePort) : "*",
+      });
+      await reloadLulu();
+      const id = insertRule({
+        lulu_key: bundleId,
+        process,
+        exec_path: execPath === "*" ? null : execPath,
+        action,
+        scope,
+        remote_host: remoteHost ?? null,
+        remote_port: remotePort ?? null,
+        source: "lulu",
+        description: `Agent ${action}: ${process ?? bundleId} → ${remoteHost ?? "*"}`,
+      });
+      return { ok: true, ruleId: id, action, bundleId, scope, remoteHost: remoteHost ?? null, remotePort: remotePort ?? null };
+    }
+    case "list_network_profiles": {
+      const { listProfiles, getActiveProfile } = await import("@/lib/firewall/profiles");
+      const profiles = listProfiles();
+      const active = getActiveProfile();
+      return {
+        profiles: profiles.map((p) => ({
+          id: p.id,
+          name: p.name,
+          ssid_pattern: p.ssid_pattern,
+          trust_level: p.trust_level,
+          is_active: p.is_active === 1,
+        })),
+        activeId: active?.id ?? null,
+      };
+    }
+    case "current_network_profile": {
+      const { getActiveProfile, currentSsid } = await import("@/lib/firewall/profiles");
+      const profile = getActiveProfile();
+      const ssid = await currentSsid();
+      if (!profile) {
+        return { active: false, ssid, message: "Ingen profil aktiv. SSID detected: " + (ssid ?? "ingen Wi-Fi") };
+      }
+      return {
+        active: true,
+        ssid,
+        id: profile.id,
+        name: profile.name,
+        trust_level: profile.trust_level,
+        description: profile.description,
+        summary: profile.llm_summary,
+        active_since: profile.updated_at,
+      };
+    }
+    case "switch_network_profile": {
+      const { activateProfile } = await import("@/lib/firewall/profiles");
+      const id = typeof args.id === "number" ? args.id : NaN;
+      if (!Number.isFinite(id)) throw new Error("id er påkrævet (number)");
+      const result = await activateProfile(id, { reason: "agent_tool" });
+      return result;
+    }
+    case "suggest_profile_for_network": {
+      const { suggestProfile } = await import("@/lib/firewall/profiles");
+      const ssid = String(args.ssid ?? "").trim();
+      if (!ssid) throw new Error("ssid er påkrævet");
+      return await suggestProfile(ssid);
+    }
+    case "suspicious_traffic_today": {
+      const { suspiciousTraffic } = await import("@/lib/firewall/suspicious");
+      const hours = typeof args.hours === "number" ? Math.round(args.hours) : 24;
+      return await suspiciousTraffic(Math.min(Math.max(hours, 1), 168));
+    }
+
     // ── News (RSS) ────────────────────────────────────────────────────────
     case "fetch_news": {
       const feedUrl = String(args.url ?? "").trim();
@@ -815,6 +939,21 @@ async function execute(
     default:
       throw new Error(`ukendt tool: ${name}`);
   }
+}
+
+/** Parse 'now-5min' / 'now-1h' / ISO / ms-epoch — bruges af list_active_connections-tool. */
+function parseFirewallSince(s: string): number {
+  const rel = s.match(/^now-(\d+)(min|m|h|d)$/i);
+  if (rel) {
+    const n = Number(rel[1]);
+    const u = rel[2].toLowerCase();
+    if (u === "d") return Date.now() - n * 86_400_000;
+    if (u === "h") return Date.now() - n * 3_600_000;
+    return Date.now() - n * 60_000;
+  }
+  if (/^\d+$/.test(s)) return Number(s);
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? Date.now() - 60_000 : t;
 }
 
 /**

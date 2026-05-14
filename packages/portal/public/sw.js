@@ -5,12 +5,17 @@
 //    so iOS home-screen widget/PWA shows something instantly, then updates
 //  - Everything else: network-first with offline fallback to cached shell
 
-const CACHE_VERSION = "v1";
+// Bump CACHE_VERSION ved hvert build der ændrer JS-bundles — invaliderer
+// gammel HTML/asset-cache så brugeren får friske bundle-paths efter deploy.
+// Pre-caching af /minimal-HTML droppet: HTML refererer til hashede
+// _next/static-paths der ændres ved rebuild, så cached HTML peger på chunks
+// der ikke længere findes → siden render'er "død" indtil hard refresh.
+// Network-first håndterer HTML uden cache.
+const CACHE_VERSION = "v2-bento";
 const STATIC_CACHE = `skynet-static-${CACHE_VERSION}`;
 const API_CACHE = `skynet-api-${CACHE_VERSION}`;
 
 const STATIC_PRECACHE = [
-  "/minimal",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
@@ -22,7 +27,7 @@ const API_ALLOWLIST = [
   "/api/weather",
   "/api/energy",
   "/api/github/trending",
-  "/api/plex",
+  "/api/jellyfin",
   "/api/setup",
 ];
 

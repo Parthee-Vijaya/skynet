@@ -167,11 +167,10 @@ export function HeroWidget() {
 
   return (
     <section
-      className="col-span-12 lg:col-span-8"
       style={{ display: "flex", gap: 32, alignItems: "center" }}
     >
-      {/* Globe */}
-      <SkynetGlobe size={220} />
+      {/* Globe — størrelse skalerer med widget-bredde via clamp på beholderen */}
+      <SkynetGlobe size={180} />
 
       {/* Text content */}
       <div style={{ flex: 1, minWidth: 0 }}>
