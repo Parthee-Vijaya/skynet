@@ -1,8 +1,9 @@
-import { exec as execCb } from "child_process";
+import { exec as execCb, execFile as execFileCb } from "child_process";
 import { promises as fs } from "fs";
 import { promisify } from "util";
 
 const exec = promisify(execCb);
+const execFile = promisify(execFileCb);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,8 +144,8 @@ interface ListOpts {
 export async function listRules(opts: ListOpts = {}): Promise<LuluRule[]> {
   const cli = await resolveCliPath();
   if (!cli) throw new Error("lulu-cli not installed");
-  const filter = opts.filter ? ` ${shellEscape(opts.filter)}` : "";
-  const { stdout } = await exec(`${shellEscape(cli)} list${filter}`, {
+  const cliArgs = opts.filter ? ["list", opts.filter] : ["list"];
+  const { stdout } = await execFile(cli, cliArgs, {
     timeout: 8000,
     maxBuffer: 16 * 1024 * 1024,
   });
@@ -283,30 +284,33 @@ export interface AddRuleArgs {
 export async function addRule(args: AddRuleArgs): Promise<void> {
   const cli = await resolveCliPath();
   if (!cli) throw new Error("lulu-cli not installed");
-  const cmd = [
-    "sudo", "-n", shellEscape(cli), "add",
-    "--key", shellEscape(args.key),
-    "--path", shellEscape(args.path),
+  // execFile sender args som array — ingen shell-interpretation, ingen
+  // injection-risiko fra user-controlled key/path/addr (også selvom de
+  // indeholder `;` `&&` `` ` `` eller `$()`).
+  const cliArgs = [
+    "-n", cli, "add",
+    "--key", args.key,
+    "--path", args.path,
     "--action", args.action,
   ];
-  if (args.addr) cmd.push("--addr", shellEscape(args.addr));
-  if (args.port) cmd.push("--port", shellEscape(args.port));
-  if (args.regex) cmd.push("--regex");
-  await exec(cmd.join(" "), { timeout: 5000 });
+  if (args.addr) cliArgs.push("--addr", args.addr);
+  if (args.port) cliArgs.push("--port", args.port);
+  if (args.regex) cliArgs.push("--regex");
+  await execFile("sudo", cliArgs, { timeout: 5000 });
 }
 
 export async function deleteRule(key: string, uuid?: string): Promise<void> {
   const cli = await resolveCliPath();
   if (!cli) throw new Error("lulu-cli not installed");
-  const cmd = ["sudo", "-n", shellEscape(cli), "delete", "--key", shellEscape(key)];
-  if (uuid) cmd.push("--uuid", shellEscape(uuid));
-  await exec(cmd.join(" "), { timeout: 5000 });
+  const cliArgs = ["-n", cli, "delete", "--key", key];
+  if (uuid) cliArgs.push("--uuid", uuid);
+  await execFile("sudo", cliArgs, { timeout: 5000 });
 }
 
 export async function reloadLulu(): Promise<void> {
   const cli = await resolveCliPath();
   if (!cli) throw new Error("lulu-cli not installed");
-  await exec(`sudo -n ${shellEscape(cli)} reload`, { timeout: 8000 });
+  await execFile("sudo", ["-n", cli, "reload"], { timeout: 8000 });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
