@@ -6,7 +6,6 @@ import { StatusWidget } from "./widgets/StatusWidget";
 import { DiskWidget } from "./widgets/DiskWidget";
 import { WeatherWidget } from "./widgets/WeatherWidget";
 import { AirWidget } from "./widgets/AirWidget";
-import { PlexWidget } from "./widgets/PlexWidget";
 import { DevicesWidget } from "./widgets/DevicesWidget";
 import { NewsWidget } from "./widgets/NewsWidget";
 import { NzbWidget } from "./widgets/NzbWidget";
@@ -129,8 +128,7 @@ export function Dashboard() {
         <LightningWidget />
         <AirWidget />
 
-        {/* Row 6 · Media & hardware */}
-        <PlexWidget />
+        {/* Row 6 · Hardware (Plex fjernet — Jellyfin på minimal cockpit) */}
         <DevicesWidget />
 
         {/* Row 7 · Vejr + Downloads + Markedsdata */}

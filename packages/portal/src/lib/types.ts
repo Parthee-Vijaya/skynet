@@ -84,20 +84,29 @@ export interface AirQualityData {
   };
 }
 
-export interface PlexStream {
+export interface JellyfinSession {
+  /** Item-titel — for serier formateres som "Show — Episode" */
   title: string;
-  subtitle?: string;
+  /** Afspiller-enhedens navn (Apple TV, iPhone, web) */
   player: string;
+  /** Hvem ser med — Jellyfin-bruger */
+  user: string;
+  /** Resolution som "4K" / "1080P" / "720P" */
   quality: string;
+  /** 0-100 */
   progress: number;
+  /** Sekunder eller minutter tilbage — vi rapporterer minutter for konsistens med tidligere widget */
   remainingMinutes: number;
-  thumbColor?: string;
+  /** True hvis afspilning er pausa */
+  paused: boolean;
 }
 
-export interface PlexData {
+export interface JellyfinData {
   online: boolean;
-  sessions: PlexStream[];
-  library: { movies: number; shows: number; sizeBytes: number };
+  sessions: JellyfinSession[];
+  library: { movies: number; shows: number; episodes: number };
+  /** Server-version — vises i tooltip / footer */
+  version?: string;
 }
 
 export interface SabnzbdSlot {
@@ -481,8 +490,14 @@ export interface GithubData {
   } | null;
   eventsLast7d: number;
   commitsLast7d: number;
+  /** Total commits today (UTC) — bruges i hero-stat */
+  commitsToday: number;
   prsOpen: number;
   starsTotal: number;
+  /** Antal sammenhængende dage med mindst 1 contribution, sluttende i dag (eller i går hvis dag-i-dag ikke har endnu) */
+  currentStreak: number;
+  /** Længste contribution-streak indenfor 30-dages vinduet */
+  longestStreak: number;
   topRepos: Array<{
     name: string;
     description: string | null;

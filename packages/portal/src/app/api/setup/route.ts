@@ -92,13 +92,14 @@ async function dGitHub(): Promise<Detection> {
     : { key: "github", name: "GitHub API", status: "partial", details: "Timeout eller rate-limit", hint: "Prøv igen om lidt.", feature: "Trending repos · GitHub-widget" };
 }
 
-async function dPlex(): Promise<Detection> {
-  const url = getSetting("plex_url") || "http://localhost:32400";
-  const token = getSetting("plex_token");
-  const up = await ping(`${url}/identity`, 2000);
-  if (!up) return { key: "plex", name: "Plex Media Server", status: "missing", hint: `Plex svarer ikke på ${url}. Start Plex, eller sæt plex_url i settings.`, feature: "Plex-widget" };
-  if (!token) return { key: "plex", name: "Plex Media Server", status: "partial", details: "Kører, men token mangler", hint: "Gem dit Plex-token under Settings.", feature: "Plex-widget" };
-  return { key: "plex", name: "Plex Media Server", status: "ok", details: `Kører på ${url}`, feature: "Plex-widget" };
+async function dJellyfin(): Promise<Detection> {
+  const url = getSetting("jellyfin_url") || "http://localhost:8096";
+  const apiKey = getSetting("jellyfin_api_key");
+  // /System/Info/Public kræver ikke auth — ideel til ping
+  const up = await ping(`${url}/System/Info/Public`, 2000);
+  if (!up) return { key: "jellyfin", name: "Jellyfin Media Server", status: "missing", hint: `Jellyfin svarer ikke på ${url}. Start Jellyfin, eller sæt jellyfin_url i settings.`, feature: "Jellyfin-widget" };
+  if (!apiKey) return { key: "jellyfin", name: "Jellyfin Media Server", status: "partial", details: "Kører, men API-key mangler", hint: "Generér en API-key under Jellyfin → Dashboard → API Keys, og gem som jellyfin_api_key i settings.", feature: "Jellyfin-widget" };
+  return { key: "jellyfin", name: "Jellyfin Media Server", status: "ok", details: `Kører på ${url}`, feature: "Jellyfin-widget" };
 }
 
 async function dTailscale(): Promise<Detection> {
@@ -221,17 +222,17 @@ export async function GET() {
   const [
     internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
-    plex, tailscale, ntfy,
+    jellyfin, tailscale, ntfy,
   ] = await Promise.all([
     dInternet(), dNode(), dLaunchAgents(), dDaemon(), dPaseo(),
     dLmStudio(), dGitHub(), dWeather(), dNasaApod(),
-    dPlex(), dTailscale(), dNtfy(),
+    dJellyfin(), dTailscale(), dNtfy(),
   ]);
 
   const detections: Detection[] = [
     internet, node, autostart, daemon, paseo,
     lmStudio, github, weather, nasaApod,
-    plex, tailscale, ntfy,
+    jellyfin, tailscale, ntfy,
   ];
 
   const summary = {

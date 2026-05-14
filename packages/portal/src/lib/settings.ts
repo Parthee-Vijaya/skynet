@@ -94,6 +94,27 @@ export function setNzbgeekApiKey(value: string): void {
 }
 
 /**
+ * Jellyfin Media Server — URL + API-key. Generér key i Jellyfin →
+ * Dashboard → API Keys. Default URL er localhost:8096 (Jellyfin's
+ * default port).
+ */
+export function getJellyfinUrl(): string {
+  return getSetting("jellyfin_url") ?? "http://localhost:8096";
+}
+
+export function setJellyfinUrl(value: string): void {
+  setSetting("jellyfin_url", value.trim().replace(/\/+$/, "").slice(0, 256));
+}
+
+export function getJellyfinApiKey(): string {
+  return getSetting("jellyfin_api_key") ?? "";
+}
+
+export function setJellyfinApiKey(value: string): void {
+  setSetting("jellyfin_api_key", value.trim().slice(0, 256));
+}
+
+/**
  * Skynet public URL — bruges til ntfy click-URLs og action-buttons.
  * Skal være en URL som iPhone/eksterne devices kan nå (typisk Tailscale
  * MagicDNS, fx http://parthee-mac.tail-XXXX.ts.net:3100).

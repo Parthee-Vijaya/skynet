@@ -143,6 +143,38 @@ function bucketDays(events: GhEvent[], days: number): GithubContribDay[] {
   return Array.from(byDate.entries()).map(([date, count]) => ({ date, count }));
 }
 
+/**
+ * Beregn current + longest streak fra contrib-array (oldest-first).
+ *
+ * Current streak = dagsrække af konsekutive dage med count > 0, sluttende
+ * i dag eller i går (hvis i dag ikke har commits endnu, broer vi 1 dag
+ * som "endnu ingen aktivitet — streaken kan stadig redes").
+ */
+function computeStreaks(contrib: GithubContribDay[]): { current: number; longest: number } {
+  if (contrib.length === 0) return { current: 0, longest: 0 };
+  let longest = 0;
+  let run = 0;
+  for (const day of contrib) {
+    if (day.count > 0) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  // Current streak — gå baglæns fra sidste dag og tæl indtil vi rammer en 0
+  // Bridge over today: hvis sidste dag (i dag) er 0, men i går er > 0, må streaken
+  // godt overleve indtil dagen er over. Vi starter altså fra `last - 1` i så fald.
+  let current = 0;
+  let i = contrib.length - 1;
+  if (i >= 0 && contrib[i].count === 0) i--; // tillad endnu-tom dag-i-dag
+  for (; i >= 0; i--) {
+    if (contrib[i].count > 0) current++;
+    else break;
+  }
+  return { current, longest };
+}
+
 export async function collect(): Promise<GithubData> {
   const USER = resolveUser();
   if (!USER) {
@@ -150,8 +182,11 @@ export async function collect(): Promise<GithubData> {
       user: null,
       eventsLast7d: 0,
       commitsLast7d: 0,
+      commitsToday: 0,
       prsOpen: 0,
       starsTotal: 0,
+      currentStreak: 0,
+      longestStreak: 0,
       topRepos: [],
       events: [],
       contrib: [],
@@ -181,6 +216,12 @@ export async function collect(): Promise<GithubData> {
 
     const commitsLast7d = eventsLast7d
       .filter((e) => e.type === "PushEvent")
+      .reduce((sum, e) => sum + (e.payload.commits?.length ?? 0), 0);
+
+    // Commits i dag (UTC) — bruges som hero-stat på widget
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const commitsToday = events
+      .filter((e) => e.type === "PushEvent" && e.created_at.slice(0, 10) === todayKey)
       .reduce((sum, e) => sum + (e.payload.commits?.length ?? 0), 0);
 
     const prsOpen = eventsLast7d.filter(
@@ -214,6 +255,7 @@ export async function collect(): Promise<GithubData> {
       .map(describeEvent);
 
     const contrib = bucketDays(events, 30);
+    const { current: currentStreak, longest: longestStreak } = computeStreaks(contrib);
 
     return {
       user: user
@@ -228,8 +270,11 @@ export async function collect(): Promise<GithubData> {
         : null,
       eventsLast7d: eventsLast7d.length,
       commitsLast7d,
+      commitsToday,
       prsOpen,
       starsTotal,
+      currentStreak,
+      longestStreak,
       topRepos,
       events: evItems,
       contrib,
@@ -240,8 +285,11 @@ export async function collect(): Promise<GithubData> {
       user: null,
       eventsLast7d: 0,
       commitsLast7d: 0,
+      commitsToday: 0,
       prsOpen: 0,
       starsTotal: 0,
+      currentStreak: 0,
+      longestStreak: 0,
       topRepos: [],
       events: [],
       contrib: [],
