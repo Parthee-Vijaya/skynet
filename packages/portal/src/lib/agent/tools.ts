@@ -915,6 +915,62 @@ export const TOOLS: ToolSchema[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "block_app_batch",
+      description:
+        "Bloker mange hosts på én gang for en specifik app via LuLu. Praktisk når en app har talt med mange trackers — én reload tilføjer alle reglerne. DESTRUKTIV — kræver bekræftelse. Brug efter list_active_connections eller suspicious_traffic_today for at finde hosts der skal blokeres.",
+      parameters: {
+        type: "object",
+        properties: {
+          bundle_id: {
+            type: "string",
+            description: "App bundle-id eller code-signing-key, fx 'com.spotify.client'",
+          },
+          exec_path: {
+            type: "string",
+            description: "Optional eksekverbar sti, eller '*' (default).",
+          },
+          process: {
+            type: "string",
+            description: "Optional proces-navn til logging.",
+          },
+          hosts: {
+            type: "array",
+            description: "Liste af hosts der skal blokeres. Hver entry: { host: string, raddr?: string, reason?: string }",
+            items: {
+              type: "object",
+              properties: {
+                host: { type: "string", description: "Hostname eller IP" },
+                raddr: { type: "string", description: "Optional remote IP" },
+                reason: { type: "string", description: "Hvorfor blokeret (fx 'tracker', 'blocklist')" },
+              },
+              required: ["host"],
+            },
+          },
+        },
+        required: ["bundle_id", "hosts"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "refresh_blocklists",
+      description:
+        "Hent friske kopier af domain-blocklists (OISD, Steven Black hosts, EasyPrivacy) fra deres respektive kilder. Genindlæser dem til in-memory cache. Bruges fx hvis brugeren spørger om listerne er opdaterede, eller efter manuel install.",
+      parameters: {
+        type: "object",
+        properties: {
+          sourceId: {
+            type: "string",
+            description: "Specifik liste at refreshe ('oisd-small', 'stevenblack', 'easyprivacy'). Udelad for at refreshe alle.",
+          },
+        },
+      },
+    },
+  },
 
   // ── Web: Fetch + Search ─────────────────────────────────────────────────
   {
@@ -966,6 +1022,7 @@ export const DESTRUCTIVE_TOOL_ACTIONS: Record<string, string[]> = {
 export const DESTRUCTIVE_TOOLS = new Set<string>([
   "block_app",
   "allow_app",
+  "block_app_batch",
   "switch_network_profile",
 ]);
 

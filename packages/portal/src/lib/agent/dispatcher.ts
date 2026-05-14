@@ -775,6 +775,85 @@ async function execute(
       return await suspiciousTraffic(Math.min(Math.max(hours, 1), 168));
     }
 
+    case "block_app_batch": {
+      const { addRule, reloadLulu, detectLulu } = await import("@/lib/firewall/lulu");
+      const { insertRule } = await import("@/lib/firewall/store");
+      const status = await detectLulu();
+      if (!status.cliInstalled) throw new Error("lulu-cli ikke installeret — kan ikke håndhæve regler");
+      if (!status.sudoersOk) throw new Error("Passwordless sudo for lulu-cli mangler — kør 'sudo scripts/install-lulu-sudoers.sh'");
+
+      const bundleId = String(args.bundle_id ?? "").trim();
+      if (!bundleId) throw new Error("bundle_id er påkrævet");
+      const hostsRaw = args.hosts;
+      if (!Array.isArray(hostsRaw) || hostsRaw.length === 0) {
+        throw new Error("hosts skal være array med mindst én entry");
+      }
+      const execPath = typeof args.exec_path === "string" ? args.exec_path : "*";
+      const processName = typeof args.process === "string" ? args.process : null;
+
+      const results: Array<{ host: string; ok: boolean; ruleId?: number; error?: string }> = [];
+      let added = 0;
+      for (const h of hostsRaw as Array<Record<string, unknown>>) {
+        const host = typeof h.host === "string" ? h.host : null;
+        if (!host) {
+          results.push({ host: "", ok: false, error: "missing host field" });
+          continue;
+        }
+        const reason = typeof h.reason === "string" ? h.reason : "batch";
+        try {
+          await addRule({
+            key: bundleId,
+            path: execPath,
+            action: "block",
+            addr: host,
+            port: "*",
+          });
+          const id = insertRule({
+            lulu_key: bundleId,
+            process: processName,
+            exec_path: execPath === "*" ? null : execPath,
+            action: "block",
+            scope: "host",
+            remote_host: host,
+            remote_port: null,
+            source: "lulu",
+            description: `agent batch-block (${reason}): ${processName ?? bundleId} → ${host}`,
+          });
+          results.push({ host, ok: true, ruleId: id });
+          added++;
+        } catch (e) {
+          results.push({ host, ok: false, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      // Én reload til sidst — meget billigere end pr. regel
+      if (added > 0) {
+        try { await reloadLulu(); } catch (e) {
+          return {
+            ok: false,
+            added,
+            failed: results.length - added,
+            results,
+            warning: `${added} regler tilføjet i plist men reload fejlede: ${e instanceof Error ? e.message : String(e)}. Kør 'sudo lulu-cli reload' manuelt.`,
+          };
+        }
+      }
+      return { ok: true, added, failed: results.length - added, results };
+    }
+
+    case "refresh_blocklists": {
+      const { refreshAll, refreshSource } = await import("@/lib/firewall/blocklists");
+      const sourceId = typeof args.sourceId === "string" ? args.sourceId : undefined;
+      if (sourceId) {
+        const result = await refreshSource(sourceId);
+        return result;
+      }
+      const results = await refreshAll();
+      return {
+        results,
+        total_domains: results.reduce((s, r) => s + (r.ok ? r.count : 0), 0),
+      };
+    }
+
     // ── News (RSS) ────────────────────────────────────────────────────────
     case "fetch_news": {
       const feedUrl = String(args.url ?? "").trim();
