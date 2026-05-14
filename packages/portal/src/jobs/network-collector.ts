@@ -121,6 +121,16 @@ async function tick(): Promise<void> {
       else connsByPid.set(c.pid, [c]);
     }
 
+    // Reverse-DNS: slå op for alle unikke remote-IPs så rhost bliver populated.
+    // Cache i 1h håndteret af reverse-dns-modulet. Lokale + Tailscale-IPs skipes.
+    const uniqRemotes = new Set<string>();
+    for (const c of conns) {
+      if (c.raddr && c.state !== "LISTEN") uniqRemotes.add(c.raddr);
+    }
+    const { reverseLookupMany, pruneCache } = await import("@/lib/firewall/reverse-dns");
+    const rdnsMap = await reverseLookupMany([...uniqRemotes]);
+    if (s.tickCount % 60 === 0) pruneCache();
+
     for (const c of conns) {
       const k = connKey(c);
       currentKeys.add(k);
@@ -131,6 +141,8 @@ async function tick(): Promise<void> {
       const bIn = bytes ? Math.round(bytes.in / pidConnCount) : 0;
       const bOut = bytes ? Math.round(bytes.out / pidConnCount) : 0;
 
+      const rhost = c.raddr ? rdnsMap.get(c.raddr) ?? null : null;
+
       rows.push({
         ts,
         pid: c.pid,
@@ -140,7 +152,7 @@ async function tick(): Promise<void> {
         lport: c.lport,
         raddr: c.raddr,
         rport: c.rport,
-        rhost: null, // reverse-DNS is lazy; collector skips for now
+        rhost,
         state: c.state,
         bytes_in: bIn,
         bytes_out: bOut,

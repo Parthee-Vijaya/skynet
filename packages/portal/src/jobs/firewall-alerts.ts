@@ -14,6 +14,7 @@ import { inspectConnection } from "@/lib/firewall/inspect";
 import { getDb } from "@/lib/db";
 import { getSetting, getSkynetPublicUrl } from "@/lib/settings";
 import { notify } from "@/lib/notify";
+import { insertEvent } from "@/lib/firewall/store";
 
 const POLL_MS = 30_000;
 const LOOKBACK_MS = 60_000;
@@ -144,6 +145,27 @@ async function sendAlert(
     `Top faktor: ${result.risk.factors[0]?.reason ?? "-"}`;
 
   const publicUrl = getSkynetPublicUrl();
+
+  // Persist event så app-health og /events-tabben ser high-risk-aktivitet over tid.
+  // risk_score gemmes i detail-JSON så app-health kan filtrere på det.
+  insertEvent({
+    kind: "suspicious",
+    process: conn.process,
+    bundle_id: conn.bundle_id,
+    raddr: conn.raddr,
+    rhost: conn.rhost,
+    detail: {
+      risk_score: result.risk.score,
+      risk_band: result.risk.band,
+      top_factors: result.risk.factors.slice(0, 3).map((f) => ({ factor: f.factor, weight: f.weight })),
+      tracker: result.tracker.isKnown
+        ? { owner: result.tracker.owner, categories: result.tracker.categories }
+        : undefined,
+      blocklist: result.blocklist.blocked ? { matched: result.blocklist.matchedDomain, source: result.blocklist.source } : undefined,
+      country: result.geo?.country_code,
+      port: conn.rport,
+    },
+  });
 
   await notify({
     title,

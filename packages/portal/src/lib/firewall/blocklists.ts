@@ -60,6 +60,8 @@ const CACHE_DIR = path.join(homedir(), "Desktop", "Claude", "projekter", "aktive
 interface State {
   /** Set af alle aktive blocklist-domains (lowercase). */
   domains: Set<string>;
+  /** domain → source-name. Bruges af lookup() for nøjagtig source-attribution. */
+  domainToSource: Map<string, string>;
   /** Per-list info — populated efter loadAll() */
   lists: Map<string, { sourceId: string; name: string; count: number; loadedAt: number }>;
   loadedAt: number | null;
@@ -70,7 +72,7 @@ const STATE_KEY = "__skynet_blocklists_state__";
 function getState(): State {
   const g = globalThis as unknown as Record<string, State>;
   if (!g[STATE_KEY]) {
-    g[STATE_KEY] = { domains: new Set(), lists: new Map(), loadedAt: null, loading: null };
+    g[STATE_KEY] = { domains: new Set(), domainToSource: new Map(), lists: new Map(), loadedAt: null, loading: null };
   }
   return g[STATE_KEY];
 }
@@ -215,13 +217,21 @@ async function reloadInMemory(): Promise<void> {
     .all() as BlocklistRow[];
 
   state.domains.clear();
+  state.domainToSource.clear();
   state.lists.clear();
 
   for (const row of rows) {
     try {
       const text = await fs.readFile(row.cached_path, "utf-8");
       const domains = JSON.parse(text) as string[];
-      for (const d of domains) state.domains.add(d);
+      for (const d of domains) {
+        state.domains.add(d);
+        // Første kilde der ejer et givent domæne vinder (ingen overskrivning).
+        // Dette giver deterministic source-attribution selv ved overlap.
+        if (!state.domainToSource.has(d)) {
+          state.domainToSource.set(d, row.name);
+        }
+      }
       state.lists.set(row.name, {
         sourceId: row.name,
         name: row.name,
@@ -261,19 +271,15 @@ export function lookup(hostname: string): BlocklistMatch {
   const lower = hostname.toLowerCase().replace(/\.$/, "");
   const parts = lower.split(".");
 
-  // Walk parent domains
+  // Walk parent domains (foo.bar.tracker.com → bar.tracker.com → tracker.com)
   for (let i = 0; i < parts.length - 1; i++) {
     const candidate = parts.slice(i).join(".");
     if (state.domains.has(candidate)) {
-      // Find which list it came from (slow path — kun ved match, ikke i hot path)
-      let source: string | undefined;
-      for (const [name] of state.lists) {
-        // Re-load file is too expensive; vi accepterer ikke at vide hvilken liste
-        // (i praksis betyder source ikke noget for blocking-beslutningen)
-        source = name;
-        break;
-      }
-      return { blocked: true, matchedDomain: candidate, source };
+      return {
+        blocked: true,
+        matchedDomain: candidate,
+        source: state.domainToSource.get(candidate),
+      };
     }
   }
 

@@ -92,29 +92,38 @@ export async function computeAppHealth(hours = 7 * 24): Promise<AppHealth[]> {
     let tracker_flows = 0;
     let blocklist_flows = 0;
     const trackerMap = new Map<string, { flow_count: number; owner?: string }>();
-    const blocklistList: Array<{ host: string; flow_count: number }> = [];
+    const blocklistAggregate = new Map<string, number>();
 
     for (const h of hosts) {
-      if (!h.rhost) continue;
-      const tds = lookupHost(h.rhost);
-      const bl = lookupBlocklist(h.rhost);
-      if (tds.isTracker) {
+      // Foretrækk rhost — men fallback til raddr (matcher ikke TDS, men kan tracke "ukendt remote")
+      const lookupTarget = h.rhost ?? h.raddr;
+      if (!lookupTarget) continue;
+      const tds = h.rhost ? lookupHost(h.rhost) : null;
+      const bl = h.rhost ? lookupBlocklist(h.rhost) : { blocked: false };
+      if (tds?.isTracker) {
         tracker_flows += h.cnt;
-        const key = tds.domain ?? h.rhost;
+        const key = tds.domain ?? lookupTarget;
         const existing = trackerMap.get(key);
         if (existing) existing.flow_count += h.cnt;
         else trackerMap.set(key, { flow_count: h.cnt, owner: tds.ownerDisplay ?? tds.owner });
       }
       if (bl.blocked) {
         blocklist_flows += h.cnt;
-        blocklistList.push({ host: h.rhost, flow_count: h.cnt });
+        // Aggreger pr. host så vi ikke får dubletter (fx tracker.spotify.com via 5 forskellige IPs)
+        blocklistAggregate.set(lookupTarget, (blocklistAggregate.get(lookupTarget) ?? 0) + h.cnt);
       }
     }
 
+    // Risk parses ud fra detail-JSON for events der har en risk-score (sat af firewall-alerts).
+    // Fallback: tæl 'suspicious' og 'new_app' som proxy for høj-risk indikatorer.
     const high_risk_events = (db
       .prepare(
         `SELECT COUNT(*) cnt FROM network_events
-         WHERE process = ? AND ts >= ? AND kind IN ('suspicious', 'new_app')`
+         WHERE process = ? AND ts >= ?
+           AND (
+             kind = 'suspicious'
+             OR (detail IS NOT NULL AND json_extract(detail, '$.risk_score') >= 70)
+           )`
       )
       .get(r.process, since) as { cnt: number }).cnt;
 
@@ -126,6 +135,11 @@ export async function computeAppHealth(hours = 7 * 24): Promise<AppHealth[]> {
       .sort((a, b) => b[1].flow_count - a[1].flow_count)
       .slice(0, 10)
       .map(([host, v]) => ({ host, flow_count: v.flow_count, owner: v.owner }));
+
+    const blocklist_examples = [...blocklistAggregate.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([host, flow_count]) => ({ host, flow_count }));
 
     results.push({
       process: r.process,
@@ -142,13 +156,15 @@ export async function computeAppHealth(hours = 7 * 24): Promise<AppHealth[]> {
       grade,
       score,
       top_trackers,
-      blocklist_examples: blocklistList.slice(0, 8),
+      blocklist_examples,
     });
   }
 
-  // Sortér efter "værst først" (lavest score, mest sport-flows)
+  // Sortér så "værst først" virkelig betyder værst først:
+  //  1. Lavest score (= højest tracker-ratio)
+  //  2. Ved samme score: flest tracker-flows
   results.sort((a, b) => {
-    if (a.grade !== b.grade) return gradeRank(a.grade) - gradeRank(b.grade);
+    if (a.score !== b.score) return a.score - b.score;
     return b.tracker_flows - a.tracker_flows;
   });
 
