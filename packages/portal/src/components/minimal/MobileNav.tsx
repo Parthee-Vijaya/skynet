@@ -22,6 +22,7 @@ export const DEFAULT_LINKS: MobileNavLink[] = [
   { href: "/projects", label: "projects", icon: "▤" },
   { href: "/agents", label: "agents", icon: "◆" },
   { href: "/automations", label: "automations", icon: "◈" },
+  { href: "/watchlist", label: "watchlist", icon: "▷" },
   { href: "/chat", label: "chat", icon: "◇" },
   { href: "/firewall", label: "firewall", icon: "▣" },
   { href: "/settings", label: "settings", icon: "⚙" },

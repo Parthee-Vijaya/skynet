@@ -14,7 +14,16 @@ export async function GET() {
   const imessageDefault = getImessageDefault();
   const hasRejseplanenAccessId = !!getRejseplanenAccessId();
   const hasNzbgeekApiKey = !!getNzbgeekApiKey();
-  return Response.json({ llm, defaults: DEFAULT_LLM_CONFIG, userName, location, githubUser, hasGithubToken, imessageDefault, hasRejseplanenAccessId, hasNzbgeekApiKey });
+  const sonarrUrl = getSetting("sonarr_url") ?? "";
+  const hasSonarrApiKey = !!getSetting("sonarr_api_key");
+  const radarrUrl = getSetting("radarr_url") ?? "";
+  const hasRadarrApiKey = !!getSetting("radarr_api_key");
+  return Response.json({
+    llm, defaults: DEFAULT_LLM_CONFIG, userName, location,
+    githubUser, hasGithubToken, imessageDefault,
+    hasRejseplanenAccessId, hasNzbgeekApiKey,
+    sonarrUrl, hasSonarrApiKey, radarrUrl, hasRadarrApiKey,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -22,6 +31,8 @@ export async function POST(req: NextRequest) {
     llm?: Partial<LLMConfig>; userName?: string; city?: string;
     githubUser?: string; githubToken?: string; imessageDefault?: string;
     rejseplanenAccessId?: string; nzbgeekApiKey?: string;
+    sonarrUrl?: string; sonarrApiKey?: string;
+    radarrUrl?: string; radarrApiKey?: string;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -35,6 +46,20 @@ export async function POST(req: NextRequest) {
   if (typeof body.imessageDefault === "string") setImessageDefault(body.imessageDefault);
   if (typeof body.rejseplanenAccessId === "string") setRejseplanenAccessId(body.rejseplanenAccessId);
   if (typeof body.nzbgeekApiKey === "string") setNzbgeekApiKey(body.nzbgeekApiKey);
+  if (typeof body.sonarrUrl === "string") {
+    const v = body.sonarrUrl.trim().replace(/\/+$/, "").slice(0, 256);
+    setSetting("sonarr_url", v);
+  }
+  if (typeof body.sonarrApiKey === "string" && body.sonarrApiKey.trim()) {
+    setSetting("sonarr_api_key", body.sonarrApiKey.trim().slice(0, 256));
+  }
+  if (typeof body.radarrUrl === "string") {
+    const v = body.radarrUrl.trim().replace(/\/+$/, "").slice(0, 256);
+    setSetting("radarr_url", v);
+  }
+  if (typeof body.radarrApiKey === "string" && body.radarrApiKey.trim()) {
+    setSetting("radarr_api_key", body.radarrApiKey.trim().slice(0, 256));
+  }
   if (typeof body.city === "string" && body.city.trim()) {
     const { setSettingJSON } = await import("@/lib/settings");
     const loc = await geocodeCity(body.city.trim());
@@ -51,5 +76,9 @@ export async function POST(req: NextRequest) {
     imessageDefault: getImessageDefault(),
     hasRejseplanenAccessId: !!getRejseplanenAccessId(),
     hasNzbgeekApiKey: !!getNzbgeekApiKey(),
+    sonarrUrl: getSetting("sonarr_url") ?? "",
+    hasSonarrApiKey: !!getSetting("sonarr_api_key"),
+    radarrUrl: getSetting("radarr_url") ?? "",
+    hasRadarrApiKey: !!getSetting("radarr_api_key"),
   });
 }

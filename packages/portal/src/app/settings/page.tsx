@@ -12,6 +12,10 @@ interface SettingsResp {
   location: LocationSetting;
   githubUser?: string;
   hasGithubToken?: boolean;
+  sonarrUrl?: string;
+  hasSonarrApiKey?: boolean;
+  radarrUrl?: string;
+  hasRadarrApiKey?: boolean;
 }
 
 interface ModelsResp {
@@ -61,6 +65,17 @@ export default function SettingsPage() {
   const [savedProfile, setSavedProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
 
+  // Media-stack
+  const [sonarrUrl, setSonarrUrl] = useState("");
+  const [sonarrApiKey, setSonarrApiKey] = useState("");
+  const [hasSonarrApiKey, setHasSonarrApiKey] = useState(false);
+  const [radarrUrl, setRadarrUrl] = useState("");
+  const [radarrApiKey, setRadarrApiKey] = useState("");
+  const [hasRadarrApiKey, setHasRadarrApiKey] = useState(false);
+  const [savingMedia, setSavingMedia] = useState(false);
+  const [savedMedia, setSavedMedia] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
@@ -71,6 +86,10 @@ export default function SettingsPage() {
         setGithubUser(data.githubUser ?? "");
         setHasGithubToken(!!data.hasGithubToken);
         setLocationLabel(data.location?.label ?? "");
+        setSonarrUrl(data.sonarrUrl ?? "");
+        setHasSonarrApiKey(!!data.hasSonarrApiKey);
+        setRadarrUrl(data.radarrUrl ?? "");
+        setHasRadarrApiKey(!!data.hasRadarrApiKey);
       })
       .catch(() => {});
   }, []);
@@ -102,6 +121,34 @@ export default function SettingsPage() {
         setTimeout(() => setSavedProfile(false), 2000);
       }
     } finally { setSavingProfile(false); }
+  };
+
+  const saveMedia = async () => {
+    setSavingMedia(true); setSavedMedia(false); setMediaError("");
+    try {
+      const body: Record<string, string> = {
+        sonarrUrl: sonarrUrl.trim(),
+        radarrUrl: radarrUrl.trim(),
+      };
+      if (sonarrApiKey.trim()) body.sonarrApiKey = sonarrApiKey.trim();
+      if (radarrApiKey.trim()) body.radarrApiKey = radarrApiKey.trim();
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { ok: boolean; error?: string; hasSonarrApiKey?: boolean; hasRadarrApiKey?: boolean };
+      if (!res.ok || !json.ok) {
+        setMediaError(json.error ?? "Fejl ved gem");
+      } else {
+        setSavedMedia(true);
+        if (typeof json.hasSonarrApiKey === "boolean") setHasSonarrApiKey(json.hasSonarrApiKey);
+        if (typeof json.hasRadarrApiKey === "boolean") setHasRadarrApiKey(json.hasRadarrApiKey);
+        setSonarrApiKey("");
+        setRadarrApiKey("");
+        setTimeout(() => setSavedMedia(false), 2000);
+      }
+    } finally { setSavingMedia(false); }
   };
 
   const save = async () => {
@@ -210,6 +257,78 @@ export default function SettingsPage() {
               </Button>
               {savedProfile && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
               {profileError && <span style={{ color: "#d87373", fontSize: 11 }}>{profileError}</span>}
+            </div>
+          </div>
+        </Section>
+
+        {/* ── Media-stack (Sonarr + Radarr) ────────────────────────────────── */}
+        <Section title="media-stack" className="mb-8">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ color: "#6b6b6b", fontSize: 11, lineHeight: 1.6 }}>
+              Sonarr (serier) + Radarr (film) bruges af watchlist-siden til at
+              tilføje + monitorere. Skynet auto-læser API-keys fra
+              <code style={{ color: "#444", margin: "0 4px" }}>~/.config/Sonarr/config.xml</code>
+              og <code style={{ color: "#444" }}>~/Library/Application Support/Radarr/config.xml</code>
+              — sæt kun manuelt her hvis Sonarr/Radarr er på en anden maskine.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>Sonarr URL</div>
+                <input
+                  type="text"
+                  value={sonarrUrl}
+                  placeholder="http://localhost:8989"
+                  onChange={(e) => setSonarrUrl(e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+              </div>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>
+                  Sonarr API-nøgle
+                  {hasSonarrApiKey && <span style={{ color: "#7dd67d", marginLeft: 6 }}>· gemt</span>}
+                </div>
+                <input
+                  type="password"
+                  value={sonarrApiKey}
+                  placeholder={hasSonarrApiKey ? "(gemt — indtast for at ændre)" : "auto-læses fra config.xml"}
+                  onChange={(e) => setSonarrApiKey(e.target.value)}
+                  style={{ ...inputStyle }}
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>Radarr URL</div>
+                <input
+                  type="text"
+                  value={radarrUrl}
+                  placeholder="http://localhost:7878"
+                  onChange={(e) => setRadarrUrl(e.target.value)}
+                  style={{ ...inputStyle }}
+                />
+              </div>
+              <div>
+                <div style={{ color: "#6b6b6b", fontSize: 11, marginBottom: 4 }}>
+                  Radarr API-nøgle
+                  {hasRadarrApiKey && <span style={{ color: "#7dd67d", marginLeft: 6 }}>· gemt</span>}
+                </div>
+                <input
+                  type="password"
+                  value={radarrApiKey}
+                  placeholder={hasRadarrApiKey ? "(gemt — indtast for at ændre)" : "auto-læses fra config.xml"}
+                  onChange={(e) => setRadarrApiKey(e.target.value)}
+                  style={{ ...inputStyle }}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Button size="sm" onClick={saveMedia} disabled={savingMedia}>
+                {savingMedia ? "gemmer…" : "→ gem media"}
+              </Button>
+              {savedMedia && <span style={{ color: "#7dd67d", fontSize: 11 }}>✓ gemt</span>}
+              {mediaError && <span style={{ color: "#d87373", fontSize: 11 }}>{mediaError}</span>}
             </div>
           </div>
         </Section>
