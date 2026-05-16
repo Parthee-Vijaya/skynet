@@ -13,6 +13,8 @@
 //   Row 4:  GITHUB (2)               | TOP-REPOS (2)          <- code primær + trending
 //   Row 5:  FIREWALL (4 cols)                                  <- network monitor full-width
 //   Row 6:  WEATHER | PASEO | JELLYFIN | SABNZBD               <- kompakte status (1 col hver)
+//   Row 6.5: WATCHLIST (4 cols)                                 <- sonarr+radarr vil-se-liste
+//   Row 6.6: RECENT-DOWNLOADS (4 cols)                          <- senest hentede film/episoder
 //   Row 7:  SERVICES (4)
 //
 // Nye widgets der registreres skal IKKE ændre eksisterende cols/positioner.
@@ -33,6 +35,8 @@ import { SabnzbdWidgetMinimal } from "./SabnzbdWidgetMinimal";
 import { GithubWidgetMinimal } from "./GithubWidgetMinimal";
 import { PaseoAgentsWidget } from "./PaseoAgentsWidget";
 import { FirewallWidget } from "./FirewallWidget";
+import { WatchlistWidgetMinimal } from "./WatchlistWidgetMinimal";
+import { RecentDownloadsWidget } from "./RecentDownloadsWidget";
 
 // Row 1 — Hero + Claude side-by-side (claude plan-usage er primær "current
 // state"-indikator; hører hjemme ved klokken)
@@ -61,6 +65,12 @@ registerWidget({ id: "weather",   group: "ambient",  cols: 1, category: "ambient
 registerWidget({ id: "paseo",     group: "ambient",  cols: 1, category: "code",    Component: PaseoAgentsWidget });
 registerWidget({ id: "jellyfin",  group: "ambient",  cols: 1, category: "media",   Component: JellyfinWidgetMinimal });
 registerWidget({ id: "sabnzbd",   group: "ambient",  cols: 1, category: "media",   Component: SabnzbdWidgetMinimal });
+
+// Row 6.5 — Watchlist (Sonarr + Radarr) full-width
+registerWidget({ id: "watchlist", group: "ambient",  cols: 4, category: "media",   Component: WatchlistWidgetMinimal });
+
+// Row 6.6 — Senest hentede film + episoder (Sonarr/Radarr history)
+registerWidget({ id: "recent-downloads", group: "ambient", cols: 4, category: "media", Component: RecentDownloadsWidget });
 
 // Row 7 — Service detail (full-width)
 registerWidget({ id: "services",  group: "services", cols: 4, category: "system",  Component: ServicesWidget });
